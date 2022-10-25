@@ -8,10 +8,9 @@ Here, we propose to track the spread of this foraging tactic through the Sarasot
 
 # Table of Contents
 
-- WorkFlowDiagram
-- data
-- code
-- results
-- ms
-- tables
-- figures
+- [Work-Flow Diagram](https://github.com/bankheak/Dolphins/tree/main/WorkFlowDiagram)
+- [Data](https://github.com/bankheak/Dolphins/tree/main/data)
+- [Code](https://github.com/bankheak/Dolphins/tree/main/code)
+- [Results](https://github.com/bankheak/Dolphins/tree/main/results)
+- [Tables](https://github.com/bankheak/Dolphins/tree/main/tables)
+- [Figures](https://github.com/bankheak/Dolphins/tree/main/figs)
