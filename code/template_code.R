@@ -1,6 +1,6 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
-# set working directory here
+# Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins")
 
 
