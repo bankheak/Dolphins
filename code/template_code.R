@@ -55,20 +55,31 @@ vert_all <- vert_all[num, num]
 dim(vert_all)
 class(vert_all)
 
-## Repeat for horizontal social network
+  ## Repeat for horizontal social network
 num <- which(colnames(hor_all) %in% IDs)
 hor_all <- hor_all[num, num]
 dim(hor_all)
 class(hor_all)
 
-## Repeat for ecological network
+  ## Repeat for ecological network
 num <- which(colnames(ecol_all) %in% IDs)
 ecol <- ecol_all[num, num]
 dim(ecol)
 class(ecol)
 
-## Repeat for genetic network
+  ## Repeat for genetic network
 num <- which(colnames(relate_all) %in% IDs)
 relate <- relate_all[num, num]
 dim(relate)
 class(relate)
+
+## Extract beggars (learners and demonstrators)
+beggars <- subset(ILV, subset=ILV$Beggar=="yes")
+beggars <- spongers[order(beggars$Order_acquisition),]
+
+### ID codes of all beggars
+beggar_all <- spongers$id_individual
+### Extract IDs of all beggars that are treated as learners
+beggar_learners <- as.vector(subset(spongers$id_individual, subset=spongers$Demons_sponging_forage=="no"))
+### extract IDs of all beggars treated as demonstrators
+beggar_demons <- as.vector(subset(spongers$id_individual, subset=spongers$Demons_sponging_forage=="yes"))
