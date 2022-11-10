@@ -1,18 +1,14 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
+###########################################################################
+# DYATIC SOCIAL ASSOCIATIONS
+###########################################################################
+
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins")
 
 ###########################################################################
-# PART 1: calculate dyadic home range overlaps ----------------------------
-
-## load all necessary packages
-require(rmarkdown)  # “Knit” button (Ctrl+Shift+K) displays preview
-require(ggplot2)  # Plot designs
-
-
-###########################################################################
-# PART 2: applying NBDA to 'begging' data ---------------------------------
+# PART 3: Applying NBDA to 'begging' data ---------------------------------
 
 ## load all necessary packages
 install.packages("devtools")
@@ -83,3 +79,4 @@ beggar_all <- spongers$id_individual
 beggar_learners <- as.vector(subset(spongers$id_individual, subset=spongers$Demons_sponging_forage=="no"))
 ### extract IDs of all beggars treated as demonstrators
 beggar_demons <- as.vector(subset(spongers$id_individual, subset=spongers$Demons_sponging_forage=="yes"))
+
