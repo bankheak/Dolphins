@@ -1,14 +1,14 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
 ###########################################################################
-# DYATIC SOCIAL ASSOCIATIONS
+# SOCIAL NETWORK STRUCTURE
 ###########################################################################
 
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins")
 
 ###########################################################################
-# PART 3: Applying NBDA to 'begging' data ---------------------------------
+# PART 1: Applying NBDA to 'begging' data ---------------------------------
 
 ## load all necessary packages
 install.packages("devtools")
