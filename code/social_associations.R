@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/code")
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
 # PART 1: Gambit of the group ---------------------------------------------
@@ -29,10 +29,9 @@ sample_data <- cbind(group_data[,3:4]) # To check that calculations are correct
 sample_data<- rbind(sample_data[1:10,])
 
 # Gambit of the group
-gbi<- get_group_by_individual(group_data, data_format = "individuals")
+gbi<- get_group_by_individual(sample_data, data_format = "individuals")
 
 # Create association index
-source("functions.R")
+source("../code/functions.R")
 nxn<- SRI.func(gbi)
-
-# Repeat steps for null model
+write.csv(nxn, "nxn.csv")

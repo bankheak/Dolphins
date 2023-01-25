@@ -24,9 +24,9 @@ SRI.func<-  function (matr) {
   n <- apply(matr1, 2, sum)
   tmatr <- t(matr1)
   df <- as.matrix(t(matr))
-  a <- df %*% t(df) # Common
-  b <- df %*% (1 - t(df)) # Present in group 2, absent in group 1
-  c <- (1 - df) %*% t(df) # Absent in group 2, present in group 1
+  a <- df %*% t(df) # Dyad in same group
+  b <- df %*% (1 - t(df)) # A present, B absent
+  c <- (1 - df) %*% t(df) # A absent, B present
   d <- ncol(df) - a - b - c # Double absent
   Dice <- data.frame()
   for (i in 1:nrow(a)) {
