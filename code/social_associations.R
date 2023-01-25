@@ -5,27 +5,34 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/OneDrive/Documents/Homework/OSU/R Homework")
+setwd("C:/Users/bankh/My_Repos/Dolphins/code")
 
 ###########################################################################
 # PART 1: Gambit of the group ---------------------------------------------
 
 # Load all necessary packages
-require(dplyr)
+require(vegan)
+require(asnipe)
+require(assocInd)
 
 # Read file in
-group_data <- read.csv("group.data.csv")
+group_data <- read.csv("93-14_data.csv")
 
 # Make date into a date class
-group_data$Date <- as.Date(as.character(group_data$Date), format="%m/%d/%Y")
-group_data <- rbind(group_data, group_data[1:5,])  # Add data for better use
+group_data$Date <- as.Date(as.character(group_data$Date), format="%d-%b-%y")
 
-# Group each individual by date and group
-check <-group_data |>
-  group_by(Individual, Date, Group_number) |>
-  summarize(indi_group_date = n())
+# Group each individual by date and sighting
+group_data <- cbind(group_data[,c(2,11,17)])
+group_data$Group <- cumsum(!duplicated(group_data[1:2]))
+group_data <- cbind(group_data[,3:4])
+sample_data <- cbind(group_data[,3:4]) # To check that calculations are correct
+sample_data<- rbind(sample_data[1:10,])
+
+# Gambit of the group
+gbi<- get_group_by_individual(group_data, data_format = "individuals")
 
 # Create association index
+source("functions.R")
+nxn<- SRI.func(gbi)
 
-
-# Calculate simple-ratio index
+# Repeat steps for null model
