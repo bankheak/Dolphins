@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins")
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
 # PART 1: Applying NBDA to 'begging' data ---------------------------------
@@ -24,4 +24,18 @@ ig <- graph_from_adjacency_matrix(as.matrix(nxn),
                                   add.colnames = T,
                                   add.rownames = NA)
 
-plot(ig)
+# Plot network
+plot(ig,
+     layout = layout_with_fr(ig),
+     # link weight, rescaled for better visualization
+     edge.width= E(ig)$weight*4,
+     # node size as degree (rescaled)
+     vertex.size= sqrt(igraph::strength(ig, vids = V(ig), mode = c("all"), loops = TRUE) *10 ),
+     vertex.frame.color= NA, #"black",
+     vertex.label.family = "Helvetica",
+     vertex.label.color="black", 
+     vertex.label.cex=0.8, 
+     vertex.label.dist=2, 
+     # edge.curved=0,
+     vertex.frame.width=0.01,
+)

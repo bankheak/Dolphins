@@ -7,11 +7,11 @@
 # Set working directory here
 setwd("C:/Users/bankh/OneDrive/Documents/Homework/OSU/R Homework")
 
+
 # SIMPLE-RATIO INDEX ------------------------------------------------------
 #' @description This function creates an association matrix using the simple-ratio index (SRI). 
 #' @param matr A binary matrix depicting individuals in the columns and groups in the rows
 #' @return A square matrix in which each cell is an estimate of a dyadic social relationship, from 0 (never seen in the same group) to 1 (always seen in the same group)
-#' @export
 
 SRI.func<-  function (matr) {
   if (any(is.na(matr))) {
@@ -36,5 +36,22 @@ SRI.func<-  function (matr) {
   }
   rownames(Dice)=colnames(Dice)=colnames(matr)
   Dice
+}
+
+
+# Null Permutations -------------------------------------------------------
+#' @description shuffles binary matrices under different restrictions. 
+#' @param mat A quantitative matrix
+#' @param iter Number of random matrices to be created 
+#' @param model Function to be chosen.
+#' @param ... Further arguments from \code{permatswap} or \code{permatfull}
+#' @return a list with \code{iter} random matrices
+#' @details Totally restricted null model is called. Cell values are permuted restricting all features of the original matrix: column sums, row sums, matrix fill and total sum.
+#' @references \code{citation("vegan")}
+
+null <- function (mat, iter, ...){
+  require(vegan)
+  aux <- permatswap(mat, times=iter, method="quasiswap", fixedmar="both", shuffle="both", mtype="prab")
+  return(aux$perm)
 }
 
