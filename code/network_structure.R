@@ -11,7 +11,7 @@ setwd("C:/Users/bankh/My_Repos/Dolphins")
 # PART 1: Applying NBDA to 'begging' data ---------------------------------
 
 ## load all necessary packages
-require(igraph)
+require(igraph) # Look at Dai Shizuka/Jordi Bascompte
 
 # Read in social association matrix
 nxn<- read.csv("nxn.csv")
@@ -20,7 +20,8 @@ nxn<- read.csv("nxn.csv")
 ig <- graph_from_adjacency_matrix(as.matrix(nxn),
                                   mode = c("undirected"),
                                   weighted = TRUE,
-                                  diag = F,
-                                  add.colnames = NULL,
+                                  diag = F, # No loops
+                                  add.colnames = T,
                                   add.rownames = NA)
 
+plot(ig)

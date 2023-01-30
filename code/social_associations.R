@@ -12,7 +12,8 @@ setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 # Load all necessary packages
 require(vegan)
-require(asnipe)
+require(asnipe) # get_group_by_individual--Damien Farine
+# Could do permutations
 require(assocInd)
 
 # Read file in
@@ -26,7 +27,7 @@ group_data <- cbind(group_data[,c(2,11,17)])
 group_data$Group <- cumsum(!duplicated(group_data[1:2]))
 group_data <- cbind(group_data[,3:4])
 sample_data <- cbind(group_data[,3:4]) # To check that calculations are correct
-sample_data<- rbind(sample_data[1:10,])
+sample_data<- rbind(sample_data[1:100,])
 
 # Gambit of the group
 gbi<- get_group_by_individual(sample_data, data_format = "individuals")
