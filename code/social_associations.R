@@ -70,5 +70,6 @@ abline(v= cv_obs, col="red")
 abline(v= cv_ci[1], col="blue")
 # 97.5% CI
 abline(v= cv_ci[2], col="blue")
-#' Looks like the observed CV is far outside what is expected by chance
-
+#' We can reject the null hypothesis that individuals associate at random
+#' and conclude that there is evidence that associations are different 
+#' from what we would expect by chance
