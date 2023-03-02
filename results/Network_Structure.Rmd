@@ -1,0 +1,55 @@
+---
+title: "Network Structure"
+author: "Kyra Bankhead"
+date: "2023-03-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this markdown I will:
+
+1. Create the network structure for the association matrix.
+
+
+# PART 1: *Network Structure*
+
+```{r network, echo=TRUE, message=FALSE, warning=FALSE}
+# Read in social association matrix
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+gbi<- read.csv("gbi.csv")
+source("../code/functions.R") # SRI & null permutation
+nxn<- SRI.func(gbi)
+nxn<-as.matrix(nxn)
+## load all necessary packages
+require(igraph)
+
+## Create social network
+ig <- graph_from_adjacency_matrix(as.matrix(nxn),
+                                  mode = c("undirected"),
+                                  weighted = TRUE,
+                                  diag = F, # No loops
+                                  add.colnames = T,
+                                  add.rownames = NA)
+
+# Plot network
+plot(ig,
+     layout = layout_with_fr(ig),
+     # link weight, rescaled for better visualization
+     edge.width= E(ig)$weight*4,
+     # node size as degree (rescaled)
+     vertex.size= sqrt(igraph::strength(ig, vids = V(ig), mode = c("all"), loops = TRUE) *10 ),
+     vertex.frame.color= NA, #"black",
+     vertex.label.family = "Helvetica",
+     vertex.label.color="black", 
+     vertex.label.cex=0.8, 
+     vertex.label.dist=2, 
+     # edge.curved=0,
+     vertex.frame.width=0.01,
+)
+
+```
+
+

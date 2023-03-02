@@ -30,11 +30,12 @@ sample_data<- rbind(group_data[1:100,]) # To check that calculations are correct
 
 # Gambit of the group index
 gbi<- get_group_by_individual(sample_data, data_format = "individuals")
+write.csv(gbi, "gbi.csv")
 
 # Create association matrix
 nxn<- SRI.func(gbi)
 nxn<-as.matrix(nxn)
-write.csv(nxn, "nxn.csv")
+
 
 ###########################################################################
 # PART 2: Permutations ---------------------------------------------
