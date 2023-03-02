@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-03-02T19:22:58.469Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" etag="Zy6435lLZjh_z21G72gp" version="20.8.23" type="github">
+<mxfile host="app.diagrams.net" modified="2023-03-02T22:08:54.232Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" etag="_N3sdjjPsZSqaXS8mg-U" version="20.8.23" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
@@ -108,6 +108,12 @@
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-2" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="302.5" y="240" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="Create undirected weighted&lt;br&gt;network with social&lt;br&gt;association&amp;nbsp;matrix" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="445" y="330" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="xzP4lWZcJlKj3KOKzyeN-4" value="Determine sample group to&lt;br&gt;&amp;nbsp;organize populations into&lt;br&gt;separate generations" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="670" y="330" width="205" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
