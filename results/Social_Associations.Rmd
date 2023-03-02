@@ -1,23 +1,36 @@
-# 'Multi-network Network-Based Diffusion Analysis
+---
+title: "Social Associations"
+author: "Kyra Bankhead"
+date: "2023-03-02"
+output: pdf_document
+---
 
-###########################################################################
-# DYATIC SOCIAL ASSOCIATIONS
-###########################################################################
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
+
+In this markdown I will:
+
+1. Subset data to easily visualize analytical steps. Then, create an association matrix from the gambit of the group assumption using the simple-ratio index function.
+
+2. Form repeated permutations from the true association matrix to create a null distribution of their coefficients of variations (CV). This will determine if the true CV ranges outside of what is expected by chance associations.
+
+
+# PART 1: *Social Association Matrix*
+
+```{r subset, echo=FALSE, message=FALSE, warning=FALSE}
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
-
-###########################################################################
-# PART 1: Social Association Matrix ---------------------------------------------
 
 # Load all necessary packages
 require(asnipe) # get_group_by_individual--Damien Farine
 # Could do permutations
 require(assocInd)
-source("../code/functions.R") # SRI & null permutation
+
 
 # Read file in
-orig_data <- read.csv("firstgen_data.csv")
+orig_data <-read.csv("../data/firstgen_data.csv")
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
@@ -26,22 +39,45 @@ orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 group_data <- cbind(orig_data[,c(2,11,17)]) # Seperate date, group and ID
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:4]) # Subset ID and group #
-sample_data<- rbind(group_data[1:100,]) # To check that calculations are correct
+sample_data<- rbind(group_data[1:10,]) # To check that calculations are correct
 
 # Gambit of the group index
 gbi<- get_group_by_individual(sample_data, data_format = "individuals")
+gbi
 
+```
+
+## Calculate simple-ratio index with group by individual matrix above.
+
+```{r matrix, echo=FALSE, message=FALSE, warning=FALSE}
+# Set working directory here
+setwd("C:/Users/bankh/My_Repos/Dolphins/code")
+source("functions.R") # SRI & null permutation
 # Create association matrix
 nxn<- SRI.func(gbi)
 nxn<-as.matrix(nxn)
 write.csv(nxn, "nxn.csv")
 
-###########################################################################
-# PART 2: Permutations ---------------------------------------------
+nxn
 
+```
+
+# PART 2: *Permutations*
+
+## True association index coefficient of variation
+CV = (SD/mean)*100
+
+```{r CVTAI, echo=FALSE, message=FALSE, warning=FALSE}
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
 cv_obs=(sd(nxn) / mean(nxn)) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
+cv_obs
+
+```
+
+## Create 1000 repeated matrices from true matrix to form null distribution
+
+```{r perm, echo=TRUE, message=FALSE, warning=FALSE}
 
 #  Create 1000 random group-by-individual binary matrices
 nF <- null(gbi, iter=1000)
@@ -58,6 +94,11 @@ for (i in 1:1000) {
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
+```
+
+## Form CV distribution
+
+```{r dist, echo=FALSE, message=FALSE, warning=FALSE}
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = quantile(cv_null, probs=c(0.025, 0.975), type=2)
 
@@ -73,7 +114,6 @@ abline(v= cv_obs, col="red")
 abline(v= cv_ci[1], col="blue")
 # 97.5% CI
 abline(v= cv_ci[2], col="blue")
-#' We can reject the null hypothesis that individuals associate at random
-#' and conclude that there is evidence that associations are different 
-#' from what we would expect by chance. Since the CV(TAI) is lower than the
-#' other CV, the associations are lower than expected.
+```
+
+We can reject the null hypothesis that individuals associate at random and conclude that there is evidence that associations are different from what we would expect by chance. Since the CV(TAI) is lower than the other CV, the associations are lower than expected.
