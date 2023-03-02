@@ -8,10 +8,13 @@
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
-# PART 1: Applying NBDA to 'begging' data ---------------------------------
+# PART 1: Structure Network ------------------------------------------------
 
 ## load all necessary packages
 require(igraph) # Look at Dai Shizuka/Jordi Bascompte
+require(tnet) # For weights
+require(sna)
+require(statnet)
 
 # Read in social association matrix
 nxn<- read.csv("nxn.csv")
@@ -39,3 +42,12 @@ plot(ig,
      # edge.curved=0,
      vertex.frame.width=0.01,
 )
+
+###########################################################################
+# PART 2: Network Properties ------------------------------------------------
+
+# Edgelist: the first two are the nodes' labels; the third is the edge (or link) weights
+el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
+
+# Weighted Shortest path lengths for all individuals
+distance_w(el)

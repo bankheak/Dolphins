@@ -55,3 +55,55 @@ null <- function (mat, iter, ...){
   return(aux$perm)
 }
 
+# EDGE LIST -----------------------------------------------------------------
+matrix_to_edgelist=function(mat, rawdata, idnodes){
+  
+  if (rawdata == TRUE){
+    ID=colnames(mat)
+    mat=HWI(mat)
+    colnames(mat)=rownames(mat)
+  } else {
+    ID=colnames(mat)
+    rownames(mat)=colnames(mat)=c(1:nrow(mat))
+  }
+  
+  if (idnodes == FALSE){
+    vi=vector(mode="numeric", length=nrow(mat)^2)
+    vi=rep(rownames(mat), nrow(mat))
+    vi=as.numeric(vi)
+    
+    vj=vector(mode="numeric", length=ncol(mat)^2)
+    v0=colnames(mat)
+    v00=matrix(0,ncol(mat), ncol(mat))
+    for(i in 1:ncol(mat)){
+      v00[,i]=rep(v0[i], ncol(mat))
+    }
+    vj=as.vector(v00)
+    vj=as.numeric(vj)
+    
+    m0=data.matrix(mat)
+    dimnames(m0)=NULL
+    vw=as.vector(m0)
+    
+    edgelist=data.frame(vi, vj, vw)
+    
+    for(i in 1:(nrow(edgelist))){
+      if(edgelist[i,1] == edgelist[i,2]) edgelist[i,3]=NA
+    }
+    edge=edgelist[!is.na(edgelist$vw),]
+    
+    for(i in 1:(nrow(edge))){
+      if(edge[i,3] == 0.00) edge[i,3]=NA
+    }
+    ed=edge[!is.na(edge$vw),]
+    
+    eltnet=data.matrix(ed)
+    as.tnet(eltnet)
+    return(eltnet)
+  }
+  
+  if (idnodes == TRUE){
+    nodes = data.frame(colnames(mat), ID)
+    names(nodes)=c("tnet code", "real ID")
+    print(nodes)}
+}
