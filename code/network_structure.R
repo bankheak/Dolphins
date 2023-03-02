@@ -46,6 +46,9 @@ plot(ig,
 ###########################################################################
 # PART 2: Network Properties ------------------------------------------------
 
+# Source edgelist function
+source("../code/functions.R")
+
 # Edgelist: the first two are the nodes' labels; the third is the edge (or link) weights
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
 
