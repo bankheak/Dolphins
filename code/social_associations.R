@@ -18,6 +18,7 @@ source("../code/functions.R") # SRI & null permutation
 
 # Read file in
 orig_data <- read.csv("firstgen_data.csv")
+orig2_data<- read.csv("secondgen_data.csv")
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
