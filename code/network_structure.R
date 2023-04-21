@@ -50,10 +50,13 @@ plot(ig,
 # Source edgelist function
 source("../code/functions.R")
 
-# Edgelist: the first two are the nodes' labels; the third is the edge (or link) weights
+# Edgelist: Nodes (i & j) and edge (or link) weight
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
 
 # Centrality measures
+# Weighted clustering coefficients
+clustering_local_w(el, measure=c("am", "gm", "mi", "ma", "bi"))
+
 ## Betweenness centrality
 betweenness_w(el, alpha=1)       
 
@@ -100,17 +103,17 @@ clustering_w (el, measure=c("am", "gm", "mi", "ma", "bi"))
 ###########################################################################
 # PART 3: Modularity ------------------------------------------------
 
-# Create a network from the first two columns
+# Create an unweighted network
 dolp_ig <- graph.edgelist(el[,1:2])
-# Add the edge weights to this network by assigning an edge attribute called 'weight'.
+# Add the edge weights to this network
 E(dolp_ig)$weight <- as.numeric(el[,3])
-# Create undirect network
+# Create undirected network
 dolp_ig <- as.undirected(dolp_ig)
 
 # Plot
 plot(dolp_ig, edge.width=E(dolp_ig)$weight*4, vertex.size=10, vertex.label=NA, edge.curved=F)
 
-# Algorythm
+# Newman's Q modularity
 newman <- cluster_leading_eigen(dolp_ig, steps = -1, weights = E(dolp_ig)$weight, 
                                 start = NULL, options = arpack_defaults, callback = NULL, 
                                 extra = NULL, env = parent.frame())
@@ -119,7 +122,7 @@ plot(dolp_ig)
 # Random color scheme
 col <- rgb(runif(10), runif(10), runif(10))
 
-# Assign a random color to individuals of each module ('community')
+# Assign a random color to individuals of each module ('module')
 newman$membership
 
 for (i in 1:length(newman$membership)){
