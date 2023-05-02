@@ -75,6 +75,8 @@ cv_obs
 
 ## Create 1000 repeated matrices from true matrix to form null distribution
 
+Permute association within samples to test long-term associations and control for gregariousness.
+
 ```{r perm, echo=TRUE, message=FALSE, warning=FALSE}
 
 #  Create 1000 random group-by-individual binary matrices

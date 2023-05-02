@@ -17,8 +17,10 @@ require(sna)
 require(statnet)
 
 # Read in social association matrix
-nxn<- read.csv("nxn.csv")
-nxn<- as.matrix(nxn)
+gbi<- read.csv("gbi.csv")
+source("../code/functions.R") # SRI & null permutation
+nxn<- SRI.func(gbi)
+nxn<-as.matrix(nxn)
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn),
@@ -46,9 +48,6 @@ plot(ig,
 
 ###########################################################################
 # PART 2: Network & Global Properties ------------------------------------------------
-
-# Source edgelist function
-source("../code/functions.R")
 
 # Edgelist: Nodes (i & j) and edge (or link) weight
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
@@ -99,9 +98,93 @@ max(as.dist(distance_w(el)))
 # Weighted clustering coefficients (using 5 different methods). 
 clustering_w (el, measure=c("am", "gm", "mi", "ma", "bi"))
 
+###########################################################################
+# PART 3: Permutate Link Weights ------------------------------------------------
+
+## Edgelist
+el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
+## igraph format with weight
+dolphin_ig <- graph.adjacency(as.matrix(nxn),mode="undirected",weighted=TRUE,diag=FALSE)
+E(dolphin_ig)$weight
+
+# Modularity by the WalkTrap algorithm 
+dolphin_walk <- cluster_walktrap(dolphin_ig, weights = E(dolphin_ig)$weight, 
+                                 steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
+## Modularity Q-value
+modularity(dolphin_walk)
+## Number of modules
+groups(dolphin_walk)
+## Membership of modules
+membership(dolphin_walk)
+## Save the edgelist into a new object
+auxrand <- as.data.frame(el)
+## Link weight distribution
+auxrand$vw
+
+# Permutate the link weights
+sample(auxrand$vw)
+## Save in the auxrand object
+auxrand[,3] <- sample(auxrand$vw)
+
+# Calculate the modularity Q-value for a new permutated edge list
+## Create a network from the list of nodes
+igrand <- graph.edgelist(el[,1:2]) 
+### Add link weights
+E(igrand)$weight <- el[,3]
+### Make undirected graph
+igrand <- as.undirected(igrand)
+## Permutate the link weights
+E(igrand)$weight <- sample(E(igrand)$weight)
+## Calculate modularity Q-value
+rmod <- walktrap.community(igrand)
+modularity(rmod)
+## Number of modules
+groups(rmod)
+## Membership of modules
+membership(rmod)
+
+# Difference from our empirical data?
+modularity(dolphin_walk)
+modularity(rmod)
+
+# Run modularity permutations 1000 times
+iter = 1000
+randmod = numeric()
+for(i in 1:iter){
+  # Save the edgelist into a new object
+  auxrand <- el
+  # igraph format
+  igrand <- graph.edgelist(auxrand[,1:2]) # Create a network from the list of nodes
+  E(igrand)$weight <- auxrand[,3] # Add link weights
+  igrand <- as.undirected(igrand) # Make undirected graph
+  # Permutate the link weights
+  E(igrand)$weight <- sample(E(igrand)$weight)
+  # calculate the modularity Q-value
+  rand_walk <- walktrap.community(igrand)
+  randmod[i] <- modularity(rand_walk) # Save Q-value into a vector
+}
+
+## Distribution with 1000 null Q-values
+randmod
+
+## Calculate the 95% confidence interval (two-tailed test)
+ci = quantile(randmod, probs=c(0.025, 0.975), type=2)
+
+## Compare with the empirical Q-value
+data.frame(Q=modularity(dolphin_walk), LowCI=ci[1], HighCI=ci[2])
+
+## Visualization random Q distribution
+hist(randmod, xlim=c(0,1))
+### Empirical Q-value
+abline(v= modularity(dolphin_walk), col="red")
+### 2.5% CI
+abline(v= ci[1], col="blue")
+### 97.5% CI
+abline(v= ci[2], col="blue")
+
 
 ###########################################################################
-# PART 3: Modularity ------------------------------------------------
+# PART 4: Modularity ------------------------------------------------
 
 # Create an unweighted network
 dolp_ig <- graph.edgelist(el[,1:2])
@@ -124,9 +207,10 @@ col <- rgb(runif(10), runif(10), runif(10))
 
 # Assign a random color to individuals of each module ('module')
 newman$membership
-
-for (i in 1:length(newman$membership)){
+for (i in 1:max(newman$membership)){
   sample(col)
   V(dolp_ig)$color[which(newman$membership==i)] = col[i]
 }
+
 plot(dolp_ig)
+

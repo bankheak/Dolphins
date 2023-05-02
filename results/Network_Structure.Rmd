@@ -11,16 +11,24 @@ knitr::opts_chunk$set(echo = TRUE)
 
 In this markdown I will:
 
-1. Create the network structure for the association matrix.
+1. Create the network structure from the association matrix.
 
 2. Evaluate local and global network metrics.
 
-3. Evaluate modularity.
+3. Permutate the link weights using the WalkTrap algorithm.
+
+4. Evaluate modularity.
 
 
 # PART 1: *Network Structure*
 
 ```{r network, echo=TRUE, message=FALSE, warning=FALSE}
+## load all necessary packages
+require(igraph) # Look at Dai Shizuka/Jordi Bascompte
+require(tnet) # For weights
+require(sna)
+require(statnet)
+
 # Read in social association matrix
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 gbi<- read.csv("gbi.csv")
@@ -56,11 +64,12 @@ plot(ig,
 
 ```
 
+
 # PART 2: *Network Metrics*
 
 ## Local Network Metrics
 
-- Local clustering coeffcient: Measure of the prevalence of node clusters in a network.
+- Local clustering coefficient: Measure of the prevalence of node clusters in a network.
 
 - Betweeness: A high betweenness means that the individual is in the communication path of other individuals, therefore, the individuals it interacts with, depend on its presence.
 
@@ -70,7 +79,10 @@ plot(ig,
 
 - Strength: Total strength of an individuals’ associations
 
-```{r lmetrics}
+```{r lmetrics, echo=TRUE, message=FALSE, warning=FALSE}
+# Source edgelist function
+source("../code/functions.R")
+
 # Edgelist: Nodes (i & j) and edge (or link) weight
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
 
@@ -85,7 +97,7 @@ betweenness_w(el, alpha=1)
 closeness_w(el, alpha=1)
 
 # Degree and strength centrality
-degree_w(el, measure=c("degree","strength"), type="out", alpha=1)
+degree_w(el, measure=c("degree","output"), type="out", alpha=1)
 
 
 ```
@@ -105,7 +117,7 @@ degree_w(el, measure=c("degree","strength"), type="out", alpha=1)
 - Clustering coefficient: Tendency of nodes to cluster in the network (Are the friends’ friends also friends?).
 
 
-```{r gmetrics}
+```{r gmetrics, echo=TRUE, message=FALSE, warning=FALSE}
 #' Size
 N = nrow(nxn)
 #' Number of possible links: 
@@ -136,11 +148,111 @@ clustering_w (el, measure=c("am", "gm", "mi", "ma", "bi"))
 
 ```
 
-# PART 3: *Modularity*
+
+# PART 3: *Permutate Link Weights*
+
+## Walktrap algorithm breakdown with one interation
+
+```{r data, message=FALSE, warning=FALSE, include=FALSE}
+## Edgelist
+el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
+## igraph format with weight
+dolphin_ig <- graph.adjacency(as.matrix(nxn),mode="undirected",weighted=TRUE,diag=FALSE)
+E(dolphin_ig)$weight
+
+```
+
+```{r oneit, echo=TRUE, message=FALSE, warning=FALSE}
+# Modularity by the WalkTrap algorithm 
+dolphin_walk <- cluster_walktrap(dolphin_ig, weights = E(dolphin_ig)$weight, 
+                                 steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
+## Modularity Q-value
+modularity(dolphin_walk)
+## Number of modules
+groups(dolphin_walk)
+## Membership of modules
+membership(dolphin_walk)
+## Save the edgelist into a new object
+auxrand <- as.data.frame(el)
+## Link weight distribution
+auxrand$vw
+
+# Permutate the link weights
+sample(auxrand$vw)
+## Save in the auxrand object
+auxrand[,3] <- sample(auxrand$vw)
+
+# Calculate the modularity Q-value for a new permutated edge list
+## Create a network from the list of nodes
+igrand <- graph.edgelist(el[,1:2]) 
+### Add link weights
+E(igrand)$weight <- el[,3]
+### Make undirected graph
+igrand <- as.undirected(igrand)
+## Permutate the link weights
+E(igrand)$weight <- sample(E(igrand)$weight)
+## Calculate modularity Q-value
+rmod <- walktrap.community(igrand)
+modularity(rmod)
+## Number of modules
+groups(rmod)
+## Membership of modules
+membership(rmod)
+
+# Difference from our empirical data?
+modularity(dolphin_walk)
+modularity(rmod)
+```
+
+
+## Permutate with multiple interations
+
+```{r mult, echo=TRUE, message=FALSE, warning=FALSE}
+# Run modularity permutations 1000 times
+iter = 1000
+randmod = numeric()
+for(i in 1:iter){
+  # Save the edgelist into a new object
+  auxrand <- el
+  # igraph format
+  igrand <- graph.edgelist(auxrand[,1:2]) # Create a network from the list of nodes
+  E(igrand)$weight <- auxrand[,3] # Add link weights
+  igrand <- as.undirected(igrand) # Make undirected graph
+  # Permutate the link weights
+  E(igrand)$weight <- sample(E(igrand)$weight)
+  # calculate the modularity Q-value
+  rand_walk <- walktrap.community(igrand)
+  randmod[i] <- modularity(rand_walk) # Save Q-value into a vector
+}
+
+## Distribution with 1000 null Q-values
+randmod
+
+## Calculate the 95% confidence interval (two-tailed test)
+ci = quantile(randmod, probs=c(0.025, 0.975), type=2)
+
+## Compare with the empirical Q-value
+data.frame(Q=modularity(dolphin_walk), LowCI=ci[1], HighCI=ci[2])
+
+## Visualization random Q distribution
+hist(randmod, xlim=c(0,1))
+### Empirical Q-value
+abline(v= modularity(dolphin_walk), col="red")
+### 2.5% CI
+abline(v= ci[1], col="blue")
+### 97.5% CI
+abline(v= ci[2], col="blue")
+
+```
+
+We can reject the null hypothesis that individuals cluster at random and conclude that there is evidence that modularity is higher than what we would expect by chance. 
+
+
+# PART 4: *Modularity*
 
 - Newman's Q modularity: Stopping parameter Q removes links according to the betweenness. 
 
-```{r modular}
+```{r modular, echo=TRUE, message=FALSE, warning=FALSE}
 # Create a network from the first two columns
 dolp_ig <- graph.edgelist(el[,1:2])
 # Add the edge weights to this network by assigning an edge attribute called 'weight'.
@@ -159,11 +271,6 @@ newman <- cluster_leading_eigen(dolp_ig, steps = -1, weights = E(dolp_ig)$weight
 # Assign a random color to individuals of each module ('modules')
 col <- rgb(runif(10), runif(10), runif(10))
 newman$membership
-
-for (i in 1:max(newman$membership)){
-  sample(col)
-  V(dolp_ig)$color[which(newman$membership==i)] = col[i]
-}
 plot(dolp_ig)
 
 ```
