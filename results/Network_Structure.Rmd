@@ -79,7 +79,7 @@ plot(ig,
 
 - Strength: Total strength of an individuals’ associations
 
-```{r lmetrics, echo=TRUE, message=FALSE, warning=FALSE}
+```{r lmetrics, message=FALSE, warning=FALSE, include=FALSE}
 # Source edgelist function
 source("../code/functions.R")
 
@@ -225,8 +225,6 @@ for(i in 1:iter){
   randmod[i] <- modularity(rand_walk) # Save Q-value into a vector
 }
 
-## Distribution with 1000 null Q-values
-randmod
 
 ## Calculate the 95% confidence interval (two-tailed test)
 ci = quantile(randmod, probs=c(0.025, 0.975), type=2)

@@ -19,7 +19,11 @@ In this markdown I will:
 
 # PART 1: *Social Association Matrix*
 
-```{r subset, echo=FALSE, message=FALSE, warning=FALSE}
+## Association Matrices will have an annual temporal resolution.
+
+## To ensure enough information is available to analyze individual association preference, I have made sure that each association matrix only indludes individuals that were seen at least 10 times in a year.
+
+```{r subset, echo=TRUE, message=FALSE, warning=FALSE}
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
@@ -30,26 +34,34 @@ require(assocInd)
 
 
 # Read file in
-orig_data <-read.csv("../data/firstgen_data.csv")
+orig_data <-read.csv("../data/secondgen_data.csv")
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
+orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
-# Group each individual by date and sighting
-group_data <- cbind(orig_data[,c(2,11,17)]) # Seperate date, group and ID
-group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
-group_data <- cbind(group_data[,3:4]) # Subset ID and group #
-sample_data<- rbind(group_data[1:100,]) # To check that calculations are correct
-
-# Gambit of the group index
-gbi<- get_group_by_individual(sample_data, data_format = "individuals")
-gbi
+# Use only one year
+sample_data<- subset(orig_data, subset=c(orig_data$Year == 2005))
 
 ```
 
+## Create gambit of the group index
+
+```{r gbi, echo=TRUE, message=FALSE, warning=FALSE}
+# Group each individual by date and sighting
+group_data <- cbind(sample_data[,c(2,11,17)]) # Seperate date, group and ID
+group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
+sample_data <- cbind(group_data[,3:4]) # Subset ID and group 
+
+# Gambit of the group index
+gbi<- get_group_by_individual(sample_data, data_format = "individuals")
+
+```
+
+
 ## Calculate simple-ratio index with group by individual matrix above.
 
-```{r matrix, echo=FALSE, message=FALSE, warning=FALSE}
+```{r matrix, echo=TRUE, message=FALSE, warning=FALSE}
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins/code")
 source("functions.R") # SRI & null permutation

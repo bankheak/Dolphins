@@ -12,3 +12,17 @@ knitr::opts_chunk$set(echo = TRUE)
 In this markdown I will:
 
 1. 
+
+
+```{r data, message=FALSE, warning=FALSE, include=FALSE}
+## load all necessary packages
+require(ade4) # Look at Dai Shizuka/Jordi Bascompte
+require(ncf) # For weights
+
+# Read in social association matrix
+gbi<- read.csv("gbi.csv")
+source("../code/functions.R") # SRI & null permutation
+nxn<- SRI.func(gbi)
+nxn<-as.matrix(nxn)
+```
+

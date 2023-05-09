@@ -107,3 +107,21 @@ matrix_to_edgelist=function(mat, rawdata, idnodes){
     names(nodes)=c("tnet code", "real ID")
     print(nodes)}
 }
+
+
+# SIMULARITY INDEX ------------------------------------------------------
+sim.func<-  function (matr) {
+  if (any(is.na(matr))) {
+    matr <- na.omit(matr)
+    cat("The data matrix contains NA, and have been removed.\n")
+  }
+  matr1 = matr
+  N <- nrow(matr1)
+  matr1[matr1 > 1] <- 1
+  n <- apply(matr1, 2, sum)
+  tmatr <- t(matr1)
+  df <- as.matrix(t(matr))
+  a <- df %*% t(df) # Dyad in same group
+  a[a > 1] <- 1
+  a
+}

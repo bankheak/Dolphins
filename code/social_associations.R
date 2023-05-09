@@ -17,14 +17,19 @@ require(assocInd)
 source("../code/functions.R") # SRI & null permutation
 
 # Read file in
-orig_data <- read.csv("firstgen_data.csv")
-orig2_data<- read.csv("secondgen_data.csv")
+orig_data<- read.csv("secondgen_data.csv")
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
+orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
+
+# Use only one year
+sample_data<- subset(orig_data, subset=c(orig_data$Year == 2005))
+ID <- unique(sample_data$Code)
+ID %in% sample_data$Code
 
 # Group each individual by date and sighting
-group_data <- cbind(orig_data[,c(2,11,17)]) # Seperate date, group and ID
+group_data <- cbind(sample_data[,c(2,11,17)]) # Seperate date, group and ID
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:4]) # Subset ID and group #
 sample_data<- rbind(group_data[1:100,]) # To check that calculations are correct
