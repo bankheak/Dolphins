@@ -14,7 +14,18 @@ setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 require(asnipe) # get_group_by_individual--Damien Farine
 # Could do permutations
 require(assocInd)
-source("../code/functions.R") # SRI & null permutation
+# Run multiple cores for faster computing
+require(doParallel)
+require(microbenchmark)
+require(parallel)
+require(foreach)
+total <- 10
+pb <- txtProgressBar(min = 0, max = total, style = 3)
+for(i in 1:total){
+  Sys.sleep(0.1)
+  setTxtProgressBar(pb, i) # update progress bar
+}
+close(pb)
 
 # Read file in
 orig_data<- read.csv("secondgen_data.csv")
@@ -32,15 +43,23 @@ ID %in% sample_data$Code
 group_data <- cbind(sample_data[,c(2,11,17)]) # Seperate date, group and ID
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:4]) # Subset ID and group #
-sample_data<- rbind(group_data[1:100,]) # To check that calculations are correct
 
 # Gambit of the group index
 gbi<- get_group_by_individual(sample_data, data_format = "individuals")
 write.csv(gbi, "gbi.csv")
 
 # Create association matrix
+source("../code/functions.R") # SRI & null permutation
+
+n.cores <- detectCores()
+system.time({
+  registerDoParallel(n.cores)
+  nxn<- SRI.func(gbi)
+})
 nxn<- SRI.func(gbi)
 nxn<-as.matrix(nxn)
+# end parallel processing
+stopImplicitCluster()
 
 
 ###########################################################################
@@ -57,11 +76,13 @@ nF <- null(gbi, iter=1000)
 #' create null distribution
 cv_null <- rep(NA,1000)
 
+##' trial<- lapply(nF, SRI.func)
+##' sri_null = as.matrix(trial)
+
 for (i in 1:1000) {
   sri_null = as.matrix(SRI.func(nF[[i]]))
   cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100
 }
-
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
