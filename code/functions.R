@@ -4,10 +4,6 @@
 # FUNCTIONS
 ###########################################################################
 
-# Set working directory here
-setwd("C:/Users/bankh/OneDrive/Documents/Homework/OSU/R Homework")
-
-
 # SIMPLE-RATIO INDEX ------------------------------------------------------
 #' @description This function creates an association matrix using the simple-ratio index (SRI). 
 #' @param matr A binary matrix depicting individuals in the columns and groups in the rows
