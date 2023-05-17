@@ -65,7 +65,7 @@ group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential gro
 group_data <- cbind(group_data[,3:4]) # Subset ID and group #
 
 # Gambit of the group index
-gbi<- get_group_by_individual(sample_data, data_format = "individuals")
+gbi<- get_group_by_individual(group_data, data_format = "individuals")
 write.csv(gbi, "gbi.csv")
 
 # Create association matrix
