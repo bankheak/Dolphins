@@ -1,20 +1,24 @@
-library(vegan)
-library(tidyverse)
+# 'Multi-network Network-Based Diffusion Analysis
 
-help(vegdist)
-data(varespec)
-str(varespec)
-help("varespec")
-t(varespec)
+###########################################################################
+# HI SIMULARITY
+###########################################################################
 
+# Set working directory here
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
+# Load all necessary packages
+require(vegan)
+require(tidyverse)
 
-# select variables from the raw data
+# Read file in
+orig_data<- read.csv("sample_data.csv")
+
+# Select variables from the raw data
 aux = orig_data[1:1000, 
                 c('Code', 'Behaviors', 'HumanInteraction', 'ConfHI')]
 
 # Use 'Behaviors' variable to extract "Feed" and create another variable with two classes (Feed, Other)
-
 aux$Foraging = "Other"
 aux$Foraging[grepl(pattern = 'Feed',
                     x = aux$Behaviors,

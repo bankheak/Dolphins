@@ -58,6 +58,7 @@ for (i in 1:length(ID)) {
 sub <- data.frame(ID, obs_vect)
 sub <- subset(sub, subset=c(sub$obs_vect > 10))
 sample_data <- subset(sample_data, sample_data$Code %in% c(sub$ID))
+write.csv(sample_data, "sample_data.csv")
 
 # Group each individual by date and sighting
 group_data <- cbind(sample_data[,c(2,11,17)]) # Seperate date, group and ID
@@ -89,7 +90,7 @@ stopImplicitCluster()
 cv_obs=(sd(nxn) / mean(nxn)) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
 
 #  Create 1000 random group-by-individual binary matrices
-reps<- 1000
+reps<- 10
   registerDoParallel(n.cores)
   nF <- null(gbi, iter=reps)
 
