@@ -98,13 +98,6 @@ reps<- 10
 #' create null distribution
 cv_null <- rep(NA,reps)
 
-##' try to put in parallel
-##' trial<- lapply(nF, SRI.func)
-##' sri_null = as.matrix(trial)
-##' look-up foreach progess bar ##
-##' Look at cyberduck sstp to run faster computing 2 ##
-
-
 registerDoParallel(n.cores)
 
   null <- foreach(i = 1:reps, 
