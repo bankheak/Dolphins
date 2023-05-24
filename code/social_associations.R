@@ -90,7 +90,8 @@ cv_obs=(sd(nxn) / mean(nxn)) * 100  # Very high CV = unexpectedly high or low as
 
 #  Create 1000 random group-by-individual binary matrices
 reps<- 1000
-nF <- null(gbi, iter=reps)
+  registerDoParallel(n.cores)
+  nF <- null(gbi, iter=reps)
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
