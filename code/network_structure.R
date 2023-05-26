@@ -17,10 +17,7 @@ require(sna)
 require(statnet)
 
 # Read in social association matrix
-gbi<- read.csv("gbi.csv")
-source("../code/functions.R") # SRI & null permutation
-nxn<- SRI.func(gbi)
-nxn<-as.matrix(nxn)
+nxn <- readRDS("nxn.RData")
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn),

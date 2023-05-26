@@ -39,35 +39,49 @@ opts <- list(progress = progress)
 ###########################################################################
 # PART 1: Social Association Matrix ---------------------------------------------
 
-# Read file in
-orig_data<- read.csv("secondgen_data.csv")
+# Read in & combine files
+firstgen_data <- read.csv("firstgen_data.csv")
+secondgen_data <- read.csv("secondgen_data.csv")
+orig_data <- rbind(firstgen_data, secondgen_data)
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
-# Use only one year
-sample_data <- subset(orig_data, subset=c(orig_data$Year == 2005))
-
 # Make sure every ID has >10 obs
-ID <- unique(sample_data$Code)
+ID <- unique(orig_data$Code)
 obs_vect <- NULL
 for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(sample_data$Code == ID[i])
+  obs_vect[i]<- sum(orig_data$Code == ID[i])
 }
 sub <- data.frame(ID, obs_vect)
 sub <- subset(sub, subset=c(sub$obs_vect > 10))
-sample_data <- subset(sample_data, sample_data$Code %in% c(sub$ID))
+sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
 write.csv(sample_data, "sample_data.csv")
 
 # Group each individual by date and sighting
-group_data <- cbind(sample_data[,c(2,11,17)]) # Seperate date, group and ID
+group_data <- cbind(orig_data[,c(2,11,17,21)]) # Seperate date, group and ID
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
-group_data <- cbind(group_data[,3:4]) # Subset ID and group #
+group_data <- cbind(group_data[,3:5]) # Subset ID and group #
+
+# Make a list of only one year per dataframe
+years <- unique(group_data$Year)
+list_years <- list()
+for (i in 1:length(years)) {
+  list_years[[i]] <- subset(group_data, subset=c(group_data$Year == years[i]))
+}    
+
+# Save nxn list
+saveRDS(list_years, file="list_years.RData")
+
+## Test a smaller amount of data for faster results
+test <- 100
 
 # Gambit of the group index
-gbi<- get_group_by_individual(group_data, data_format = "individuals")
-write.csv(gbi, "gbi.csv")
+gbi <- list()
+for (y in 1:length(years)) {
+  gbi[[y]] <- get_group_by_individual(list_years[[y]][,c(1, 3)], data_format = "individuals")
+}
 
 # Create association matrix
 source("../code/functions.R") # SRI & null permutation
@@ -75,11 +89,17 @@ source("../code/functions.R") # SRI & null permutation
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
-  nxn<- SRI.func(gbi)
+nxn <- list()
+for (i in 1:length(years)) {
+  nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
+}
 })
-nxn<-as.matrix(nxn)
-# end parallel processing
+
+# End parallel processing
 stopImplicitCluster()
+
+# Save nxn list
+saveRDS(nxn, file="nxn.RData")
 
 
 ###########################################################################
@@ -90,7 +110,7 @@ stopImplicitCluster()
 cv_obs=(sd(nxn) / mean(nxn)) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
 
 #  Create 1000 random group-by-individual binary matrices
-reps<- 10
+reps<- 1000
   registerDoParallel(n.cores)
   nF <- null(gbi, iter=reps)
 
@@ -98,20 +118,13 @@ reps<- 10
 #' create null distribution
 cv_null <- rep(NA,reps)
 
-registerDoParallel(n.cores)
-
-  null <- foreach(i = 1:reps, 
+foreach(i = 1:reps, 
           .combine = c) %dopar% { 
-            # replace c with rbind to create a dataframe
             sri_null = as.matrix(SRI.func(nF[[i]]))
-            ( sd(sri_null) / mean(sri_null) ) * 100}
+            cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100}
    
 stopImplicitCluster()
 
-for (i in 1:reps) {
-  sri_null = as.matrix(SRI.func(nF[[i]]))
-  cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100
-}
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
