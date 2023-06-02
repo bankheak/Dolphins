@@ -1,6 +1,7 @@
 # Load the parallel package
 library(parallel)
 library(doParallel)
+library(pbapply)
 
 # Read file in
 gbi<-  read.csv("../data/gbi.csv")
@@ -24,7 +25,7 @@ null <- function (mat, iter, ...){
 }
 
 # Create an example array
-my_array <- 1:10
+my_array <- 1:1000
 
 # Split the array into chunks for parallel processing
 array_chunks <- split(my_array, ceiling(seq_along(my_array) / num_nodes))
@@ -33,6 +34,7 @@ array_chunks <- split(my_array, ceiling(seq_along(my_array) / num_nodes))
 nF <- foreach(chunk = array_chunks, .combine = c) %dopar% {
   #  Create 1000 random group-by-individual binary matrices
   null(gbi, iter=1000)
+  
 }
 
 # Stop the cluster
