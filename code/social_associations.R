@@ -11,30 +11,13 @@ setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 require(asnipe) # get_group_by_individual--Damien Farine
 # Could do permutations
 require(assocInd)
+require(vegan)
 # Run multiple cores for faster computing
 require(doParallel)
 require(microbenchmark)
 require(parallel)
 require(foreach)
 require(progress)
-
-# progress bar ------------------------------------------------------------
-
-iterations <- 100                               # used for the foreach loop  
-
-pb <- progress_bar$new(
-  format = "letter = :letter [:bar] :elapsed | eta: :eta",
-  total = iterations,    # 100 
-  width = 60)
-
-progress_letter <- rep(LETTERS[1:10], 10)  # token reported in progress bar
-
-# allowing progress bar to be used in foreach -----------------------------
-progress <- function(n){
-  pb$tick(tokens = list(letter = progress_letter[n]))
-} 
-
-opts <- list(progress = progress)
 
 ###########################################################################
 # PART 1: Social Association Matrix ---------------------------------------------
@@ -60,7 +43,7 @@ sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
 write.csv(sample_data, "sample_data.csv")
 
 # Group each individual by date and sighting
-group_data <- cbind(orig_data[,c(2,11,17,21)]) # Seperate date, group and ID
+group_data <- cbind(sample_data[,c(2,11,17,21)]) # Seperate date, group and ID
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:5]) # Subset ID and group #
 
@@ -82,6 +65,7 @@ gbi <- list()
 for (y in 1:length(years)) {
   gbi[[y]] <- get_group_by_individual(list_years[[y]][,c(1, 3)], data_format = "individuals")
 }
+saveRDS(gbi, file="gbi.RData")
 
 # Create association matrix
 source("../code/functions.R") # SRI & null permutation
@@ -100,7 +84,6 @@ stopImplicitCluster()
 
 # Save nxn list
 saveRDS(nxn, file="nxn.RData")
-
 
 ###########################################################################
 # PART 2: Permutations ---------------------------------------------

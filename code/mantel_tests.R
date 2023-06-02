@@ -8,7 +8,7 @@
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
-# PART 1: Structure Data for ILV ------------------------------------------------
+# PART 1: Create HI Similarity Matrix  ------------------------------------------------
 
 ## load all necessary packages
 require(ade4) # Look at Dai Shizuka/Jordi Bascompte
@@ -49,49 +49,22 @@ rawHI <- as.matrix(table(aux$Code, aux$ConfHI)[,1:2])
 rawHI <- data.frame(rawHI)
 
 # Take out the number of foraging events per ID
-IDdata <- data.frame(Foraging = subset(IDbehav, IDbehav$Var2 == "Feed"))
-IDdata <- IDdata[,c(1,3:4)]
+IDdata <- data.frame(Foraging = subset(IDbehav, IDbehav[,2] == "Feed"))[,c(1,3)]
+
 ## Add up the # of times each ID was seen in HI
-IDdata$HI = rawHI$Freq[rawHI$Var2 == "P"]
+IDdata$HI <- rawHI$Freq[rawHI[,2] != "0"]
 ## Proportion of time FOraging spent in HI
-IDdata$HIprop = IDdata[,3]/IDdata[,2]
+IDdata$HIprop <- as.numeric(IDdata[,3])/as.numeric(IDdata[,2])
 
-# How many observations do each ID have?
-IDdata = as.data.frame(table(aux$Code))
-IDdata$HI = as.vector(rowSums(rawHI))
-IDdata$HIprop = IDdata$HI/IDdata$Freq
+# Only ID to prop
+HIprop_ID <- na.omit(IDdata[,c(1, 4)])
 
-identical(row.names(rawHI), IDdata$Var1)
-
-
-# Count how many times each individual was 'Feed'
-# Count how many times each ind was in HI or not
-# Divide the two to create the 'propHI'
-
-
-aux$Behaviors[grepl(pattern = 'Feed',
-                    x = aux$Behaviors,
-                    ignore.case = FALSE, perl = FALSE,
-                    fixed = FALSE, useBytes = FALSE)]
-
-as.vector(table(aux$Behaviors))
-table(aux$HumanInteraction)
-
-
-# pick the feeding events
-aux[which(aux$Behaviors == 'pFeed'), ]
-
-# 
-aux[which(aux$HumanInteraction != 999), ]
-
-
-
+# Or I could measure HI per obs for each ID
+IDdata_2 <- as.data.frame(table(aux$Code))
+IDdata_2$HI <- rawHI$Freq[rawHI[,2] != "0"]
+IDdata_2$HIprop <- IDdata_2$HI/IDdata_2$Freq
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
-fake_HIprop = t(varespec)[,1]
+
+fake_HIprop <- t(HIprop_ID[,2])
 as.matrix(vegdist(fake_HIprop, method = 'euclidean'))
-
-
-# Create simularity matrix
-nxn_area<- sim.func(aux)
-
