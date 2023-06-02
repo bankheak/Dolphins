@@ -1,20 +1,42 @@
-# Slowly build up the code to work in the cluster
-require(doParallel) # registerDoParallel
-require(vegan)
-# Null function
-null <- function (mat, iter, ...){
-  aux <- permatswap(mat, times=iter, method="quasiswap", fixedmar="both", shuffle="both", mtype="prab")
-  return(aux$perm)
-}
+# Load the parallel package
+library(parallel)
+library(doParallel)
 
 # Read file in
 gbi<-  read.csv("../data/gbi.csv")
 
-#  Create 1000 random group-by-individual binary matrices
-reps<- 1000
-registerDoParallel(10)
-nF <- null(gbi, iter=reps)
+# Specify the number of nodes/workers in the cluster
+num_nodes <- 4
 
-stopImplicitCluster()
+# Create a cluster with the specified number of nodes/workers
+cl <- makeCluster(num_nodes)
 
-write.csv(nF, "nF.csv")
+# Register the cluster to enable parallel processing
+registerDoParallel(cl)
+
+# Define a function that performs the computation on a single element
+# Null function
+null <- function (mat, iter, ...){
+  library(vegan)
+  aux <- permatswap(mat, times=iter, method="quasiswap", fixedmar="both", 
+                    shuffle="both", mtype="prab")
+  return(aux$perm)
+}
+
+# Create an example array
+my_array <- 1:10
+
+# Split the array into chunks for parallel processing
+array_chunks <- split(my_array, ceiling(seq_along(my_array) / num_nodes))
+
+# Perform the computation on each chunk in parallel
+nF <- foreach(chunk = array_chunks, .combine = c) %dopar% {
+  #  Create 1000 random group-by-individual binary matrices
+  null(gbi, iter=1000)
+}
+
+# Stop the cluster
+stopCluster(cl)
+
+# Print the results
+print(nF)
