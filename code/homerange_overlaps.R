@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins")
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
 # PART 1: calculate dyadic home range overlaps ----------------------------

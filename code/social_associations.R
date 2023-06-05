@@ -59,6 +59,8 @@ saveRDS(list_years, file="list_years.RData")
 
 ## Test a smaller amount of data for faster results
 test <- 100
+test_gbi <- get_group_by_individual(list_years[[1]][c(1:100),c(1, 3)], data_format = "individuals")
+write.csv(test_gbi, "../data/test_gbi.csv")
 
 # Gambit of the group index
 gbi <- list()
