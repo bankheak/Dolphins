@@ -57,17 +57,18 @@ for (i in 1:length(years)) {
 # Save nxn list
 saveRDS(list_years, file="list_years.RData")
 
-## Test a smaller amount of data for faster results
-test <- 100
-test_gbi <- get_group_by_individual(list_years[[1]][c(1:100),c(1, 3)], data_format = "individuals")
-write.csv(test_gbi, "../data/test_gbi.csv")
-
 # Gambit of the group index
 gbi <- list()
 for (y in 1:length(years)) {
   gbi[[y]] <- get_group_by_individual(list_years[[y]][,c(1, 3)], data_format = "individuals")
 }
 saveRDS(gbi, file="gbi.RData")
+
+## Test a smaller amount of data for faster results
+test_gbi <- gbi[[1]] # or
+test <- 1000
+test_gbi <- get_group_by_individual(list_years[[1]][c(1:test),c(1, 3)], data_format = "individuals")
+write.csv(test_gbi, "../data/test_gbi.csv")
 
 # Create association matrix
 source("../code/functions.R") # SRI & null permutation

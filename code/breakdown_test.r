@@ -7,7 +7,7 @@ library(foreach)
 gbi<-  read.csv("../data/test_gbi.csv")
 
 # Specify the number of nodes/workers in the cluster
-num_nodes <- 2
+num_nodes <- 4
 
 # Create a cluster with the specified number of nodes/workers
 cl <- makeCluster(num_nodes)

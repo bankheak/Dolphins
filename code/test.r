@@ -1,49 +1,60 @@
-# Slowly build up the code to work in the cluster
 # Load all necessary packages
-require(asnipe) # get_group_by_individual--Damien Farine
-# Could do permutations
-require(assocInd)
 # Run multiple cores for faster computing
 require(doParallel) # registerDoParallel
-require(microbenchmark)
-require(parallel)
 require(foreach)
-# Null function
-null <- function (mat, iter, ...){
-  require(vegan)
-  aux <- permatswap(mat, times=iter, method="quasiswap", fixedmar="both", shuffle="both", mtype="prab")
-  return(aux$perm)
+
+# Load function
+SRI.func<-  function (matr) {
+  if (any(is.na(matr))) {
+    matr <- na.omit(matr)
+    cat("The data matrix contains NA, and have been removed.\n")
+  }
+  matr1 = matr
+  N <- nrow(matr1)
+  matr1[matr1 > 1] <- 1
+  n <- apply(matr1, 2, sum)
+  tmatr <- t(matr1)
+  df <- as.matrix(t(matr))
+  a <- df %*% t(df) # Dyad in same group
+  b <- df %*% (1 - t(df)) # A present, B absent
+  c <- (1 - df) %*% t(df) # A absent, B present
+  d <- ncol(df) - a - b - c # Double absent
+  Dice <- data.frame()
+  for (i in 1:nrow(a)) {
+    for (j in 1:ncol(a)) {
+      Dice[i, j] <- a[i, j]/(a[i, j] + b[i, j] + c[i, j])
+    }
+  }
+  rownames(Dice)=colnames(Dice)=colnames(matr)
+  Dice
 }
 
-# Read file in
-gbi<-  readRDS("../data/gbi.RData")
+# Specify the number of nodes/workers in the cluster
+num_nodes <- 4
 
-#  Create 1000 random group-by-individual binary matrices
-gbi <- gbi[[1]]
-reps<- 1000
-registerDoParallel(2)
-nF <- null(gbi, iter=reps)
+# Create a cluster with the specified number of nodes/workers
+cl <- makeCluster(num_nodes)
+
+# Register the cluster to enable parallel processing
+registerDoParallel(cl)
+
+# Read file in
+nF<-  read.csv("nF.csv")
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
-cv_null <- rep(NA,reps)
+cv_null <- rep(NA,100)
 
 
-    foreach(i = 1:reps, 
+    foreach(i = 1:100, 
             .combine = c) %dopar% { 
             sri_null = as.matrix(SRI.func(nF[[i]]))
             cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100}
 
-stopImplicitCluster()
 
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
-saveRDS(cv_null, file = "/home/ib/bankheak/R_libs/Dolphins/code/cv_null.rds")
+stopImplicitCluster()
 
-
-# Perform the computation on each chunk in parallel
-nF <- foreach(chunk = array_chunks, .combine = c) %dopar% {
-  #  Create 1000 random group-by-individual binary matrices
-  null(gbi, iter=1000)
-}
+write.csv(cv_null, "cv_null.csv")

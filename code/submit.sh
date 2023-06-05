@@ -1,18 +1,32 @@
 #!/bin/sh
+
 # Give the job a name
-$ -N JOB_DOL
-# set the shell
-$ -S /bin/sh
-# set working directory on all host to directory where the job was started
-$ -cwd
-# send all ERROR messages to this file
-$ -e errors.txt
-# Change the email address to YOUR email, and you will be emailed when the job has finished.
-$ -m e
-$ -M bankheak@oregonstate.edu
-# Ask for 1 core, as R can only use 1 core for processing
-$ -pe orte 1
-# Load the R Module
-module load R
-# Commands to run job
-R --slave < breakdown_test.r > output.${SGE_TASK_ID} --args $mystart $myend
+#$ -N R_Array_DOLPHIN
+
+#$ -S /bin/sh
+
+# set working directory on all host to
+# directory where the job was started
+#$ -cwd
+
+# send output to job.log (STDOUT + STDERR)
+#$ -o job.log
+#$ -j y
+
+# Setup array variables (range and step of chunks)
+#$ -t 1-1000:100
+
+# email information
+#$ -m e
+# Just change the email address.  You will be emailed when the job has finished.
+#$ -M bankheak@oregonstate.edu
+
+mystart=${SGE_TASK_ID}
+myend=$((${SGE_TASK_ID} + ${SGE_TASK_STEPSIZE} - 1))
+
+
+#Change which version of R you want to load on the Compute Nodes
+module load R/4.2.1
+
+# command to run.  ONLY CHANGE THE NAME OF YOUR APPLICATION  
+R --slave < test.r > output.${SGE_TASK_ID} --args $mystart $myend
