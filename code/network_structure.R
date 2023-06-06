@@ -19,6 +19,10 @@ require(statnet)
 # Read in social association matrix
 nxn <- readRDS("nxn.RData")
 
+# Test one year at a time
+year <- 1
+nxn <- nxn[[year]]
+
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn),
                                   mode = c("undirected"),
@@ -47,6 +51,7 @@ plot(ig,
 # PART 2: Network & Global Properties ------------------------------------------------
 
 # Edgelist: Nodes (i & j) and edge (or link) weight
+source("../code/functions.R") # SRI & null permutation
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
 
 # Centrality measures
@@ -200,10 +205,10 @@ newman <- cluster_leading_eigen(dolp_ig, steps = -1, weights = E(dolp_ig)$weight
 plot(dolp_ig)
 
 # Random color scheme
-col <- rgb(runif(10), runif(10), runif(10))
+col <- rgb(runif(14), runif(14), runif(14))
 
 # Assign a random color to individuals of each module ('module')
-newman$membership
+V(dolp_ig)$color <- NA
 for (i in 1:max(newman$membership)){
   sample(col)
   V(dolp_ig)$color[which(newman$membership==i)] = col[i]

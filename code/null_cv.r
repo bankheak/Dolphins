@@ -43,17 +43,16 @@ nF<-  readRDS("../code/nF.RData")
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
-reps <- 100
+reps <- 1000
 cv_null <- rep(NA,reps)
 
-foreach(i = 1:reps, 
-        .combine = c) %dopar% { 
-          sri_null = as.matrix(SRI.func(nF[[i]]))
-          cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100} 
-
-
-# remove NAs, if any
-cv_null = cv_null[!is.na(cv_null)]
+cv_null_years <- list()
+for (j in 1:22) {
+  cv_null_years[[j]] <- foreach(i = 1:reps, 
+                     .combine = c) %dopar% { 
+                       sri_null = as.matrix(SRI.func(nF[[i]]))
+                       cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100} 
+}
 
 # Stop the cluster
 stopCluster(cl)

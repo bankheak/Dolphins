@@ -4,7 +4,7 @@ library(doParallel)
 library(foreach)
 
 # Read file in
-gbi<-  read.csv("../data/test_gbi.csv")
+gbi<-  readRDS("../data/gbi.RData")
 
 # Specify the number of nodes/workers in the cluster
 num_nodes <- 4
@@ -26,7 +26,10 @@ null <- function (mat, iter, ...){
 
 # Parallel processing
 reps <- 1000
-nF <- null(gbi, iter=reps)
+nF <- list()
+for (i in 1:22) {
+  nF[[i]] <- null(gbi[[i]], iter=reps)
+}
 
 # Stop the cluster
 stopCluster(cl)

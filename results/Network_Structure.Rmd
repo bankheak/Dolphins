@@ -31,12 +31,12 @@ require(statnet)
 
 # Read in social association matrix
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
-gbi<- read.csv("gbi.csv")
-source("../code/functions.R") # SRI & null permutation
-nxn<- SRI.func(gbi)
-nxn<-as.matrix(nxn)
-## load all necessary packages
-require(igraph)
+# Read in social association matrix
+nxn <- readRDS("nxn.RData")
+
+# Test one year at a time
+year <- 1
+nxn <- nxn[[year]]
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn),
@@ -62,6 +62,7 @@ plot(ig,
      vertex.frame.width=0.01,
 )
 
+
 ```
 
 
@@ -79,7 +80,7 @@ plot(ig,
 
 - Strength: Total strength of an individuals’ associations
 
-```{r lmetrics, message=FALSE, warning=FALSE, include=FALSE}
+```{r lmetrics, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 # Source edgelist function
 source("../code/functions.R")
 
@@ -117,7 +118,7 @@ degree_w(el, measure=c("degree","output"), type="out", alpha=1)
 - Clustering coefficient: Tendency of nodes to cluster in the network (Are the friends’ friends also friends?).
 
 
-```{r gmetrics, echo=TRUE, message=FALSE, warning=FALSE}
+```{r gmetrics, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 #' Size
 N = nrow(nxn)
 #' Number of possible links: 
@@ -155,6 +156,8 @@ clustering_w (el, measure=c("am", "gm", "mi", "ma", "bi"))
 
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
 ## Edgelist
+# Source edgelist function
+source("../code/functions.R")
 el <- matrix_to_edgelist(nxn, rawdata = FALSE, idnodes = FALSE)
 ## igraph format with weight
 dolphin_ig <- graph.adjacency(as.matrix(nxn),mode="undirected",weighted=TRUE,diag=FALSE)
@@ -162,7 +165,8 @@ E(dolphin_ig)$weight
 
 ```
 
-```{r oneit, echo=TRUE, message=FALSE, warning=FALSE}
+
+```{r oneit, message=FALSE, warning=FALSE, include=FALSE}
 # Modularity by the WalkTrap algorithm 
 dolphin_walk <- cluster_walktrap(dolphin_ig, weights = E(dolphin_ig)$weight, 
                                  steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
@@ -202,6 +206,7 @@ membership(rmod)
 # Difference from our empirical data?
 modularity(dolphin_walk)
 modularity(rmod)
+
 ```
 
 
@@ -267,8 +272,15 @@ newman <- cluster_leading_eigen(dolp_ig, steps = -1, weights = E(dolp_ig)$weight
                                 extra = NULL, env = parent.frame())
 
 # Assign a random color to individuals of each module ('modules')
-col <- rgb(runif(10), runif(10), runif(10))
-newman$membership
+# Random color scheme
+col <- rgb(runif(14), runif(14), runif(14))
+
+V(dolp_ig)$color <- NA
+for (i in 1:max(newman$membership)){
+  sample(col)
+  V(dolp_ig)$color[which(newman$membership==i)] = col[i]
+}
+
 plot(dolp_ig)
 
 ```

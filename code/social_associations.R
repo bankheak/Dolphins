@@ -14,10 +14,8 @@ require(assocInd)
 require(vegan)
 # Run multiple cores for faster computing
 require(doParallel)
-require(microbenchmark)
 require(parallel)
 require(foreach)
-require(progress)
 
 ###########################################################################
 # PART 1: Social Association Matrix ---------------------------------------------
@@ -93,10 +91,6 @@ saveRDS(nxn, file="nxn.RData")
 # PART 2: Permutations ---------------------------------------------------------
 
 # Done in the HPC --------------------------------------------------------------
-# Calculate the CV of the observation association data
-# CV = (SD/mean)*100
-year <- 1
-cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
 
 #  Create 1000 random group-by-individual binary matrices
 reps<- 100
@@ -115,12 +109,24 @@ foreach(i = 1:reps,
    
 stopImplicitCluster()
 
-# remove NAs, if any
-cv_null = cv_null[!is.na(cv_null)]
-
 # Next take results from the HPC ------------------------------------------------
 
-cv_null <- read.csv("../data/cv_null.csv")
+# Read in null cv values for one year
+cv_null <- as.vector(unlist(read.csv("../data/cv_null.csv", header = FALSE)))
+## Remove square brackets and their contents using regular expressions
+clean_string <- gsub("\\[.*?\\]", "", cv_null)
+## Split the string into individual elements
+elements <- unlist(strsplit(clean_string, " "))
+## Convert the elements to numeric values
+cv_null <- as.numeric(elements)
+## Remove NAs, if any
+cv_null = cv_null[!is.na(cv_null)]
+
+# Calculate the CV of the observation association data
+# CV = (SD/mean)*100
+year <- 1
+cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly 
+# high or low association indices in the empirical distribution
 
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = quantile(cv_null, probs=c(0.025, 0.975), type=2)
