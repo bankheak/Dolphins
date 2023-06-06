@@ -15,6 +15,7 @@ library(raster)
 library(ggplot2)
 library(rerddapXtracto)
 library(sf)
+library(sp)
 
 # Read in file
 sample_data <- read.csv("sample_data.csv")
@@ -38,6 +39,19 @@ for (i in 1:length(years)) {
 
 # Test one year at a time
 coord_data <- list_years[[1]]
+
+# Create a SpatialPointsDataFrame
+coordinates(data) <- c("longitude", "latitude")
+# Assign CRS
+proj4string(data) <- CRS("+proj=longlat +datum=WGS84")
+
+
+
+
+
+
+
+
 
 # Plot Coordinates on Map
 # now plot

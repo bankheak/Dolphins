@@ -39,22 +39,24 @@ cl <- makeCluster(num_nodes)
 registerDoParallel(cl)
 
 # Read file in
-nF<-  read.csv("nF.csv")
+nF<-  readRDS("../code/nF.RData")
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
-cv_null <- rep(NA,100)
+reps <- 100
+cv_null <- rep(NA,reps)
 
-
-    foreach(i = 1:100, 
-            .combine = c) %dopar% { 
-            sri_null = as.matrix(SRI.func(nF[[i]]))
-            cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100}
+foreach(i = 1:reps, 
+        .combine = c) %dopar% { 
+          sri_null = as.matrix(SRI.func(nF[[i]]))
+          cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100} 
 
 
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
-stopImplicitCluster()
+# Stop the cluster
+stopCluster(cl)
 
-write.csv(cv_null, "cv_null.csv")
+# Write the results to a file
+write.csv(cv_null, "cv_null.csv", row.names = FALSE)

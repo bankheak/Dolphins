@@ -25,11 +25,12 @@ null <- function (mat, iter, ...){
 }
 
 # Parallel processing
-nF <- null(gbi, iter=1000)
+reps <- 1000
+nF <- null(gbi, iter=reps)
 
 # Stop the cluster
 stopCluster(cl)
 stopImplicitCluster()
 
 # Print the results
-write.csv(nF, "../code/nF.csv")
+saveRDS(nF, "../code/nF.RData")

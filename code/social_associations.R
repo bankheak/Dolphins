@@ -44,6 +44,7 @@ write.csv(sample_data, "sample_data.csv")
 
 # Group each individual by date and sighting
 group_data <- cbind(sample_data[,c(2,11,17,21)]) # Seperate date, group and ID
+group_data <- subset(group_data, subset=c(group_data$Code != "None"))
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:5]) # Subset ID and group #
 
@@ -66,7 +67,7 @@ saveRDS(gbi, file="gbi.RData")
 
 ## Test a smaller amount of data for faster results
 test_gbi <- gbi[[1]] # or
-test <- 1000
+test <- 100
 test_gbi <- get_group_by_individual(list_years[[1]][c(1:test),c(1, 3)], data_format = "individuals")
 write.csv(test_gbi, "../data/test_gbi.csv")
 
@@ -89,16 +90,19 @@ stopImplicitCluster()
 saveRDS(nxn, file="nxn.RData")
 
 ###########################################################################
-# PART 2: Permutations ---------------------------------------------
+# PART 2: Permutations ---------------------------------------------------------
 
+# Done in the HPC --------------------------------------------------------------
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
-cv_obs=(sd(nxn) / mean(nxn)) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
+year <- 1
+cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly high or low association indices in the empirical distribution
 
 #  Create 1000 random group-by-individual binary matrices
-reps<- 1000
+reps<- 100
   registerDoParallel(n.cores)
-  nF <- null(gbi, iter=reps)
+  nF <- null(test_gbi, iter=reps)
+  saveRDS(nF, "../code/nF.RData")
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
@@ -113,6 +117,10 @@ stopImplicitCluster()
 
 # remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
+
+# Next take results from the HPC ------------------------------------------------
+
+cv_null <- read.csv("../data/cv_null.csv")
 
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = quantile(cv_null, probs=c(0.025, 0.975), type=2)
