@@ -60,7 +60,7 @@ for (i in 1:length(years)) {
 }    
 
 # Save nxn list
-saveRDS(list_years_test, file="list_years.RData")
+saveRDS(list_years, file="list_years.RData")
 
 # Gambit of the group index
 gbi <- list()

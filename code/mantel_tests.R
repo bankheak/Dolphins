@@ -43,28 +43,31 @@ aux$Foraging[grepl(pattern = 'Feed',
 # Categorize ID to Foraging
 IDbehav <- table(aux$Code, aux$Foraging)
 IDbehav <- data.frame(IDbehav)
+colnames(IDbehav) <- c("Code", "Foraging", "Freq")
 
 # Categorize ConfHI to IDs
 rawHI <- as.matrix(table(aux$Code, aux$ConfHI)[,1:2])
 rawHI <- data.frame(rawHI)
+colnames(rawHI) <- c("Code", "ConfHI", "Freq")
 
 # Take out the number of foraging events per ID
-IDdata <- data.frame(Foraging = subset(IDbehav, IDbehav[,2] == "Feed"))[,c(1,3)]
+IDdata <- data.frame(Foraging = subset(IDbehav, IDbehav$Foraging == "Feed"))[,c(1,3)]
 
 ## Add up the # of times each ID was seen in HI
-IDdata$HI <- rawHI$Freq[rawHI[,2] != "0"]
+IDdata$HI <- rawHI$Freq[rawHI$ConfHI != "0"]
+colnames(IDdata) <- c("Code", "Foraging", "HI")
+
 ## Proportion of time FOraging spent in HI
-IDdata$HIprop <- as.numeric(IDdata[,3])/as.numeric(IDdata[,2])
+IDdata$HIprop <- as.numeric(IDdata$HI)/as.numeric(IDdata$Foraging)
 
 # Only ID to prop
 HIprop_ID <- na.omit(IDdata[,c(1, 4)])
 
-# Or I could measure HI per obs for each ID
+# ----Or I could measure HI per obs for each ID-----
 IDdata_2 <- as.data.frame(table(aux$Code))
 IDdata_2$HI <- rawHI$Freq[rawHI[,2] != "0"]
 IDdata_2$HIprop <- IDdata_2$HI/IDdata_2$Freq
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
-
-fake_HIprop <- t(HIprop_ID[,2])
-as.matrix(vegdist(fake_HIprop, method = 'euclidean'))
+fake_HIprop <- t(HIprop_ID$HIprop)
+dissimilarity <- as.matrix(vegdist(fake_HIprop, method = 'euclidean'))
