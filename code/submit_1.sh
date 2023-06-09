@@ -29,4 +29,4 @@ myend=$((${SGE_TASK_ID} + ${SGE_TASK_STEPSIZE} - 1))
 module load R/4.2.1
 
 # command to run.  ONLY CHANGE THE NAME OF YOUR APPLICATION  
-R --slave < null_gbi.r > output.${SGE_TASK_ID} --args $mystart $myend
+R --slave < null_cv.r > output.${SGE_TASK_ID} --args $mystart $myend

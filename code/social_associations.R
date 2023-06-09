@@ -41,10 +41,16 @@ sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
 write.csv(sample_data, "sample_data.csv")
 
 # Group each individual by date and sighting
-group_data <- cbind(sample_data[,c(2,11,17,21)]) # Seperate date, group and ID
+group_data <- cbind(sample_data[,c("Date","Sighting","Code","Year")]) 
 group_data <- subset(group_data, subset=c(group_data$Code != "None"))
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:5]) # Subset ID and group #
+
+# Test smaller dataset
+test <- 100
+group_data <- cbind(group_data[1:test,c(1,3)])
+group_data$Year <- rep(c(1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+                         2001, 2002),10)
 
 # Make a list of only one year per dataframe
 years <- unique(group_data$Year)
@@ -54,12 +60,12 @@ for (i in 1:length(years)) {
 }    
 
 # Save nxn list
-saveRDS(list_years, file="list_years.RData")
+saveRDS(list_years_test, file="list_years.RData")
 
 # Gambit of the group index
 gbi <- list()
 for (y in 1:length(years)) {
-  gbi[[y]] <- get_group_by_individual(list_years[[y]][,c(1, 3)], data_format = "individuals")
+  gbi[[y]] <- get_group_by_individual(list_years[[y]][,c("Code", "Group")], data_format = "individuals")
 }
 saveRDS(gbi, file="gbi.RData")
 
@@ -112,13 +118,8 @@ stopImplicitCluster()
 # Next take results from the HPC ------------------------------------------------
 
 # Read in null cv values for one year
-cv_null <- as.vector(unlist(read.csv("../data/cv_null.csv", header = FALSE)))
-## Remove square brackets and their contents using regular expressions
-clean_string <- gsub("\\[.*?\\]", "", cv_null)
-## Split the string into individual elements
-elements <- unlist(strsplit(clean_string, " "))
-## Convert the elements to numeric values
-cv_null <- as.numeric(elements)
+cv_null <- read.csv("../data/cv_null.csv", header = FALSE)
+cv_null <- as.numeric(cv_null[2:1001, 2])
 ## Remove NAs, if any
 cv_null = cv_null[!is.na(cv_null)]
 
