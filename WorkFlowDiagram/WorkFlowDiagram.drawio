@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-06-12T19:34:40.460Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="xOrM1sU_-wR3sFmGeBUH" version="21.0.1" type="github">
+<mxfile host="app.diagrams.net" modified="2023-06-12T20:09:40.506Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="c-r38xmF49O3o6TGWFBD" version="21.0.1" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
@@ -46,13 +46,13 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-15" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;3&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="365" y="460" width="40" height="40" as="geometry" />
+          <mxGeometry x="365" y="500" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.872;entryY=1.067;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;fontSize=12;fontColor=#FFFFFF;" parent="1" source="feJvAz9ZvgBtIoRs770C-16" target="feJvAz9ZvgBtIoRs770C-30" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-16" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;4&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="500" y="550" width="40" height="40" as="geometry" />
+          <mxGeometry x="500" y="590" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-17" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Association Matrix&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
           <mxGeometry x="40" y="160" width="120" height="60" as="geometry" />
@@ -60,14 +60,14 @@
         <mxCell id="feJvAz9ZvgBtIoRs770C-18" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Network Structure&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
           <mxGeometry x="170" y="290" width="120" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-23" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Network Structure&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="310" y="380" width="120" height="60" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-23" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Regression&lt;br&gt;Models&lt;br&gt;&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
+          <mxGeometry x="310" y="420" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-30" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Genetic Relatedness&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="450" y="470" width="120" height="60" as="geometry" />
+          <mxGeometry x="450" y="510" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-32" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Spatial Overlap&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="570" y="560" width="120" height="60" as="geometry" />
+          <mxGeometry x="570" y="600" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-13" value="&lt;span style=&quot;color: rgb(51, 51, 51); background-color: rgb(248, 249, 250);&quot;&gt;Which individuals are&lt;br&gt;in the same group?&lt;/span&gt;" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" parent="1" vertex="1">
           <mxGeometry x="620" y="160" width="205" height="60" as="geometry" />
@@ -97,11 +97,11 @@
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-2" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
           <mxGeometry x="170" y="160" width="205" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="445" y="380" width="205" height="60" as="geometry" />
+        <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="Compare SRI matrix&amp;nbsp;to dyadic &lt;br&gt;sim in HI, sex, age, &lt;br&gt;genetic relatedness and &lt;br&gt;home range overlap" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="445" y="420" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-4" value="" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="670" y="380" width="205" height="60" as="geometry" />
+          <mxGeometry x="690" y="420" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-1" value="Coefficient of Variation" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
           <mxGeometry x="215" y="120" width="160" height="30" as="geometry" />
@@ -139,6 +139,14 @@
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-13" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-12">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="700" y="320" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-14" value="SRI ~ ILV + GR + HRO + HI Freq" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="445" y="380" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-15" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-14">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="622.5" y="450" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
       </root>
