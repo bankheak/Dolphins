@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-06-12T20:09:40.506Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="c-r38xmF49O3o6TGWFBD" version="21.0.1" type="github">
+<mxfile host="app.diagrams.net" modified="2023-06-12T20:21:10.618Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="I4imhOsGW9BnxETK-MNj" version="21.0.1" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
@@ -97,10 +97,10 @@
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-2" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
           <mxGeometry x="170" y="160" width="205" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="Compare SRI matrix&amp;nbsp;to dyadic &lt;br&gt;sim in HI, sex, age, &lt;br&gt;genetic relatedness and &lt;br&gt;home range overlap" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+        <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="Run multiple linear regression&lt;br&gt;with association matrix as&lt;br&gt;response with all predictors" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
           <mxGeometry x="445" y="420" width="205" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="xzP4lWZcJlKj3KOKzyeN-4" value="" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
+        <mxCell id="xzP4lWZcJlKj3KOKzyeN-4" value="Measure dissimilarity dist.&lt;br&gt;between dyadic HI frequency" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
           <mxGeometry x="690" y="420" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-1" value="Coefficient of Variation" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
@@ -147,6 +147,47 @@
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-15" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-14">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="622.5" y="450" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-16" value="Euclidian Distance&lt;br&gt;(HI Freq)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="755" y="360" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-17" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-16">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="867.5" y="450" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-18" value="Measure similarity distance&lt;br&gt;between dyadic individual&lt;br&gt;level variables (ILV)" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="420" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-19" value="Similarity Matrix&lt;br&gt;(ILV)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="990" y="360" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-20" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-19">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1097.5" y="450" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-21" value="Measure dyadic home range &lt;br&gt;overlap using Kernel&lt;br&gt;&amp;nbsp;density estimates" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="420" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-22" value="Kernel Density&lt;br&gt;(HRO)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="1225" y="360" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-23" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-22">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1327.5" y="450" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-24" value="Calculate dyadic biparental &lt;br&gt;relatedness (r) using the&lt;br&gt;Queller and Goodnight’s index" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="420" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-25" value="Queller and Goodnight’s index&lt;br&gt;(GR)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="1410" y="360" width="210" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-26" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-25">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1557.5" y="450" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
       </root>
