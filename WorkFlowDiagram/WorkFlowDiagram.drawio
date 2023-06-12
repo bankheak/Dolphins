@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-06-12T20:43:00.334Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="jcs4Yk-tUGG3wC_6is8b" version="21.0.1" type="github">
+<mxfile host="app.diagrams.net" modified="2023-06-12T20:47:34.124Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="g6Q1mqC1XvpKbDZE4TDu" version="21.0.1" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
@@ -234,47 +234,69 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-40" value="Use SRI and exclude&lt;br&gt;mother–offspring associations" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="175" y="670" width="205" height="60" as="geometry" />
+          <mxGeometry x="410" y="670" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-41" value="Horizontal Learning NBDA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="190" y="630" width="190" height="30" as="geometry" />
+          <mxGeometry x="425" y="630" width="190" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-42" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-41">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="352.5" y="700" as="sourcePoint" />
+            <mxPoint x="587.5" y="700" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-43" value="Include only relationships &lt;br&gt;between mother and &lt;br&gt;offspring" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="392.5" y="670" width="205" height="60" as="geometry" />
+          <mxGeometry x="627.5" y="670" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-44" value="Vertical Learning NBDA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="417.5" y="630" width="170" height="30" as="geometry" />
+          <mxGeometry x="652.5" y="630" width="170" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-45" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-44">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="570" y="700" as="sourcePoint" />
+            <mxPoint x="805" y="700" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-46" value="Include only genetically&lt;br&gt;related individuals&lt;br&gt;" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="610" y="670" width="205" height="60" as="geometry" />
+          <mxGeometry x="845" y="670" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-47" value="Genetic Relatedness NBDA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="625" y="630" width="190" height="30" as="geometry" />
+          <mxGeometry x="860" y="630" width="190" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-48" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-47">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="787.5" y="700" as="sourcePoint" />
+            <mxPoint x="1022.5" y="700" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-49" value="Depict home range overlaps &lt;br&gt;and&amp;nbsp;recreational boat&lt;br&gt;and anglers concentration" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="830" y="670" width="205" height="60" as="geometry" />
+          <mxGeometry x="1065" y="670" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-50" value="Environmental Similarity NBDA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="835" y="630" width="210" height="30" as="geometry" />
+          <mxGeometry x="1070" y="630" width="210" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-51" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-50">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1007.5" y="700" as="sourcePoint" />
+            <mxPoint x="1242.5" y="700" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-52" value="Fit OADA with/out &lt;br&gt;social transmission through&lt;br&gt;networks&amp;nbsp;with all combinations &lt;br&gt;of networks and ILVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="177.5" y="670" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-53" value="OADA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="302.5" y="630" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-54" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-53">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="355" y="700" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-55" value="Depict home range overlaps &lt;br&gt;and&amp;nbsp;recreational boat&lt;br&gt;and anglers concentration" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="670" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-56" value="Environmental Similarity NBDA" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="1305" y="630" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-57" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-56">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1477.5" y="700" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
       </root>
