@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-06-12T21:10:42.442Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="nhfEecC_ZgOO09UNTTyD" version="21.3.8" type="github">
+<mxfile host="app.diagrams.net" modified="2023-06-12T21:15:25.077Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="whoqZzhB633AvF587woD" version="21.3.8" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
@@ -88,7 +88,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-1" value="Exclude individuals with&amp;nbsp;&lt;br&gt;less than 10 observations" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="400" y="130" width="205" height="60" as="geometry" />
+          <mxGeometry x="625" y="130" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-2" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
           <mxGeometry x="170" y="270" width="205" height="60" as="geometry" />
@@ -108,11 +108,11 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-3" value="ID Sample Size" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" parent="1" vertex="1">
-          <mxGeometry x="475" y="90" width="130" height="30" as="geometry" />
+          <mxGeometry x="700" y="90" width="130" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-4" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" parent="1" target="hiPtZPuh-JGFuhu2f1dp-3" edge="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="575" y="160" as="sourcePoint" />
+            <mxPoint x="800" y="160" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-5" value="Determine what local and &lt;br&gt;global metrics to&lt;br&gt;investigate" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
@@ -194,14 +194,14 @@
           <mxGeometry x="40" y="130" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-30" value="Organize populations into&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;separate generations" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="170" y="130" width="205" height="60" as="geometry" />
+          <mxGeometry x="395" y="130" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-31" value="Annual Communities" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" parent="1" vertex="1">
-          <mxGeometry x="217.5" y="90" width="160" height="30" as="geometry" />
+          <mxGeometry x="442.5" y="90" width="160" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-32" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" parent="1" source="hiPtZPuh-JGFuhu2f1dp-30" target="hiPtZPuh-JGFuhu2f1dp-31" edge="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="435" y="270" as="sourcePoint" />
+            <mxPoint x="660" y="270" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-37" value="Queller and Goodnight’s index (GR)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" parent="1" vertex="1">
@@ -286,6 +286,17 @@
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-57" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" parent="1" target="hiPtZPuh-JGFuhu2f1dp-56" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1477.5" y="700" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="y0YR0FFxCOMch95mn0cS-1" value="Match each individual to&lt;br&gt;a group based on date&amp;nbsp;&lt;br&gt;and sighting" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="170" y="130" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="y0YR0FFxCOMch95mn0cS-2" value="Groups" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="295" y="90" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="y0YR0FFxCOMch95mn0cS-3" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="y0YR0FFxCOMch95mn0cS-1" target="y0YR0FFxCOMch95mn0cS-2">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="435" y="270" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
       </root>
