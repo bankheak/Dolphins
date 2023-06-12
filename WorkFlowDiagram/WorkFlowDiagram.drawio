@@ -1,14 +1,16 @@
-<mxfile host="app.diagrams.net" modified="2023-06-12T20:24:59.206Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="3CgRTLqlU_3RPOo1MQaw" version="21.0.1" type="github">
+<mxfile host="app.diagrams.net" modified="2023-06-12T20:34:16.978Z" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" etag="YTybbih8eGOAZ_GCerDu" version="21.0.1" type="github">
   <diagram id="Asj_OvlAV7eRFMY_503B" name="Page-1">
     <mxGraphModel dx="794" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="feJvAz9ZvgBtIoRs770C-19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontColor=#FFFFFF;" parent="1" source="LIPbDDBm2kCoPktOWhKg-1" target="feJvAz9ZvgBtIoRs770C-17" edge="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontColor=#FFFFFF;" parent="1" source="LIPbDDBm2kCoPktOWhKg-1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="150" as="targetPoint" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="LIPbDDBm2kCoPktOWhKg-1" value="Raw Data&lt;br&gt;Metadata" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
-          <mxGeometry x="40" y="60" width="120" height="70" as="geometry" />
+          <mxGeometry x="40" y="20" width="120" height="70" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;fontSize=12;fontColor=#FFFFFF;" parent="1" edge="1">
           <mxGeometry relative="1" as="geometry">
@@ -33,161 +35,202 @@
         <mxCell id="feJvAz9ZvgBtIoRs770C-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.839;entryY=1.033;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=12;fontColor=#FFFFFF;dashed=1;" parent="1" source="feJvAz9ZvgBtIoRs770C-13" target="feJvAz9ZvgBtIoRs770C-17" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-13" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;1&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="90" y="240" width="40" height="40" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-13" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;2&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="90" y="350" width="40" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.9;entryY=1.044;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;fontSize=12;fontColor=#FFFFFF;" parent="1" source="feJvAz9ZvgBtIoRs770C-14" target="feJvAz9ZvgBtIoRs770C-18" edge="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-14" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;2&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="230" y="370" width="40" height="40" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-14" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;3&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="90" y="490" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.922;entryY=1.067;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=12;fontColor=#FFFFFF;dashed=1;" parent="1" source="feJvAz9ZvgBtIoRs770C-15" target="feJvAz9ZvgBtIoRs770C-23" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-15" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;3&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="365" y="500" width="40" height="40" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-15" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;4&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="95" y="620" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.872;entryY=1.067;entryDx=0;entryDy=0;entryPerimeter=0;dashed=1;fontSize=12;fontColor=#FFFFFF;" parent="1" source="feJvAz9ZvgBtIoRs770C-16" target="feJvAz9ZvgBtIoRs770C-30" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-16" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;4&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
-          <mxGeometry x="500" y="590" width="40" height="40" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-16" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;5&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="90" y="750" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-17" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Association Matrix&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="40" y="160" width="120" height="60" as="geometry" />
+          <mxGeometry x="40" y="270" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-18" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Network Structure&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="170" y="290" width="120" height="60" as="geometry" />
+          <mxGeometry x="40" y="410" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="feJvAz9ZvgBtIoRs770C-23" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Regression&lt;br&gt;Models&lt;br&gt;&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="310" y="420" width="120" height="60" as="geometry" />
+          <mxGeometry x="40" y="540" width="120" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-30" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Genetic Relatedness&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="450" y="510" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="feJvAz9ZvgBtIoRs770C-32" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Spatial Overlap&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
-          <mxGeometry x="570" y="600" width="120" height="60" as="geometry" />
+        <mxCell id="feJvAz9ZvgBtIoRs770C-30" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Diffusion&lt;br&gt;Analysis&lt;br&gt;&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" parent="1" vertex="1">
+          <mxGeometry x="40" y="670" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-13" value="&lt;span style=&quot;color: rgb(51, 51, 51); background-color: rgb(248, 249, 250);&quot;&gt;Which individuals are&lt;br&gt;in the same group?&lt;/span&gt;" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" parent="1" vertex="1">
-          <mxGeometry x="620" y="160" width="205" height="60" as="geometry" />
+          <mxGeometry x="620" y="270" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-14" value="Create N x N matrix based&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;&amp;nbsp;on the p&lt;font color=&quot;#333333&quot;&gt;roportion of time &lt;br&gt;any two individuals &lt;br&gt;spent associated&lt;/font&gt;" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="395" y="160" width="205" height="60" as="geometry" />
+          <mxGeometry x="395" y="270" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-17" value="Simple-ratio Index" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" parent="1" vertex="1">
-          <mxGeometry x="460" y="120" width="140" height="30" as="geometry" />
+          <mxGeometry x="460" y="230" width="140" height="30" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-18" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" parent="1" source="DAMQzkQiVlCdPJjBUR-s-14" target="DAMQzkQiVlCdPJjBUR-s-17" edge="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="660" y="300" as="sourcePoint" />
+            <mxPoint x="660" y="410" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-22" value="Gambit of the group" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" parent="1" vertex="1">
-          <mxGeometry x="675" y="120" width="150" height="30" as="geometry" />
+          <mxGeometry x="675" y="230" width="150" height="30" as="geometry" />
         </mxCell>
         <mxCell id="DAMQzkQiVlCdPJjBUR-s-23" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;width=1;" parent="1" source="DAMQzkQiVlCdPJjBUR-s-13" target="DAMQzkQiVlCdPJjBUR-s-22" edge="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="732.5" y="155" as="sourcePoint" />
+            <mxPoint x="732.5" y="265" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-1" value="Determine sample group to&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;&amp;nbsp;organize populations into&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;separate generations" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="850" y="160" width="205" height="60" as="geometry" />
+          <mxGeometry x="850" y="270" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-2" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="170" y="160" width="205" height="60" as="geometry" />
+          <mxGeometry x="170" y="270" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-3" value="Run multiple linear regression&lt;br&gt;with association matrix as&lt;br&gt;response with all predictors" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="445" y="420" width="205" height="60" as="geometry" />
+          <mxGeometry x="175" y="540" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="xzP4lWZcJlKj3KOKzyeN-4" value="Measure dissimilarity dist.&lt;br&gt;between dyadic HI frequency" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" parent="1" vertex="1">
-          <mxGeometry x="690" y="420" width="205" height="60" as="geometry" />
+          <mxGeometry x="420" y="540" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-1" value="Coefficient of Variation" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="215" y="120" width="160" height="30" as="geometry" />
+          <mxGeometry x="215" y="230" width="160" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-2" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="347.5" y="190" as="sourcePoint" />
+            <mxPoint x="347.5" y="300" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-3" value="At least 10 observations&lt;br&gt;per individual" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="885" y="100" width="170" height="50" as="geometry" />
+          <mxGeometry x="885" y="210" width="170" height="50" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-4" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-3">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1025" y="190" as="sourcePoint" />
+            <mxPoint x="1025" y="300" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-5" value="Determine what local and &lt;br&gt;global metrics to&lt;br&gt;investigate" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="297.5" y="290" width="205" height="60" as="geometry" />
+          <mxGeometry x="167.5" y="410" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-6" value="Local/Global Metrics" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="352.5" y="250" width="150" height="30" as="geometry" />
+          <mxGeometry x="222.5" y="370" width="150" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-7" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-6">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="475" y="320" as="sourcePoint" />
+            <mxPoint x="345" y="440" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-11" value="Create undirected weighted&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;network with social&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;association&amp;nbsp;matrix" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="522.5" y="290" width="205" height="60" as="geometry" />
+          <mxGeometry x="392.5" y="410" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-12" value="SRI = Edge Weight" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="577.5" y="250" width="150" height="30" as="geometry" />
+          <mxGeometry x="447.5" y="370" width="150" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-13" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-12">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="700" y="320" as="sourcePoint" />
+            <mxPoint x="570" y="440" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-14" value="SRI ~ ILV + GR + HRO + HI Freq" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="445" y="380" width="220" height="30" as="geometry" />
+          <mxGeometry x="175" y="500" width="220" height="30" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-15" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-14">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="622.5" y="450" as="sourcePoint" />
+            <mxPoint x="352.5" y="570" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-16" value="Euclidian Distance&lt;br&gt;(HI Freq)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="755" y="360" width="140" height="50" as="geometry" />
+          <mxGeometry x="485" y="480" width="140" height="50" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-17" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-16">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="867.5" y="450" as="sourcePoint" />
+            <mxPoint x="597.5" y="570" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-18" value="Measure similarity distance&lt;br&gt;between dyadic individual&lt;br&gt;level variables (ILV)" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="920" y="420" width="205" height="60" as="geometry" />
+          <mxGeometry x="650" y="540" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-19" value="Similarity Matrix&lt;br&gt;(ILV)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="990" y="360" width="130" height="50" as="geometry" />
+          <mxGeometry x="720" y="480" width="130" height="50" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-20" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-19">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1097.5" y="450" as="sourcePoint" />
+            <mxPoint x="827.5" y="570" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-21" value="Measure dyadic home range &lt;br&gt;overlap using Kernel&lt;br&gt;&amp;nbsp;density estimates" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="1150" y="420" width="205" height="60" as="geometry" />
+          <mxGeometry x="880" y="540" width="205" height="60" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-22" value="Fixed Kernel Method&lt;br&gt;(HRO)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="1205" y="360" width="160" height="50" as="geometry" />
+          <mxGeometry x="935" y="480" width="160" height="50" as="geometry" />
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-23" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-22">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1327.5" y="450" as="sourcePoint" />
+            <mxPoint x="1057.5" y="570" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="hiPtZPuh-JGFuhu2f1dp-24" value="Calculate dyadic biparental &lt;br&gt;relatedness (r) using the&lt;br&gt;Queller and Goodnight’s index" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="1380" y="420" width="205" height="60" as="geometry" />
+          <mxGeometry x="1120" y="540" width="205" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="hiPtZPuh-JGFuhu2f1dp-25" value="Queller and Goodnight’s index&lt;br&gt;(GR)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
-          <mxGeometry x="1410" y="360" width="210" height="50" as="geometry" />
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.839;entryY=1.033;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=12;fontColor=#FFFFFF;dashed=1;" edge="1" parent="1" source="hiPtZPuh-JGFuhu2f1dp-28" target="hiPtZPuh-JGFuhu2f1dp-29">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="hiPtZPuh-JGFuhu2f1dp-26" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-25">
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-28" value="&lt;font style=&quot;font-size: 19px;&quot; color=&quot;#ffffff&quot;&gt;1&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#B266FF;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="210" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-36" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="LIPbDDBm2kCoPktOWhKg-1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1557.5" y="450" as="sourcePoint" />
+            <mxPoint x="60" y="110" as="sourcePoint" />
+            <mxPoint x="100" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-29" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Social Association Matrix&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fontSize=19;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-30" value="Create N x N matrix based&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;&amp;nbsp;on the p&lt;font color=&quot;#333333&quot;&gt;roportion of time &lt;br&gt;any two individuals &lt;br&gt;spent associated&lt;/font&gt;" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="395" y="130" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-31" value="Simple-ratio Index" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="460" y="90" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-32" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="hiPtZPuh-JGFuhu2f1dp-30" target="hiPtZPuh-JGFuhu2f1dp-31">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="660" y="270" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-33" value="Create permutations of true &lt;br&gt;association matrix to form&lt;br&gt;null distribution of CVs" style="html=1;shadow=0;dashed=0;align=center;verticalAlign=middle;shape=mxgraph.arrows2.arrow;dy=0;dx=30;notch=30;rotation=0;direction=west;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="170" y="130" width="205" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-34" value="Coefficient of Variation" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="215" y="90" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-35" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;exitX=0;exitY=0.5;exitDx=30;exitDy=0;exitPerimeter=0;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-34">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="347.5" y="160" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-37" value="Queller and Goodnight’s index (GR)" style="whiteSpace=wrap;html=1;rounded=1;arcSize=50;align=center;verticalAlign=middle;strokeWidth=1;autosize=1;spacing=4;treeFolding=1;treeMoving=1;newEdgeStyle={&quot;edgeStyle&quot;:&quot;entityRelationEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;,&quot;segment&quot;:10,&quot;curved&quot;:1};" vertex="1" parent="1">
+          <mxGeometry x="1140" y="490" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-38" value="" style="edgeStyle=entityRelationEdgeStyle;startArrow=none;endArrow=none;segment=10;curved=1;rounded=0;shape=link;width=-1;" edge="1" parent="1" target="hiPtZPuh-JGFuhu2f1dp-37">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1300" y="570" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hiPtZPuh-JGFuhu2f1dp-39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;fontSize=12;fontColor=#FFFFFF;dashed=1;" edge="1" parent="1" source="feJvAz9ZvgBtIoRs770C-14">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="140" y="380" as="sourcePoint" />
+            <mxPoint x="150" y="469" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="151" y="510" />
+              <mxPoint x="151" y="469" />
+            </Array>
           </mxGeometry>
         </mxCell>
       </root>
