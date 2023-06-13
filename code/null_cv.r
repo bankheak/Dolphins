@@ -6,7 +6,7 @@ library(foreach)
 gbi <-  readRDS("../data/gbi.RData")
 
 # Specify the number of nodes/workers in the cluster
-num_nodes <- 8
+num_nodes <- 4
 
 # Create a cluster with the specified number of nodes/workers
 cl <- makeCluster(num_nodes)

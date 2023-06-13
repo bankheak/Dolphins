@@ -61,47 +61,20 @@ sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
 
 ## Create gambit of the group index
 
-```{r gbi, message=FALSE, warning=FALSE, include=FALSE}
+```{r gbi, echo=TRUE, message=FALSE, warning=FALSE}
 # Group each individual by date and sighting
-group_data <- cbind(sample_data[,c(2,11,17,21)]) # Seperate date, group and ID
-group_data <- subset(group_data, subset=c(group_data$Code != "None"))
-group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
-group_data <- cbind(group_data[,3:5]) # Subset ID and group #
-
-# Make a list of only one year per dataframe
-years <- unique(group_data$Year)
-list_years <- list()
-for (i in 1:length(years)) {
-  list_years[[i]] <- subset(group_data, subset=c(group_data$Year == years[i]))
-}    
-
 # Gambit of the group index
-gbi <- list()
-for (y in 1:length(years)) {
-  gbi[[y]] <- get_group_by_individual(list_years[[y]][,c(1, 3)], data_format = "individuals")
-}
+gbi <- readRDS("../data/gbi.RData")
 
 ```
 
 
 ## Calculate simple-ratio index with group by individual matrix above.
 
-```{r matrix, message=FALSE, warning=FALSE, include=FALSE}
+```{r matrix, echo=TRUE, message=FALSE, warning=FALSE}
 
 # Create association matrix
-source("../code/functions.R") # SRI & null permutation
-
-n.cores <- detectCores()
-system.time({
-  registerDoParallel(n.cores)
-nxn <- list()
-for (i in 1:length(years)) {
-  nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
-}
-})
-
-# End parallel processing
-stopImplicitCluster()
+nxn <- readRDS("../data/nxn.RData")
 
 ```
 
@@ -111,50 +84,17 @@ stopImplicitCluster()
 
 Permute association within samples to test long-term associations and control for gregariousness.
 
-```{r CVTAI, message=FALSE, warning=FALSE, include=FALSE}
-# Done in the HPC ---------------------------------------------------------
-
-#  Create 1000 random group-by-individual binary matrices
-reps<- 100
-  registerDoParallel(n.cores)
-  nF <- null(test_gbi, iter=reps)
-  saveRDS(nF, "../code/nF.RData")
-
-#' Calculate the association and CV for each of the 1000 permuted matrices to
-#' create null distribution
-cv_null <- rep(NA,reps)
-
-foreach(i = 1:reps, 
-          .combine = c) %dopar% { 
-            sri_null = as.matrix(SRI.func(nF[[i]]))
-            cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100}
-   
-stopImplicitCluster()
-
-# Next take results from the HPC ------------------------------------------
-
-
-```
-
 ## True association index coefficient of variation
 CV = (SD/mean)*100
 
 ```{r perm, message=FALSE, warning=FALSE, include=FALSE}
 
 # Read in null cv values for one year
-cv_null <- as.vector(unlist(read.csv("../data/cv_null.csv", header = FALSE)))
-## Remove square brackets and their contents using regular expressions
-clean_string <- gsub("\\[.*?\\]", "", cv_null)
-## Split the string into individual elements
-elements <- unlist(strsplit(clean_string, " "))
-## Convert the elements to numeric values
-cv_null <- as.numeric(elements)
-## Remove NAs, if any
-cv_null = cv_null[!is.na(cv_null)]
+cv_null <- readRDS("../data/cv_years.RData")
 
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
-year <- 1
+year <- 14
 cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly 
 # high or low association indices in the empirical distribution
 
@@ -165,10 +105,10 @@ cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedl
 ```{r dist, echo=TRUE, message=FALSE, warning=FALSE}
 
 # Calculate 95% confidence interval, in a two-tailed test
-cv_ci = quantile(cv_null, probs=c(0.025, 0.975), type=2)
+cv_ci = quantile(cv_null[[year]], probs=c(0.025, 0.975), type=2)
 
 # histogram of null CVs
-hist(cv_null, 
+hist(cv_null[[year]], 
      breaks=50, 
      col='grey70',
      main = 'Restrictive null model',
