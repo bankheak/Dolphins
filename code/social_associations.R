@@ -124,7 +124,6 @@ cv_null <- readRDS("../data/cv_years.RData")
 
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
-year <- 21
 cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly 
 # high or low association indices in the empirical distribution
 
