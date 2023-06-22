@@ -61,11 +61,13 @@ system.time({
   el_years <- list()
   for (i in 1:length(years)) {
     el_years[[i]] <- matrix_to_edgelist(nxn[[i]], rawdata = FALSE, idnodes = FALSE)
-  }   
+  }  
+  ### End parallel processing
+  stopImplicitCluster()
 })
 
 saveRDS(el_years, "el_years.RData")
-el <- readRDS("../data/el_years.RData")
+el <- as.matrix(readRDS("../data/el_years.RData"))
 
 #' Breakdown: connectance = length(which(as.dist(orca_hwi)!=0))/(N*(N-1)/2)
 #' Number of nodes (number of rows in the association matrix)
@@ -124,7 +126,7 @@ auxrand[,3] <- sample(auxrand$vw)
 ## Create a network from the list of nodes
 igrand <- graph.edgelist(el[[year]][,1:2]) 
 ### Add link weights
-E(igrand)$weight <- el[[year]][,3]
+E(igrand)$weight <- el[[year]][,2]
 ### Make undirected graph
 igrand <- as.undirected(igrand)
 ## Permutate the link weights
@@ -149,7 +151,7 @@ for(i in 1:iter){
   auxrand <- el[[year]]
   # igraph format
   igrand <- graph.edgelist(auxrand[,1:2]) # Create a network from the list of nodes
-  E(igrand)$weight <- auxrand[,3] # Add link weights
+  E(igrand)$weight <- auxrand[,2] # Add link weights
   igrand <- as.undirected(igrand) # Make undirected graph
   # Permutate the link weights
   E(igrand)$weight <- sample(E(igrand)$weight)
@@ -196,19 +198,21 @@ system.time({
 newman <- cluster_leading_eigen(dolp_ig[[year]], steps = -1, weights = E(dolp_ig[[year]])$weight, 
                                 start = NULL, options = arpack_defaults, callback = NULL, 
                                 extra = NULL, env = parent.frame())
- 
 
-# Random color scheme
-col <- rgb(runif(max(newman$membership)), 
-           runif(max(newman$membership)), 
-           runif(max(newman$membership)))
 
-# Assign a random color to individuals of each module ('module')
+# Generate a vector of colors based on the number of unique memberships
 V(dolp_ig[[year]])$color <- NA
+col <- rainbow(max(newman$membership))
+
+# Create a vector of individual IDs
+individual_ids <- 1:vcount(dolp_ig[[year]])
+
+# Assign individual IDs as labels to the nodes
+V(dolp_ig[[year]])$label <- individual_ids
+
 for (i in 1:max(newman$membership)){
-  sample(col)
-  V(dolp_ig[[year]])$color[which(newman$membership==i)] = col[i]
+  V(dolp_ig[[year]])$color[which(newman$membership==i)] <- col[i]
 }
 
-plot(dolp_ig[[year]])
-
+# Plot the graph with individual IDs as labels
+plot(dolp_ig[[year]], vertex.label = V(dolp_ig[[year]])$label)

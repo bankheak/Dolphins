@@ -64,7 +64,7 @@ IDdata$HIprop <- as.numeric(IDdata$HI)/as.numeric(IDdata$Foraging)
 HIprop_ID <- na.omit(IDdata[,c(1, 4)])
 
 # ----Or I could measure HI per obs for each ID-----
-IDdata_2 <- as.data.frame(table(aux$Code))
+IDdata_2 <- as.data.frame(table(aux$Code)) # FB07 (Group 4) & FB92 (Group 4) in year 1
 IDdata_2$HI <- rawHI$Freq[rawHI[,2] != "0"]
 IDdata_2$HIprop <- IDdata_2$HI/IDdata_2$Freq
 

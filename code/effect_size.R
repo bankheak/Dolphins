@@ -17,6 +17,8 @@ require(doParallel)
 require(parallel)
 require(foreach)
 
+source("OR3_NBDA code 1.2.15.r") # sources functions
+source("OR2_sensitivity functions.R") # sources functions 
 
 ###########################################################################
 # PART 1: Organize Raw Data ---------------------------------------------
@@ -29,7 +31,7 @@ orig_data <- rbind(firstgen_data, secondgen_data)
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
-write.csv(sample_data, "orig_data.csv")
+write.csv(orig_data, "orig_data.csv")
 
 # Group each individual by date and sighting
 group_data <- cbind(orig_data[,c("Date","Sighting","Code","Year")]) 
@@ -50,6 +52,7 @@ for (y in 1:length(years)) {
   gxi[[y]] <- get_group_by_individual(list_years[[y]][,c("Code", "Group")], data_format = "individuals")
 }
 saveRDS(gxi, file="gxi.RData")
+gxi <- readRDS("gxi.RData")
 
 # Create association matrix
 source("../code/functions.R") # SRI & null permutation
@@ -66,28 +69,33 @@ system.time({
 # End parallel processing
 stopImplicitCluster()
 
+saveRDS(nxn, file="nxn_full.RData")
 
 ###########################################################################
 # PART 2: Calculate Error in Association Sample Size ---------------------------------------------
 
-# Get together_apart and NBDA_error functions
-source("../code/functions.R")
+source("../code/functions.R") # together_apart and NBDA_error
 
 # Extract how many times each dyad has been seen together and how many times they have been seen apart
 ## These two matrices will be used to create a social network with observational error using a Bayesian approach
 year <- 21
-together_apart_output <- together_apart(sightings=gbi[[year]])
+together_apart_output <- together_apart(sightings=gxi[[year]])
+saveRDS(together_apart_output, "together_apart_output.RData")
 write.csv(together_apart_output[,,1], file="../data/together_matrix.csv") # save 'together' matrix
 write.csv(together_apart_output[,,2], file="../data/apart_matrix.csv") # save 'apart' matrix
 
+together_apart_output <- readRDS("together_apart_output.RData")
+together_matrix <- read.csv("together_matrix.csv")
+apart_matrix <- read.csv("apart_matrix.csv")
+
 # Determine how many times individuals have been seen and choose cut-off points
-cutoff <- sort(unique(colSums(gbi[[year]]))) # extract colSums (=number of sightings)
+cutoff <- sort(unique(colSums(gxi[[year]]))) # extract colSums (=number of sightings)
 cutoff <- cutoff[-length(cutoff)] # remove the maximum number of sightings  
 cutoff <- cutoff[-length(cutoff)] # remove second last as well
 
 # Run a first simulation with dropping learners and s=8 (social learning)
 sim1 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=8 and dropping learners
-                                   sightings=gbi[[year]],
+                                   sightings=gxi[[year]],
                                    cutoff=cutoff, 
                                    association_index="SRI", 
                                    iterations=10000, 
@@ -103,7 +111,7 @@ write.csv(sim1$summary,"../data/sensitivity_NBDA_with_error_false neg_drop learn
 
 # Run a second simulation with keeping learners and s=8 (social learning)
 sim2 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=8 and keeping learners
-                                   sightings=sightings,
+                                   sightings=gxi[[year]],
                                    cutoff=cutoff, 
                                    association_index="SRI", 
                                    iterations=10000, 
@@ -119,7 +127,7 @@ write.csv(sim2$summary,"sensitivity_NBDA_with_error_false neg_keep learners_SUMM
 
 # Run a third simulation with dropping learners and s=0 (asocial learning)
 sim3 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=0 and dropping learners
-                                   sightings=sightings,
+                                   sightings=gxi[[year]],
                                    cutoff=cutoff, 
                                    association_index="SRI", 
                                    iterations=10000, 
@@ -134,7 +142,7 @@ write.csv(sim3$summary,"sensitivity_NBDA_with_error_false pos_drop learners_SUMM
 
 # Run a fourth simulation with keeping learners and s=0 (asocial learning)
 sim4 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=0 and keeping learners
-                                   sightings=sightings,
+                                   sightings=gxi[[year]],
                                    cutoff=cutoff, 
                                    association_index="SRI", 
                                    iterations=10000, 

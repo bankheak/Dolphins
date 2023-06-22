@@ -7,12 +7,12 @@
 # load necessary packages
 library(asnipe)
 library(Matrix)
-library(survival)
-library(combinat)
 library(matrixStats)
 library(foreach)
 library(doParallel)
 library(tcltk)
+library(survival)
+library(combinat)
 
 
 # TOGETHER_APART----- ------------------------------------------------------
@@ -102,9 +102,140 @@ together_apart <- function(sightings){
 #'         (given the log likelihood falls outside the 95% confidence interval). 
 #' @references \code{citation(Wild and Hoppitt 2019)}
 
+setClass("oaData", representation(idname = "vector", assMatrix = "matrix", asoc = "matrix", orderAcq = "vector", updateTimes = "vector", ties = "vector", trueTies = "list", demons = "vector", weights = "vector", groupid = "character", taskid = "character", groupvect = "vector", taskvect = "vector", diffvect = "vector", coxdata = "data.frame", mldata = "data.frame"))
+
+setMethod("initialize",
+          signature(.Object = "oaData"),
+          function(.Object, idname = NULL, assMatrix, asoc, orderAcq, ties = NULL, trueTies = list(NULL), demons = NULL, groupid = "1", taskid = "1", updateTimes = NULL, groupvect = NA, taskvect = NA, diffvect = NA, weights = rep(1, dim(assMatrix)[1]), ...) {
+            
+            # Create default names vector if none is provided, if it is, convert to a factor
+            if (is.null(idname)) idname <- (1:dim(assMatrix)[1])
+            
+            time1 <- vector()
+            time2 <- vector()
+            status <- vector()
+            
+            id <- vector()
+            identity <- vector()
+            stMetric <- vector()
+            totalMetric <- vector()
+            learnMetric <- vector()
+            totalAsoc <- vector()
+            group <- task <- vector()
+            
+            # If asoc is null, create dummy data with all zeroes
+            if (is.null(asoc)) {
+              asoc <- cbind(rep(0, dim(assMatrix)[1]))
+            }
+            
+            # Make sure the asoc is in matrix form
+            asoc <- as.matrix(asoc)
+            
+            # Calculate the asocial learning variables for the learning individual at each step
+            learnAsoc <- matrix(nrow = dim(asoc)[2], ncol = length(orderAcq))
+            for (i in 1:length(orderAcq)) learnAsoc[, i] <- asoc[orderAcq[i]]
+            
+            # If there are no ties vector of zeroes
+            if (is.null(ties)) ties <- rep(0, length(orderAcq))
+            
+            # Define functions for calculating total st Metric
+            newFunc <- function(x) x * (1 - statusTracker)
+            newFunc2 <- function(x) x * statusTracker2 * weights
+            
+            # Generate a variable for tracking the status of individuals in the group in question
+            if (is.null(demons)) {
+              statusTracker <- rep(0, dim(assMatrix)[1])
+              statusTracker2 <- rep(0, dim(assMatrix)[1])
+            } else {
+              statusTracker <- statusTracker2 <- demons
+            }
+            
+            # Loop through acquisition events
+            for (i in 1:length(orderAcq)) {
+              
+              if (ties[i] == 0) statusTracker2 <- statusTracker
+              
+              # Loop through each individual
+              for (j in 1:dim(assMatrix)[1]) {
+                
+                # Only naive individuals considered
+                if (statusTracker[j] == 0) {
+                  
+                  # Record variables for Cox model
+                  time1 <- c(time1, i - 1)
+                  time2 <- c(time2, i)
+                  identity <- c(identity, j)
+                  stMetric <- c(stMetric, sum(assMatrix[j, ] * statusTracker2 * weights))
+                  id <- c(id, idname[j])
+                  if (!is.na(groupvect[1])) group <- c(group, groupvect[j])
+                  if (!is.na(taskvect[1])) task <- c(task, taskvect[j])
+                  
+                  # Record status as one if individual acquires trait, zero otherwise for Cox model
+                  if (j == orderAcq[i]) {
+                    status <- c(status, 1)
+                    
+                    # Record the social transmission metric and asocial learning variables for the learning individual (ML model)
+                    learnMetric <- c(learnMetric, sum(assMatrix[j, ] * statusTracker2 * weights))
+                    
+                  } else {
+                    status <- c(status, 0)
+                    
+                  }
+                }
+              }
+              
+              # Calculate total st metric over all individuals in the group for each acquisition event (ML model)
+              newMatrix <- apply(assMatrix, 2, newFunc)
+              if (is.na(diffvect[1])) {
+                totalMetric <- c(totalMetric, sum(apply(newMatrix, 1, newFunc2)))
+              } else {
+                
+                totalMetric <- rbind(totalMetric, as.vector(tapply(apply(apply(newMatrix, 1, newFunc2), 2, sum), diffvect, sum)))
+              }
+              
+              # Set statusTracker to one if individual acquires trait
+              statusTracker[orderAcq[i]] <- 1
+            }
+            
+            # Record individual variables for each line of data in the Cox model
+            indVar <- matrix(asoc[identity, ], ncol = ncol(asoc), dimnames = dimnames(asoc))
+            if (is.na(groupvect[1])) group <- rep(groupid, length(time1))
+            if (is.na(taskvect[1])) task <- rep(taskid, length(time1))
+            coxdata <- data.frame(id = as.factor(id), time1, time2, status, identity, stMetric, indVar, group, task)
+            # And for the ML models
+            if (is.na(groupvect[1])) {
+              group <- rep(groupid, length(orderAcq))
+            } else {
+              group <- rep("NA", length(orderAcq))
+            }
+            if (is.na(taskvect[1])) {
+              task <- rep(taskid, length(orderAcq))
+            } else {
+              task <- rep("NA", length(orderAcq))
+            }
+            mldata <- data.frame(group, task, orderAcq, learnMetric, totalMetric, asoc[orderAcq, ])
+            
+            if (is.null(demons)) demons <- NA
+            if (is.na(groupvect[1])) {
+              groupvect <- groupid
+            }
+            if (is.na(taskvect[1])) {
+              taskvect <- taskid
+            }
+            
+            callNextMethod(.Object, idname = idname, assMatrix = assMatrix, asoc = asoc, orderAcq = orderAcq, updateTimes = NA, ties = ties, trueTies = trueTies, demons = demons, weights = weights, groupid = groupid, taskid = taskid, groupvect = groupvect, taskvect = taskvect, diffvect = diffvect, coxdata = coxdata, mldata = mldata)
+            
+          }
+)
+
+oaData <- function(idname = NULL, assMatrix, asoc = NULL, orderAcq, ties = NULL, trueTies = list(NULL), groupid = "1", taskid = "1", groupvect = NA, taskvect = NA, diffvect = NA, updateTimes = NULL, demons = NULL, weights = rep(1, dim(assMatrix)[1])) {
+  
+  new("oaData", idname = idname, assMatrix = assMatrix, asoc = asoc, orderAcq = orderAcq, ties = ties, trueTies = trueTies, groupid = groupid, taskid = taskid, demons = demons, groupvect = groupvect, taskvect = taskvect, diffvect = diffvect, weights = weights)
+  
+} 
+
+
 sensitivity_NBDA_ind_error <- function(x, sightings, cutoff, association_index, iterations, s, num_ind_learn, cores=NULL, keep_learners=FALSE, delta_AICc=2){ # define function and parameters
-  
-  
   
   assoc_SRI <- asnipe::get_network(sightings, data_format="GBI", association_index=association_index) ## calculate association matrix SRI
   
@@ -406,6 +537,7 @@ null <- function (mat, iter, ...){
   aux <- permatswap(mat, times=iter, method="quasiswap", fixedmar="both", shuffle="both", mtype="prab")
   return(aux$perm)
 }
+
 
 # EDGE LIST -----------------------------------------------------------------
 matrix_to_edgelist=function(mat, rawdata, idnodes){
