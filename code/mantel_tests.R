@@ -16,7 +16,7 @@ require(ncf) # For weights
 require(vegan)
 
 # Read file in to retain ILV
-orig_data <- read.csv("sample_data.csv")
+sample_data <- read.csv("sample_data.csv")
 
 # Read in social association matrix and data
 nxn <- readRDS("nxn.RData")
@@ -30,7 +30,7 @@ dolp_dist <- 1-nxn[[year]]
 dolp_dist <- as.dist(dolp_dist)
 
 # Select variables from the raw data
-aux <- orig_data[1:nrow(list_years[[year]]), 
+aux <- sample_data[1:nrow(list_years[[year]]), 
                 c('Code', 'Behaviors', 'HumanInteraction', 'ConfHI')]
 
 # Use 'Behaviors' variable to extract "Feed" and create another variable with two classes (Feed, Other)
