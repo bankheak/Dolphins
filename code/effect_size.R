@@ -18,7 +18,7 @@ require(parallel)
 require(foreach)
 
 source("OR3_NBDA code 1.2.15.r") # sources functions
-source("OR2_sensitivity functions.R") # sources functions 
+source("OR2_sensitivity functions.r") # sources functions 
 
 ###########################################################################
 # PART 1: Organize Raw Data ---------------------------------------------
@@ -93,21 +93,26 @@ cutoff <- sort(unique(colSums(gxi[[year]]))) # extract colSums (=number of sight
 cutoff <- cutoff[-length(cutoff)] # remove the maximum number of sightings  
 cutoff <- cutoff[-length(cutoff)] # remove second last as well
 
+
+# All done in the HPC ------------------------------------------------------
+
 # Run a first simulation with dropping learners and s=8 (social learning)
-sim1 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=8 and dropping learners
-                                   sightings=gxi[[year]],
-                                   cutoff=cutoff, 
-                                   association_index="SRI", 
-                                   iterations=10000, 
-                                   s=8, 
-                                   num_ind_learn=20, 
-                                   cores=2,
-                                   keep_learners = FALSE,
-                                   delta_AICc = 2)
+  sim1 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=8 and dropping learners
+                                     sightings=gxi[[year]],
+                                     cutoff=cutoff, 
+                                     association_index="SRI", 
+                                     iterations=10000, 
+                                     s=8, 
+                                     num_ind_learn=20, 
+                                     cores=2,
+                                     keep_learners = FALSE,
+                                     delta_AICc = 2)
 
 save(sim1, file="../data/sensitivity_NBDA_with_error_false neg_drop learners.RData") # save the sim1 object 
 write.csv(sim1$raw,"../data/sensitivity_NBDA_with_error_false neg_drop learners_RAW.csv" )
 write.csv(sim1$summary,"../data/sensitivity_NBDA_with_error_false neg_drop learners_SUMMARY.csv" )
+
+sim1 <- readRDS("../data/sensitivity_NBDA_with_error.RData")
 
 # Run a second simulation with keeping learners and s=8 (social learning)
 sim2 <- sensitivity_NBDA_ind_error(x=together_apart_output, # with s=8 and keeping learners
@@ -155,6 +160,11 @@ save(sim4, file="sensitivity_NBDA_with_error_false pos_keep learners.RData") # s
 write.csv(sim4$raw,"sensitivity_NBDA_with_error_false pos_keep learners_RAW.csv" )
 write.csv(sim4$summary,"sensitivity_NBDA_with_error_false pos_keep learners_SUMMARY.csv" )
 
+# Next take results from the HPC ------------------------------------------------
+sim1 <- readRDS("neg_drop.RData")
+sim2 <- readRDS("neg_keep.RData")
+sim3 <- readRDS("pos_drop.RData")
+sim4 <- readRDS("pos_keep.RData")
 
 ###########################################################################
 # PART 3: Plot Simulated Results ---------------------------------------------

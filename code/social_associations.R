@@ -59,8 +59,9 @@ for (i in 1:length(years)) {
   list_years[[i]] <- subset(group_data, subset=c(group_data$Year == years[i]))
 }    
 
-# Save nxn list
+# Save list
 saveRDS(list_years, file="list_years.RData")
+list_years <- readRDS("list_years.RData")
 
 # Gambit of the group index
 gbi <- list()

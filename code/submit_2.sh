@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Give the job a name
-#$ -N R_Array_PERMUTATIONS
+#$ -N R_Array_EFFECT
 
 #$ -S /bin/sh
 
@@ -29,4 +29,4 @@ myend=$((${SGE_TASK_ID} + ${SGE_TASK_STEPSIZE} - 1))
 module load R/4.2.1
 
 # command to run.  ONLY CHANGE THE NAME OF YOUR APPLICATION  
-R --slave < test.r > output.${SGE_TASK_ID} --args $mystart $myend
+R --slave < e_size.R > output.${SGE_TASK_ID} --args $mystart $myend

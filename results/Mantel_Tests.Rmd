@@ -15,14 +15,21 @@ In this markdown I will:
 
 
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
+
+# Set working directory here
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+
 ## load all necessary packages
 require(ade4) # Look at Dai Shizuka/Jordi Bascompte
 require(ncf) # For weights
 
-# Read in social association matrix
-gbi<- read.csv("gbi.csv")
-source("../code/functions.R") # SRI & null permutation
-nxn<- SRI.func(gbi)
-nxn<-as.matrix(nxn)
+# Read file in to retain ILV
+orig_data <- read.csv("sample_data.csv")
+
+# Read in social association matrix and data
+nxn <- readRDS("nxn.RData")
+list_years <- readRDS("list_years.RData")
+
+
 ```
 
