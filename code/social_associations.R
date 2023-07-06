@@ -40,6 +40,18 @@ sub <- subset(sub, subset=c(sub$obs_vect > 10))
 sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
 write.csv(sample_data, "sample_data.csv")
 
+# Get estimate of sampling effort
+dates_year <- format(sample_data$Date, "%Y")
+effort <- table(years)
+
+# Get estimate of population size
+unique_ID_year <- tapply(sample_data$Code, sample_data$Year, function(x) length(unique(x)))
+
+# Compare effort to population size
+effort <- as.data.frame(effort)
+pop <- as.data.frame(unique_ID_year)
+pop_effort <- cbind(effort, pop)
+
 # Group each individual by date and sighting
 group_data <- cbind(sample_data[,c("Date","Sighting","Code","Year")]) 
 group_data <- subset(group_data, subset=c(group_data$Code != "None"))
