@@ -28,6 +28,8 @@ orig_data <- rbind(firstgen_data, secondgen_data)
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
+year_subset <- 3 # Define how many years will be used to subset the network
+orig_data$subYear <- ((orig_data$Year - 1995) %/% year_subset) + 2
 
 # Make sure every ID has >10 obs
 ID <- unique(orig_data$Code)
@@ -59,22 +61,16 @@ ID_HI <- table(sample_data$Code, sample_data$ConfHI, sample_data$Year)
 ID_HI <- as.matrix(ID_HI)[,2]
 
 # Group each individual by date and sighting
-group_data <- cbind(sample_data[,c("Date","Sighting","Code","Year")]) 
+group_data <- cbind(sample_data[,c("Date","Sighting","Code","TriYear")]) 
 group_data <- subset(group_data, subset=c(group_data$Code != "None"))
 group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
 group_data <- cbind(group_data[,3:5]) # Subset ID and group #
 
-# Test smaller dataset
-test <- 100
-group_data <- cbind(group_data[1:test,c(1,3)])
-group_data$Year <- rep(c(1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-                         2001, 2002),10)
-
 # Make a list of only one year per dataframe
-years <- unique(group_data$Year)
+years <- unique(group_data$subYear)
 list_years <- list()
 for (i in 1:length(years)) {
-  list_years[[i]] <- subset(group_data, subset=c(group_data$Year == years[i]))
+  list_years[[i]] <- subset(group_data, subset=c(group_data$subYear == years[i]))
 }    
 
 # Save list
@@ -88,12 +84,6 @@ for (y in 1:length(years)) {
 }
 saveRDS(gbi, file="gbi.RData")
 
-##----- Test a smaller amount of data for faster results------
-# test_gbi <- gbi[[1]] # or
-# test <- 100
-# test_gbi <- get_group_by_individual(list_years[[1]][c(1:test),c(1, 3)], data_format = "individuals")
-# write.csv(test_gbi, "../data/test_gbi.csv")
-
 # Create association matrix
 source("../code/functions.R") # SRI & null permutation
 
@@ -104,13 +94,13 @@ nxn <- list()
 for (i in 1:length(years)) {
   nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
 }
-})
-
 # End parallel processing
 stopImplicitCluster()
+})
 
 # Save nxn list
 saveRDS(nxn, file="nxn.RData")
+nxn <- readRDS("nxn.RData")
 
 ###########################################################################
 # PART 2: Permutations ---------------------------------------------------------
@@ -143,12 +133,14 @@ cv_null <- readRDS("../data/cv_years.RData")
 
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
+year = 1
 cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly 
 # high or low association indices in the empirical distribution
 
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = quantile(cv_null[[year]], probs=c(0.025, 0.975), type=2)
 
+# Check whether patterns of connection are non-random
 # histogram of null CVs
 hist(cv_null[[year]], 
      breaks=50, 
@@ -161,7 +153,5 @@ abline(v= cv_obs, col="red")
 abline(v= cv_ci[1], col="blue")
 # 97.5% CI
 abline(v= cv_ci[2], col="blue")
-#' We can reject the null hypothesis that individuals associate at random
-#' and conclude that there is evidence that associations are different 
-#' from what we would expect by chance. Since the CV(TAI) is lower than the
-#' other CV, the associations are lower than expected.
+#' This shows whether there are more preferred/avoided 
+#' relationships than we would expect at random

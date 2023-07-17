@@ -54,7 +54,7 @@ plot(ig,
 # Edgelist: Nodes (i & j) and edge (or link) weight
 source("../code/functions.R") # SRI & null permutation
 ## Edgelist for each year
-years <- unique(sample_data$Year)
+years <- unique(sample_data$TriYear)
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)

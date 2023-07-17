@@ -1,31 +1,34 @@
-# 'Multi-network Network-Based Diffusion Analysis
+---
+title: "Homerange Overlaps"
+author: "Kyra Bankhead"
+date: "2023-07-17"
+output: pdf_document
+---
 
-###########################################################################
-# HOME RANGE OVERLAPS
-###########################################################################
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
+In this markdown I will:
+
+1. Convert coordinate degree data into meters and organize this data into a spatial points data frame.
+
+2. Plot the individualized homerange overlaps.
+
+# PART 1: *Spatial Points Data Frame*
+
+```{r data, message=FALSE, warning=FALSE, include=FALSE}
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
-
-###########################################################################
-# PART 1: calculate dyadic home range overlaps ----------------------------
 
 ## load all necessary packages
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs
 library(scales) # Helps make polygons partly transparent using the alpha argument
-library(ggmap) # Download tiles using ggmap
-library(viridis) # Color pallette
-library(gridExtra) # grid.arrange function
-library(ggplot2)
-library(adehabitatHR) # Kernel density 
 
 # Read in file
 sample_data <- read.csv("sample_data.csv")
-
-# Create background map using ggmap
-mybasemap <- ggmap(get_stamenmap(bbox = c(left = -83, bottom = 27, right = -82, top = 28)))
 
 # Extract coordinates
 coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code')]) # Subset Date and Coordinates #
@@ -58,8 +61,14 @@ coord_data <- subset(coord_data, coord_data$id %in% c(sub$ID))
 
 # Only include three columns (id, x, and y coordinates) for making MCP's
 dolph.sp <- coord_data[, c("id", "y", "x")] 
-dolph.sp <- dolph.sp[!is.na(dolph.sp$x) & !is.na(dolph.sp$y),]
 
+```
+
+## Convert coordinate degrees into meters
+
+You can also embed plots, for example:
+
+```{r meters, echo=TRUE, message=FALSE, warning=FALSE}
 # Create a simple feature data frame (sf)
 coord_data_sf <- st_as_sf(dolph.sp, coords = c("x", "y"), crs = 4326)
 
@@ -73,18 +82,28 @@ dolph.sp <- dolph.sp[!is.na(dolph.sp$x) & !is.na(dolph.sp$y),]
 
 coordinates(dolph.sp) <- c("x", "y")
 
+```
+
+## Organize data into a spatial points data frame
+
+```{r SP, echo=TRUE, message=FALSE, warning=FALSE}
 # Set the initial CRS for data to WGS84 (latitude and longitude)
 proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
 
 # Calculate MCPs for each dolphin
 dolph.mcp <- mcp(dolph.sp, percent = 95)
 
-# Plot homeranges
+```
+
+
+# PART 2: *Homerange Overlaps*
+
+## Plot the individual homerange overlaps
+
+```{r hro, echo=TRUE, message=FALSE, warning=FALSE}
+# Plot
 plot(dolph.sp, col = as.factor(dolph.sp@data$id), pch = 16, asp = 1)
 plot(dolph.mcp, col = alpha(1:5, 0.5), add = TRUE)
 
-# Create kernel estimates for each id
-kernel.ref <- kernelUD(dolph.sp, h = "href", extent = 0.5)  # href = the referen
+```
 
-dolph.kernel.poly <- getverticeshr(kernel.ref, percent = 95)  
-print(turtle.kernel.poly)  # returns the area of each polygon
