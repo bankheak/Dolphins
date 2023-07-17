@@ -22,7 +22,7 @@ nxn <- readRDS("nxn.RData")
 sample_data <- read.csv("sample_data.csv")
 
 # Test one year at a time
-year <- 1
+year <- 2
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn[[year]]),
@@ -54,7 +54,7 @@ plot(ig,
 # Edgelist: Nodes (i & j) and edge (or link) weight
 source("../code/functions.R") # SRI & null permutation
 ## Edgelist for each year
-years <- unique(sample_data$TriYear)
+years <- unique(sample_data$subYear)
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
@@ -144,6 +144,7 @@ modularity(dolphin_walk[[year]])
 modularity(rmod)
 
 # Run modularity permutations 1000 times
+year <- 5
 iter = 1000
 randmod = numeric()
 for(i in 1:iter){
@@ -167,7 +168,7 @@ ci = quantile(randmod, probs=c(0.025, 0.975), type=2)
 data.frame(Q=modularity(dolphin_walk[[year]]), LowCI=ci[1], HighCI=ci[2])
 
 ## Visualization random Q distribution
-hist(randmod, xlim=c(0.2,0.6))
+hist(randmod, xlim=c(0,0.6))
 ### Empirical Q-value
 abline(v= modularity(dolphin_walk[[year]]), col="red")
 ### 2.5% CI
