@@ -55,11 +55,6 @@ pop_effort <- cbind(effort, pop) # Days per year and pop size per year
 plot(pop_effort$effort ~ pop_effort$unique_ID_year)
 sd(pop_effort$effort)
 
-# Find HI events among individuals
-sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
-ID_HI <- table(sample_data$Code, sample_data$ConfHI, sample_data$Year)
-ID_HI <- as.matrix(ID_HI)[,2]
-
 # Group each individual by date and sighting
 group_data <- cbind(sample_data[,c("Date","Sighting","Code","TriYear")]) 
 group_data <- subset(group_data, subset=c(group_data$Code != "None"))

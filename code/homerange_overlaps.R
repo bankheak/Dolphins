@@ -25,15 +25,15 @@ library(rgdal) # Overlap
 # Read in file
 sample_data <- read.csv("sample_data.csv")
 
-# Create background map using ggmap
-mybasemap <- ggmap(get_stamenmap(bbox = c(left = -83, bottom = 27, right = -82, top = 28)))
+# Add HI data
+sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
 
 # Extract coordinates
-coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'subYear')]) # Subset Date and Coordinates #
+coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'subYear', 'ConfHI')]) # Subset Date and Coordinates #
 ## Format date and year
 coord_data$Date <- as.Date(as.character(coord_data$Date), format="%Y-%m-%d")
 ## Give descriptive names
-colnames(coord_data) <- c("date", "y", "x", "id", "subyear")
+colnames(coord_data) <- c("date", "y", "x", "id", "subyear", "HI")
 
 # Seperate map per years
 years <- unique(coord_data$subyear)
@@ -43,7 +43,7 @@ for (i in 1:length(years)) {
 }    
 
 # Test one year at a time
-coord_data <- coord_years[[1]]
+coord_data <- coord_years[[5]]
 
 # Eliminate IDs with less than 5 locations
 coord_data <- subset(coord_data, subset=c(coord_data$id != "None"))
@@ -108,28 +108,79 @@ dolph.kernel.poly <- getverticeshr(kernel.lscv, percent = 95)
 print(dolph.kernel.poly)  # returns the area of each polygon
 
 ###########################################################################
-# PART 2: Plot HRO ------------------------------------------------------------
+# PART 2: Plot HRO for HI Dolphins ------------------------------------------------------------
 
-# Calculate MCPs for each dolphin
-dolph.mcp <- mcp(dolph.sp, percent = 95)
+# Find HI events among individuals
+ID_HI <- subset(coord_data, subset=c(coord_data$HI == 1))
+ID_HI <- ID_HI[,c('y', 'x', 'id')] 
 
-# Convert dolph.sp and dolph.mcp to sf objects
-dolph.sp_sf <- st_as_sf(dolph.sp)
-dolph.mcp_sf <- st_as_sf(dolph.mcp)
+# Make sure there are at least 5 relocations
+ID <- unique(ID_HI$id)
+obs_vect <- NULL
+for (i in 1:length(ID)) {
+  obs_vect[i]<- sum(ID_HI$id == ID[i])
+}
+sub <- data.frame(ID, obs_vect)
+sub <- subset(sub, subset=c(sub$obs_vect > 4))
+ID_HI <- subset(ID_HI, ID_HI$id %in% sub$ID)
 
-# Convert ggmap basemap to raster
-mybasemap_raster <- as.raster(mybasemap)
+# Recalculate Coordinate data
+ID_HI_sf <- st_as_sf(ID_HI, coords = c("x", "y"), crs = 4326)
+HI.sf <- st_transform(ID_HI_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+ID_HI$x <- st_coordinates(HI.sf)[, 1]
+ID_HI$y <- st_coordinates(HI.sf)[, 2]
 
-# Plot the ggmap basemap as a raster and overlay the two sf objects
-ggplot() +
-  annotation_raster(mybasemap_raster, xmin = -83, xmax = -82, ymin = 27, ymax = 28) +
-  geom_sf(data = dolph.mcp_sf, aes(fill = as.factor(id)), alpha = 0.5) +
-  geom_sf(data = dolph.sp_sf, aes(color = factor(id)), size = 3, shape = 16) +
-  scale_fill_viridis_d(option = "D", begin = 0.2, end = 0.8, direction = -1) +  # Use viridis color palette
-  scale_color_manual(values = rainbow(length(unique(dolph.sp_sf$id)))) +
-  theme_minimal() +
-  labs(fill = "MCP", color = "Dolphin number") +
-  coord_sf() + theme(legend.position = "none")  # Remove the legend
+ID_HI <- ID_HI[!is.na(ID_HI$x) & !is.na(ID_HI$y),]
+
+coordinates(ID_HI) <- c("x", "y")
+
+proj4string(ID_HI) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
+
+# Kernel estimate
+HI.kern <- kernelUD(ID_HI, h = 500)
+HI.kernel.poly <- getverticeshr(HI.kern, percent = 95)
+
+# Plot kernel density
+colors <- c("red", "green", "blue")
+individuals <- unique(HI.kernel.poly@data$id)
+## Match each individual to a color
+individual_color <- colors[match(individuals, unique(HI.kernel.poly@data$id))]
+## Match the color for each home range polygon
+color <- individual_color[match(HI.kernel.poly@data$id, individuals)]
+## Plot the home range polygons with colors
+plot(HI.kernel.poly, col = color)
+
+# Calculate MCPs for each HI dolphin
+HI.mcp <- mcp(ID_HI, percent = 95)
+
+# Transform the point and MCP objects. 
+HI.spgeo <- spTransform(ID_HI, CRS("+proj=longlat"))
+HI.mcpgeo <- spTransform(HI.mcp, CRS("+proj=longlat"))
+
+# Turn the spatial data frame of points into just a dataframe for plotting in ggmap
+HI.geo <- data.frame(HI.spgeo@coords, 
+                          id = HI.spgeo@data$id )
+
+# Create background map using ggmap
+mybasemap <- get_stamenmap(bbox = c(left = -83, bottom = 27, right = -82, top = 28))
+
+# Plot HI ids
+mymap.hr <- ggmap(mybasemap) + 
+  geom_polygon(data = fortify(HI.mcpgeo),  
+               # Polygon layer needs to be "fortified" to add geometry to the dataframe
+               aes(long, lat, colour = id, fill = id),
+               alpha = 0.3) + # alpha sets the transparency
+  geom_point(data = HI.geo, 
+             aes(x = x, y = y, colour = id))  +
+  theme(legend.position = c(0.15, 0.80)) +
+  labs(x = "Longitude", y = "Latitude") +
+  scale_fill_manual(name = "Dolphin ID", 
+                    values = c("red", "blue", "green"),
+                    breaks = c("BEGR", "F222", "F232")) +
+  scale_colour_manual(name = "Dolphin ID", 
+                      values = c("red", "blue", "green"),
+                      breaks = c("BEGR", "F222", "F232"))
+
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
