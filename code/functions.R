@@ -184,3 +184,138 @@ sim.func<-  function (matr) {
   a[a > 1] <- 1
   a
 }
+
+# WDI ------------------------------------------------------
+#' @description This function Calculate the Whittaker Dissimilarity Index for each pair of consecutive years using
+#' the function: WDI = (2 * b) / (a + b)
+#' a = the number of species unique to the first time period
+#' b = the number of species unique to the second time period 
+#' @param listyears A list of data increments based on the designated resolution
+#' @return A vector containing the calculated WDI values
+
+WDI <- function(time_periods){
+  
+  # Calculate the Whittaker Dissimilarity Index for each pair of consecutive years
+  wd_indices <- vector("numeric", length(time_periods) - 1)
+  for (i in 1:(length(time_periods) - 1)) {
+    time_period1 <- time_periods[[i]]
+    time_period2 <- time_periods[[i + 1]]
+    
+    unique_ids_1 <- unique(time_period1$Code)
+    unique_ids_2 <- unique(time_period2$Code)
+    
+    a <- sum(!unique_ids_2 %in% unique_ids_1) # Number of ids unique to time_period1
+    b <- sum(!unique_ids_1 %in% unique_ids_2) # Number of ids unique to time_period2
+    
+    wd_indices[i] <- (2 * b) / (a + b)
+  }
+  
+  return(wd_indices)
+  
+}
+
+# WDI PERMUTATIONS ------------------------------------------------------
+#' @description This function shuffles the real data IDs around and then uses 
+#' the WDI function within the desired resolution
+#' @param listyears A list of data increments based on the designated resolution
+#' @return A vector containing the calculated WDI values
+
+# Function to perform the permutation test for a given time period increment
+wdi_permutation <- function(data_list) {
+  shuffled_wdi_values_list <- vector("list", length(data_list))
+  
+  num_permutations <- 1000
+  
+  # Function to shuffle id compositions within each time period
+  shuffle_IDs <- function(slipt_data) {
+    
+    # Shuffle the IDs within each data frame
+    shuffled_data_list <- list()
+    for (i in seq_along(split_data)) {
+      shuffled_data_list[[i]] <- transform(split_data[[i]], IDs = sample(split_data[[i]]$Code))
+    }
+    
+    # Combine the shuffled data frames back into a single data frame
+    shuffled_data <- do.call(rbind, shuffled_data_list)
+    
+    return(shuffled_data)
+  }
+  
+  for (j in seq_along(data_list)) {
+    data <- data_list[[j]]
+    num_years <- j + 1
+    
+    shuffled_wdi_values <- numeric(num_permutations)
+    for (i in 1:num_permutations) {
+      shuffled_data <- shuffle_IDs(data)
+      shuffled_data$Increment <- cut(shuffled_data$Year, breaks = seq(min(shuffled_data$Year), max(shuffled_data$Year) + num_years, by = num_years), labels = FALSE)
+      shuf_list <- split(shuffled_data, shuffled_data$Increment)
+      shuffled_wdi_values[i] <- mean(WDI(shuf_list))
+    }
+    
+    shuffled_wdi_values_list[[j]] <- shuffled_wdi_values
+  }
+  
+  return(shuffled_wdi_values_list)
+}
+
+# POPULATION TURNOVER ------------------------------------------------------
+#' @description Calculates turnover of a given population across different periods of time and compare it to the null expectation using a null model approach
+#' @param data Binary matrix \code{M} of periods of time in the rows vs. individuals in the columns, where \code{m_ij = 1} represent the presence of individual \code{j} in the period of time \code{i} and \code{m_ij = 0} otherwise
+#' @param iter Integer, number of iterations for the randomization process
+#' @param subseq Boolean. TRUE average only the beta diversity index (turnover) between subsequent periods (1-2, 2-3, 3-4 etc). FALSE averages all matrix elements (turnover among all periods).
+#' @param plot Boolean. Plot histogram, empirical mean and 95%CI of the ramdom distribution. 
+#' @details The proxy measure for turnover is the averaged Whittaker's beta diversity index for all the periods of time. The null model randomizes individuals into periods of time (columns), constraining their empirical capture frequency (row sums) and total number of sightings (matrix fill).
+#' @value Returns the empirical turnover (average Whittaker index), the standard deviation (SD) and the 95% confidence intervals (two-tailed test). Significant results are shown by empirical values falling outside than the 97.5% CI or 2.5%. The funciton also returns the null distribution of Whittaker indices, where the red line represents the empirical value and the blue ones represent the 95% confidence intervals.
+#' @author Mauricio Cantor (m.cantor@ymail.com)
+#' @references Cantor et al. 2012 Disentangling social networks from spatiotemporal dynamics: the temporal structure of a dolphin society. Animal Behaviour 84 (2012) 641-651
+#' @return
+
+turnover_w <- function(data, iter=1000, subseq=FALSE, plot=FALSE){
+  
+  # create internal objects
+  rand = data
+  turno = numeric()
+  result = matrix(NA, 1, 4);  colnames(result) = c("Empirical", "SD", "2.5%CI", "97.5%CI");  rownames(result) = c("Turnover")
+  
+  # calculate the turnover for the empirical data
+  obs = betadiver(data, method="w", order=F, help=F)
+  
+  if(subseq==TRUE){
+    obs = as.matrix(obs)
+    aux = numeric()
+    for(i in 2:nrow(obs)){ aux[i-1] = obs[i, i-1] }
+    obs = aux
+  }
+  
+  # randomize original data, calculate and save mean turnover for each iteration
+  for(i in 1:iter){
+    rand = apply(data, 2, sample)
+    
+    if(subseq==TRUE){
+      aux2 = as.matrix(betadiver(rand, method="w", order=F, help=F))
+      aux3 = numeric()
+      for(j in 2:nrow(aux2)){ aux3[j-1] = aux2[j, j-1] }
+      turno[i] = mean(aux3)
+    } else {
+      turno[i] = mean(betadiver(rand, method="w", order=F, help=F))
+    }
+  }
+  
+  # print result
+  result[,1:2] = c(mean(obs), sd(obs))
+  result[,3:4] = quantile(turno, probs=c(0.025,0.975), type=2)
+  
+  # plot
+  if(plot==TRUE){
+    hist(turno, xlab="Random turnover", main=NULL, xlim=c(result[,3]-0.03, result[,4]+0.03))
+    abline(v=mean(obs), col="red")         # empirical
+    abline(v=mean(result[,4]), col="blue") # 2.5% CI
+    abline(v=mean(result[,3]), col="blue") # 97.5% CI
+  }
+  
+  return(result)
+}
+
+
+

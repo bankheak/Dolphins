@@ -26,7 +26,7 @@ library(rgdal) # Overlap
 sample_data <- read.csv("sample_data.csv")
 
 # Add HI data
-sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
+# sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
 
 # Extract coordinates
 coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'subYear', 'ConfHI')]) # Subset Date and Coordinates #
@@ -81,7 +81,7 @@ proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs
 kernel.lscv <- kernelUD(dolph.sp, h = "LSCV")  # LSCV = least squares cross validation
 
 # Get the names or IDs of the individuals that are of concern
-selected_individuals <- c("F101", "F191", "F192", "FB15", "FB35", "FB41", "FB93")
+selected_individuals <- c("BEGR", "1091", "1314", "C872", "F108", "F109", "F118")
 
 # Repeat code above to calculate appropriate bandwidth for IDs of concern
 concern.sp <- coord_data[, c("id", "y", "x")] 
@@ -101,24 +101,22 @@ proj4string(concern.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_de
 kernel.con <- kernelUD(concern.sp, h = "LSCV")
 plotLSCV(kernel.con) # it looks like a bandwidth of 1000 will be good enough
 
-kernel.lscv <- kernelUD(dolph.sp, h = 1000)
-
 # 95% of estimated distribution
-dolph.kernel.poly <- getverticeshr(kernel.lscv, percent = 95)  
+dolph.kernel.poly <- getverticeshr(kernel, percent = 95)  
 print(dolph.kernel.poly)  # returns the area of each polygon
 
 ###########################################################################
 # PART 2: Plot HRO for HI Dolphins ------------------------------------------------------------
 
 # Find HI events among individuals
-ID_HI <- subset(coord_data, subset=c(coord_data$HI == 1))
+ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
 ID_HI <- ID_HI[,c('y', 'x', 'id')] 
 
 # Make sure there are at least 5 relocations
 ID <- unique(ID_HI$id)
 obs_vect <- NULL
 for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(ID_HI$id == ID[i])
+  obs_vect[i]<- sum(ID_HI$id == ID[1])
 }
 sub <- data.frame(ID, obs_vect)
 sub <- subset(sub, subset=c(sub$obs_vect > 4))
@@ -186,4 +184,4 @@ mymap.hr <- ggmap(mybasemap) +
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
 
 # Get HRO 
-kov <- kerneloverlaphr(kernel.lscv, method="HR", lev=95)
+kov <- kerneloverlaphr(kernel, method="HR", lev=95)

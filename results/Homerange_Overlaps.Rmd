@@ -202,6 +202,30 @@ plot(HI.kernel.poly, col = color)
 
 ```
 
+## Look into what HI behaviors these dolphins have performed
+
+```{r typeHI}
+# Categorize ConfHI to IDs
+ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
+
+HI_type <- as.matrix(table(ID_HI$id, ID_HI$HI))
+HI_type <- data.frame(HI_type)
+colnames(HI_type) <- c("Code", "ConfHI", "Freq")
+
+HI <- subset(rawHI, subset=c(rawHI$ConfHI != 0))
+HI <- subset(HI, subset=c(HI$Freq != 0))
+
+```
+
+
+When looking at the observed behaviors of each individual, I found within the 3-year sample:
+
+* BEGR was caught begging 2 times and provisioning 2 times.
+
+* F222 was caught patrolling 2 times, scavenging 1 time, and entangled 2 times. 
+
+* F232 was caught patrolling 2 time, provisioning 1 time, interacting with fixed gear 1 time, and entangled 1 time.
+
 
 ## Plot only HI individual home ranges using MCP
 

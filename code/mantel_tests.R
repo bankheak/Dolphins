@@ -23,7 +23,7 @@ nxn <- readRDS("nxn.RData")
 list_years <- readRDS("list_years.RData")
 
 # Transforming SRI similarity into distance
-year <- 1
+year <- 5
 dolp_dist = nxn[[year]] + 0.00001
 dolp_dist <- 1-nxn[[year]]
 ## Remove the redundant cells and the diagonal 
@@ -51,6 +51,9 @@ colnames(IDbehav) <- c("Code", "Forg_Freq")
 rawHI <- as.matrix(table(aux$Code, aux$ConfHI))
 rawHI <- data.frame(rawHI)
 colnames(rawHI) <- c("Code", "ConfHI", "Freq")
+
+HI <- subset(rawHI, subset=c(rawHI$ConfHI != 0))
+HI <- subset(HI, subset=c(HI$Freq != 0))
 
 ## Add up the # of times each ID was seen in HI
 IDbehav$HI <- rawHI$Freq[rawHI$ConfHI != 0]

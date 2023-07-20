@@ -28,8 +28,6 @@ orig_data <- rbind(firstgen_data, secondgen_data)
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
-year_subset <- 3 # Define how many years will be used to subset the network
-orig_data$subYear <- ((orig_data$Year - 1995) %/% year_subset) + 2
 
 # Make sure every ID has >10 obs
 ID <- unique(orig_data$Code)
@@ -40,6 +38,7 @@ for (i in 1:length(ID)) {
 sub <- data.frame(ID, obs_vect)
 sub <- subset(sub, subset=c(sub$obs_vect > 10))
 sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
+
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
@@ -62,11 +61,7 @@ group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential gro
 group_data <- cbind(group_data[,3:5]) # Subset ID and group #
 
 # Make a list of only one year per dataframe
-years <- unique(group_data$subYear)
-list_years <- list()
-for (i in 1:length(years)) {
-  list_years[[i]] <- subset(group_data, subset=c(group_data$subYear == years[i]))
-}    
+list_years <- split(sample_data, sample_data$Year)
 
 # Save list
 saveRDS(list_years, file="list_years.RData")
