@@ -14,7 +14,6 @@ require(assocInd)
 require(vegan)
 # Run multiple cores for faster computing
 require(doParallel)
-require(parallel)
 require(foreach)
 
 ###########################################################################
@@ -24,54 +23,52 @@ require(foreach)
 firstgen_data <- read.csv("firstgen_data.csv")
 secondgen_data <- read.csv("secondgen_data.csv")
 orig_data <- rbind(firstgen_data, secondgen_data)
+orig_data <- subset(orig_data, subset=c(orig_data$Code != "None"))
 
 # Make date into a date class
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
-# Make sure every ID has >10 obs
-ID <- unique(orig_data$Code)
-obs_vect <- NULL
-for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(orig_data$Code == ID[i])
-}
-sub <- data.frame(ID, obs_vect)
-sub <- subset(sub, subset=c(sub$obs_vect > 10))
-sample_data <- subset(orig_data, orig_data$Code %in% c(sub$ID))
+# Get rid of any data with no location data
+sample_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
-# Estimate sampling effort and size
-## Get estimate of sampling effort
-effort <- tapply(sample_data$Date, sample_data$Year, function(x) length(unique(x)))
-## Get estimate of population size
-unique_ID_year <- tapply(sample_data$Code, sample_data$Year, function(x) length(unique(x)))
-## Compare effort to population size
-effort <- as.data.frame(effort)
-pop <- as.data.frame(unique_ID_year)
-pop_effort <- cbind(effort, pop) # Days per year and pop size per year
-plot(pop_effort$effort ~ pop_effort$unique_ID_year)
-sd(pop_effort$effort)
+# Make a list of three years per dataframe
+sample_data$ThreeYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 3, by = 3), labels = FALSE)
+list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
 
-# Group each individual by date and sighting
-group_data <- cbind(sample_data[,c("Date","Sighting","Code","TriYear")]) 
-group_data <- subset(group_data, subset=c(group_data$Code != "None"))
-group_data$Group <- cumsum(!duplicated(group_data[1:2])) # Create sequential group # by date
-group_data <- cbind(group_data[,3:5]) # Subset ID and group #
-
-# Make a list of only one year per dataframe
-list_years <- split(sample_data, sample_data$Year)
+# Eliminate IDs with less than 5 locations
+ID <- list()
+for (i in seq_along(list_threeyears)) {
+ID[[i]] <- unique(list_threeyears[[i]]$Code)
+obs_vect <- NULL
+for (j in 1:length(ID[[i]])) {
+  obs_vect[j] <- sum(list_threeyears[[i]]$Code == ID[[i]][j])
+}
+sub <- data.frame(ID = ID[[i]], obs_vect = obs_vect)
+sub <- subset(sub, subset=c(sub$obs_vect > 10))
+list_threeyears[[i]] <- subset(list_threeyears[[i]], list_threeyears[[i]]$Code %in% c(sub$ID))}
 
 # Save list
-saveRDS(list_years, file="list_years.RData")
+saveRDS(list_threeyears, file="list_years.RData")
 list_years <- readRDS("list_years.RData")
 
-# Gambit of the group index
+# Calculate Gambit of the group
 gbi <- list()
-for (y in 1:length(years)) {
-  gbi[[y]] <- get_group_by_individual(list_years[[y]][,c("Code", "Group")], data_format = "individuals")
+group_data <- list()
+for (i in seq_along(list_years)) {
+  
+  # Group each individual by date and sighting
+  group_data[[i]] <- cbind(list_years[[i]][,c("Date","Sighting","Code","Year")]) 
+  group_data[[i]]$Group <- cumsum(!duplicated(group_data[[i]][1:2])) # Create sequential group # by date
+  group_data[[i]] <- cbind(group_data[[i]][,3:5]) # Subset ID and group #
+  
+  # Gambit of the group index
+  gbi[[i]] <- get_group_by_individual(group_data[[i]][,c("Code", "Group")], data_format = "individuals")
 }
+
 saveRDS(gbi, file="gbi.RData")
 
 # Create association matrix
@@ -81,7 +78,7 @@ n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
 nxn <- list()
-for (i in 1:length(years)) {
+for (i in seq_along(list_years)) {
   nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
 }
 # End parallel processing

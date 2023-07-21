@@ -24,39 +24,18 @@ library(rgdal) # Overlap
 
 # Read in file
 sample_data <- read.csv("sample_data.csv")
+list_years <- readRDS("list_years.RData")
 
-# Add HI data
-# sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
+# # Test one year at a time
+year <- 5
+coord_data <- list_years[[year]]
 
 # Extract coordinates
-coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'subYear', 'ConfHI')]) # Subset Date and Coordinates #
+coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #
 ## Format date and year
 coord_data$Date <- as.Date(as.character(coord_data$Date), format="%Y-%m-%d")
 ## Give descriptive names
-colnames(coord_data) <- c("date", "y", "x", "id", "subyear", "HI")
-
-# Seperate map per years
-years <- unique(coord_data$subyear)
-coord_years <- list()
-for (i in 1:length(years)) {
-  coord_years[[i]] <- subset(coord_data, subset=c(coord_data$subyear == years[i]))
-}    
-
-# Test one year at a time
-coord_data <- coord_years[[5]]
-
-# Eliminate IDs with less than 5 locations
-coord_data <- subset(coord_data, subset=c(coord_data$id != "None"))
-coord_data <- coord_data[!is.na(coord_data$x) & !is.na(coord_data$y),]
-
-ID <- unique(coord_data$id)
-obs_vect <- NULL
-for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(coord_data$id == ID[i])
-}
-sub <- data.frame(ID, obs_vect)
-sub <- subset(sub, subset=c(sub$obs_vect > 10))
-coord_data <- subset(coord_data, coord_data$id %in% c(sub$ID))
+colnames(coord_data) <- c("date", "y", "x", "id", "year", "HI")
 
 # Only include three columns (id, x, and y coordinates) for making MCP's
 dolph.sp <- coord_data[, c("id", "y", "x")] 
@@ -184,4 +163,8 @@ mymap.hr <- ggmap(mybasemap) +
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
 
 # Get HRO 
+kernel <- kernelUD(dolph.sp, h = 1000)
+
 kov <- kerneloverlaphr(kernel, method="HR", lev=95)
+
+saveRDS(kov, "kov.RDS")
