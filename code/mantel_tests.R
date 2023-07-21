@@ -34,7 +34,7 @@ dolp_dist <- as.dist(dolp_dist)
 data <- list_years[[year]]
 aux <- data[, c('Code', 'Behaviors', 'HumanInteraction', 'ConfHI')]
 
-length(unique(aux$Code)) # 381 individuals should stay consistent
+length(unique(aux$Code)) # individuals should stay consistent
 
 # Use 'Behaviors' variable to extract "Feed" and create another variable with two classes (Feed, Other)
 aux$Foraging <- "Other"
@@ -58,9 +58,6 @@ rawHI <- as.matrix(table(aux$Code, aux$ConfHI))
 rawHI <- as.data.frame(rawHI, stringsAsFactors = FALSE)
 colnames(rawHI) <- c("Code", "ConfHI", "Freq")
 
-#HI <- subset(rawHI, subset=c(rawHI$ConfHI != 0))
-#HI <- subset(HI, subset=c(HI$Freq != 0))
-
 ## Add up the # of times each ID was seen in HI
 IDbehav$HI <- rawHI$Freq[rawHI$ConfHI != 0]
 IDdata <- IDbehav
@@ -73,11 +70,6 @@ IDdata[is.na(IDdata)] <- 0
 # Only ID to prop
 HIprop_ID <- IDdata[,c(1, 4)]
 
-# ----Or I could measure HI per obs for each ID-----
-#IDdata_2 <- as.data.frame(table(aux$Code)) # FB07 (Group 4) & FB92 (Group 4) in year 1
-#IDdata_2$HI <- rawHI$Freq[rawHI[,2] != "0"]
-#IDdata_2$HIprop <- IDdata_2$HI/IDdata_2$Freq
-
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 fake_HIprop <- HIprop_ID$HIprop
 dissimilarity_HI <- as.matrix(dist(as.matrix(fake_HIprop), method = "euclidean"))
@@ -86,7 +78,8 @@ dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
 dissimilarity_HI <- as.dist(dissimilarity_HI) # HI dissimilarity
 kov <- as.dist(kov) # Home range overlap
 
-# Dissimilarity matrix
-mantel.rtest(kov, dolp_dist, nrepet=999)
+# Dissimilarity matrices
+HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, kov, nrepet = 1000)
+plot(HI_test)
+# So far no correlation with HI engagement and associations
 
-mantel.rtest(dissimilarity_HI, dolp_dist, nrepet=999) 
