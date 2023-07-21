@@ -13,13 +13,12 @@ setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 ## load all necessary packages
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
-library(adehabitatHR) # Caluculate MCPs
+library(adehabitatHR) # Caluculate MCPs and Kernel density 
 library(scales) # Helps make polygons partly transparent using the alpha argument
 library(ggmap) # Download tiles using ggmap
 library(viridis) # Color pallette
 library(gridExtra) # grid.arrange function
 library(ggplot2)
-library(adehabitatHR) # Kernel density 
 library(rgdal) # Overlap
 
 # Read in file
@@ -31,7 +30,7 @@ year <- 5
 coord_data <- list_years[[year]]
 
 # Extract coordinates
-coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #
+coord_data <- cbind(coord_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #
 ## Format date and year
 coord_data$Date <- as.Date(as.character(coord_data$Date), format="%Y-%m-%d")
 ## Give descriptive names
@@ -45,11 +44,10 @@ coord_data_sf <- st_as_sf(dolph.sp, coords = c("x", "y"), crs = 4326)
 
 # UTM zone for study area
 dolph.sf <- st_transform(coord_data_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+
 # Extract coordinates (latitude and longitude) and create new columns
 dolph.sp$x <- st_coordinates(dolph.sf)[, 1]
 dolph.sp$y <- st_coordinates(dolph.sf)[, 2]
-# Remove two rows with NA's
-dolph.sp <- dolph.sp[!is.na(dolph.sp$x) & !is.na(dolph.sp$y),]
 
 coordinates(dolph.sp) <- c("x", "y")
 

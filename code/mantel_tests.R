@@ -86,10 +86,6 @@ dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
 dissimilarity_HI <- as.dist(dissimilarity_HI) # HI dissimilarity
 kov <- as.dist(kov) # Home range overlap
 
-# Make sure all matrices have the same dimensions
-length(unique(list_years[[year]]$Code)) == length(unique(HIprop_ID$Code))
-
-
 # Dissimilarity matrix
 mantel.rtest(kov, dolp_dist, nrepet=999)
 

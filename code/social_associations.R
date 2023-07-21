@@ -30,7 +30,8 @@ orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
 # Get rid of any data with no location data
-sample_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
+orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
+sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
