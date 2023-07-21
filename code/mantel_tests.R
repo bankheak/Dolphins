@@ -17,7 +17,8 @@ require(vegan)
 
 # Read file in to retain ILV
 sample_data <- read.csv("sample_data.csv")
-kov <- readRDS("kov.RDS")
+kov <- readRDS("kov.RDS")  # Home range overlap
+kov <- as.dist(kov)
 
 # Read in social association matrix and data
 nxn <- readRDS("nxn.RData")
@@ -43,7 +44,7 @@ aux$Foraging[grepl(pattern = 'Feed',
                    ignore.case = FALSE, perl = FALSE,
                    fixed = FALSE, useBytes = FALSE)] = "Feed"
 #aux <- subset(aux, aux$Foraging == "Feed")
-aux$ConfHI <- ifelse(aux$ConfHI == "0", 0, 1)
+#aux$ConfHI <- ifelse(aux$ConfHI == "0", 0, 1)
 
 # Categorize ID to Foraging
 IDbehav <- table(aux$Code, aux$Foraging)
@@ -53,13 +54,23 @@ colnames(IDbehav) <- c("Code", "Forg_Freq")
 # Group by the 'Code' column and sum the frequencies
 IDbehav <- aggregate(. ~ Code, data = IDbehav, sum)
 
+# HI behaviors should be partitioned into 3 different types
+#' B = Begging (direct provisioning): F, G, H
+#' P = patrolling/scavenging (indirect): A, B, C
+#' D = foraging around fixed gear (humans not present):D, E, P
+# Fix the code using ifelse statements
+aux$ConfHI <- ifelse(aux$ConfHI %in% c("F", "G", "H"), "B",
+                     ifelse(aux$ConfHI %in% c("A", "B", "C"), "P", 
+                            ifelse(aux$ConfHI %in% c("D", "E", "P"), "D", "0")))
+
 # Categorize ConfHI to IDs
 rawHI <- as.matrix(table(aux$Code, aux$ConfHI))
 rawHI <- as.data.frame(rawHI, stringsAsFactors = FALSE)
 colnames(rawHI) <- c("Code", "ConfHI", "Freq")
 
 ## Add up the # of times each ID was seen in HI
-IDbehav$HI <- rawHI$Freq[rawHI$ConfHI != 0]
+HI <- "B"
+IDbehav$HI <- rawHI$Freq[rawHI$ConfHI == HI & rawHI$ConfHI != "0"]
 IDdata <- IDbehav
 colnames(IDdata) <- c("Code", "Foraging", "HI")
 
@@ -76,10 +87,9 @@ dissimilarity_HI <- as.matrix(dist(as.matrix(fake_HIprop), method = "euclidean")
 dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
 
 dissimilarity_HI <- as.dist(dissimilarity_HI) # HI dissimilarity
-kov <- as.dist(kov) # Home range overlap
 
 # Dissimilarity matrices
-HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, kov, nrepet = 1000)
+HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, nrepet = 1000)
 plot(HI_test)
 # So far no correlation with HI engagement and associations
 
