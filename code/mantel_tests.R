@@ -1,19 +1,21 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
 ###########################################################################
-# MANTEL TESTS
+# MRQAP TESTS
 ###########################################################################
 
 # Set working directory here
 setwd("C:/Users/bankh/My_Repos/Dolphins/data")
 
 ###########################################################################
-# PART 1: Create HI Similarity Matrix  ------------------------------------------------
+# PART 1: Create HI Disimilarity Matrix  ------------------------------------------------
 
 ## load all necessary packages
-require(ade4) # Look at Dai Shizuka/Jordi Bascompte
-require(ncf) # For weights
-require(vegan)
+library(ade4) # Look at Dai Shizuka/Jordi Bascompte
+library(ncf) # For weights
+library(vegan)
+library(igraph) # graph_adj
+require(asnipe) # mrqap.dsp
 
 # Read file in to retain ILV
 sample_data <- read.csv("sample_data.csv")
@@ -88,8 +90,29 @@ dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
 
 dissimilarity_HI <- as.dist(dissimilarity_HI) # HI dissimilarity
 
-# Dissimilarity matrices
+
+###########################################################################
+# PART 2: Run Mantel Tests  ------------------------------------------------
+
+# Dissimilarity Mantel Test
 HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, nrepet = 1000)
 plot(HI_test)
 # So far no correlation with HI engagement and associations
+
+## HRO
+hro_test <- mantel.rtest(dolp_dist, kov, nrepet = 1000)
+plot(hro_test)
+
+
+###########################################################################
+# PART 3: Create MRQAP Models  ------------------------------------------------
+
+# Set a number of permutations
+Nperm <- 1000
+
+# Calculate QAP correlations for the association response matrix
+mrqap <- mrqap.dsp(nxn[[year]] ~ dissimilarity_HI + kov,
+                   randomisations = Nperm,
+                   intercept = FALSE,
+                   test.statistic = "beta")
 

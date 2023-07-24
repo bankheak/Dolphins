@@ -22,7 +22,7 @@ nxn <- readRDS("nxn.RData")
 sample_data <- read.csv("sample_data.csv")
 
 # Test one year at a time
-year <- 2
+year <- 5
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn[[year]]),

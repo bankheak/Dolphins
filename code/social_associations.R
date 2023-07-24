@@ -96,7 +96,7 @@ nxn <- readRDS("nxn.RData")
 # Done in the HPC --------------------------------------------------------------
 
 #  Create 1000 random group-by-individual binary matrices
-reps<- 100
+reps<- 1000
   registerDoParallel(n.cores)
   nF <- null(test_gbi, iter=reps)
   saveRDS(nF, "../code/nF.RData")

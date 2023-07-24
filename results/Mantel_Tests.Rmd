@@ -1,5 +1,5 @@
 ---
-title: "Mantel Tests"
+title: "MRQAP Tests"
 author: "Kyra Bankhead"
 date: "2023-05-02"
 output: pdf_document
