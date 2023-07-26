@@ -1,15 +1,15 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
 ###########################################################################
-# DYATIC SOCIAL ASSOCIATIONS
+# DYATIC SOCIAL ASSOCIATIONP
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("C:/Users/bankh/My_Repos/DolphiNP/data")
 
 # Load all necessary packages
 require(asnipe) # get_group_by_individual--Damien Farine
-# Could do permutations
+# Could do permutatioNP
 require(assocInd)
 require(vegan)
 # Run multiple cores for faster computing
@@ -40,7 +40,7 @@ sample_data <- read.csv("sample_data.csv")
 sample_data$ThreeYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 3, by = 3), labels = FALSE)
 list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
 
-# Eliminate IDs with less than 5 locations
+# Eliminate IDs with less than 5 locatioNP
 ID <- list()
 for (i in seq_along(list_threeyears)) {
 ID[[i]] <- unique(list_threeyears[[i]]$Code)
@@ -73,7 +73,7 @@ for (i in seq_along(list_years)) {
 saveRDS(gbi, file="gbi.RData")
 
 # Create association matrix
-source("../code/functions.R") # SRI & null permutation
+source("../code/functioNP.R") # SRI & null permutation
 
 n.cores <- detectCores()
 system.time({
@@ -91,7 +91,7 @@ saveRDS(nxn, file="nxn.RData")
 nxn <- readRDS("nxn.RData")
 
 ###########################################################################
-# PART 2: Permutations ---------------------------------------------------------
+# PART 2: PermutatioNP ---------------------------------------------------------
 
 # Done in the HPC --------------------------------------------------------------
 
@@ -128,7 +128,7 @@ cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedl
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = quantile(cv_null[[year]], probs=c(0.025, 0.975), type=2)
 
-# Check whether patterns of connection are non-random
+# Check whether patterNP of connection are non-random
 # histogram of null CVs
 hist(cv_null[[year]], 
      breaks=50, 
@@ -142,10 +142,10 @@ abline(v= cv_ci[1], col="blue")
 # 97.5% CI
 abline(v= cv_ci[2], col="blue")
 #' This shows whether there are more preferred/avoided 
-#' relationships than we would expect at random
+#' relatioNPhips than we would expect at random
 
 ###########################################################################
-# PART 3: SRI ---------------------------------------------------------
+# PART 3: SRI Within HI Pairs---------------------------------------------------------
 
 # Read in different behavior's data frames
 IDbehav_Beg <- readRDS("IDbehav_Beg.RData")
@@ -205,10 +205,10 @@ for (i in seq_along(Beg_nxn)) {
   is_B[[i]] <- rownames(Beg_nxn[[i]]) == "B" 
 }
 
-is_NS <- is_S <- list()
+is_NP <- is_P <- list()
 for (i in seq_along(Pat_nxn)) {
-  is_NS[[i]] <- rownames(Pat_nxn[[i]]) == "NS"
-  is_S[[i]] <- rownames(Pat_nxn[[i]]) == "S" 
+  is_NP[[i]] <- rownames(Pat_nxn[[i]]) == "NP"
+  is_P[[i]] <- rownames(Pat_nxn[[i]]) == "P" 
 }
 
 is_ND <- is_D <- list()
@@ -233,17 +233,17 @@ NB_B <- extract_combs(Beg_nxn, is_NB, is_B)
 B_NB <- extract_combs(Beg_nxn, is_B, is_NB)
 B_B <- extract_combs(Beg_nxn, is_B, is_B)
 
-NS_NS <- extract_combs(Pat_nxn, is_NS, is_NS)
-NS_S <- extract_combs(Pat_nxn, is_NS, is_S)
-S_NS <- extract_combs(Pat_nxn, is_S, is_NS)
-S_S <- extract_combs(Pat_nxn, is_S, is_S)
+NP_NP <- extract_combs(Pat_nxn, is_NP, is_NP)
+NP_P <- extract_combs(Pat_nxn, is_NP, is_P)
+P_NP <- extract_combs(Pat_nxn, is_P, is_NP)
+P_P <- extract_combs(Pat_nxn, is_P, is_P)
 
 ND_ND <- extract_combs(Dep_nxn, is_ND, is_ND)
 ND_D <- extract_combs(Dep_nxn, is_ND, is_D)
 D_ND <- extract_combs(Dep_nxn, is_D, is_ND)
 D_D <- extract_combs(Dep_nxn, is_D, is_D)
 
-## Step 3: Calculate the average of non-diagonal elements in the 'NB-NB', 'NB-B', and 'B-B' submatrices
+## Step 3: Calculate the average of non-diagonal elements in the pairing sub-matrices
 
 ### Function to calculate avg
 avg_comb <- function(a, b, c, d) {
@@ -270,9 +270,18 @@ avg_comb <- function(a, b, c, d) {
 
 
 avg_Beg <- avg_comb(NB_NB, NB_B, B_NB, B_B)
-colnames(avg_Beg) <- c("NB_NB", "NB_B", "B_NB", "B_B")
-avg_Pat <- avg_comb(NS_NS, NS_S, S_NS, S_S)
-colnames(avg_Beg) <- c("NS_NS", "NS_S", "S_NS", "S_S")
+colnames(avg_Beg) <- c("NB_NB", "NB_B", "B_NB", "B_B") # Only one beggar in period 4 (2002-2004)
+boxplot(avg_Beg)
+plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5, 
+     xlab="3-Year Period", ylab="Avg SRI", main = "Beggar-Beggar Pairs")
+
+avg_Pat <- avg_comb(NP_NP, NP_P, P_NP, P_P)
+colnames(avg_Pat) <- c("NP_NP", "NP_P", "P_NP", "P_P")
+boxplot(avg_Pat)
+plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5, 
+     xlab="3-Year Period", ylab="Avg SRI")
+
 avg_Dep <- avg_comb(ND_ND, ND_D, D_ND, D_D)
-colnames(avg_Beg) <- c("ND_ND", "ND_D", "D_ND", "D_D")
+colnames(avg_Dep) <- c("ND_ND", "ND_D", "D_ND", "D_D") # Only one depredation in period 4 (2002-2004)
+boxplot(avg_Dep)
 
