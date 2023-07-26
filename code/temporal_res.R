@@ -15,12 +15,10 @@ library(vegan)
 # Run multiple cores for faster computing
 require(doParallel)
 require(parallel)
-library(sfsmisc, verbose=F)
+library(sfsmisc, verbose=F) 
 
 # Read in file and add months
 sample_data <- read.csv("sample_data.csv")
-# Make data easily divisible
-# sample_data <- subset(sample_data, subset=c(sample_data$Year > 2004))
 
 # Estimate sampling effort and size for each year
 ## Get estimate of sampling effort

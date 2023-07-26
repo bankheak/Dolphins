@@ -204,7 +204,7 @@ plot(HI.kernel.poly, col = color)
 
 ## Look into what HI behaviors these dolphins have performed
 
-```{r typeHI}
+```{r typeHI, echo=TRUE, message=FALSE, warning=FALSE}
 # Categorize ConfHI to IDs
 ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
 
