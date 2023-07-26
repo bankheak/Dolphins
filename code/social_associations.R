@@ -278,8 +278,6 @@ plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5,
 avg_Pat <- avg_comb(NP_NP, NP_P, P_NP, P_P)
 colnames(avg_Pat) <- c("NP_NP", "NP_P", "P_NP", "P_P")
 boxplot(avg_Pat)
-plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5, 
-     xlab="3-Year Period", ylab="Avg SRI")
 
 avg_Dep <- avg_comb(ND_ND, ND_D, D_ND, D_D)
 colnames(avg_Dep) <- c("ND_ND", "ND_D", "D_ND", "D_D") # Only one depredation in period 4 (2002-2004)
