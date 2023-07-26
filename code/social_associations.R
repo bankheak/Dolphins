@@ -143,3 +143,136 @@ abline(v= cv_ci[1], col="blue")
 abline(v= cv_ci[2], col="blue")
 #' This shows whether there are more preferred/avoided 
 #' relationships than we would expect at random
+
+###########################################################################
+# PART 3: SRI ---------------------------------------------------------
+
+# Read in different behavior's data frames
+IDbehav_Beg <- readRDS("IDbehav_Beg.RData")
+IDbehav_Pat <- readRDS("IDbehav_Pat.RData")
+IDbehav_Dep <- readRDS("IDbehav_Dep.RData")
+
+# Get unique behavior assignments
+status <- function(IDbehav, HI, NonHI){
+  lapply(seq_along(IDbehav), function(i) {
+    IDbehav[[i]]$Stat <- ifelse(IDbehav[[i]]$HI > 0, HI, NonHI)
+    df <- IDbehav[[i]][, c('Code', 'Stat')] 
+    df
+    })
+}
+
+## Match each individual with it's behavior
+Beg <- status(IDbehav_Beg, "B", "NB")
+Pat <- status(IDbehav_Pat, "P", "NP")
+Dep <- status(IDbehav_Dep, "D", "ND")
+
+# Replace individuals in the matrix with their assigned behavior
+replace_ID_with_HI <- function(sri_matrix, ID_HI_df) {
+  # Create vector that matches IDs to their stat
+  id_to_stat <- setNames(ID_HI_df$Stat, ID_HI_df$Code)
+  
+  # Replace each ID with stat in row and column names
+  row_names <- id_to_stat[rownames(sri_matrix)]
+  col_names <- id_to_stat[colnames(sri_matrix)]
+  
+  # Create the replaced matrix
+  replaced_matrix <- sri_matrix
+  
+  # Assign row and column names with behavioral states
+  dimnames(replaced_matrix) <- list(row_names, col_names)
+  return(replaced_matrix)
+}
+
+# Make a replaced nxn for each behavior
+Beg_nxn <- lapply(seq_along(nxn), function(i) {
+  replace_ID_with_HI(nxn[[i]], Beg[[i]])
+})
+                  
+Pat_nxn <- lapply(seq_along(nxn), function(i) {
+  replace_ID_with_HI(nxn[[i]], Pat[[i]])
+})
+
+Dep_nxn <- lapply(seq_along(nxn), function(i) {
+  replace_ID_with_HI(nxn[[i]], Dep[[i]])
+})
+
+# Get an average SRI for each category of pairing
+## Step 1: Create a matrix for each category of stat
+
+is_NB <- is_B <- list()
+for (i in seq_along(Beg_nxn)) {
+  is_NB[[i]] <- rownames(Beg_nxn[[i]]) == "NB"
+  is_B[[i]] <- rownames(Beg_nxn[[i]]) == "B" 
+}
+
+is_NS <- is_S <- list()
+for (i in seq_along(Pat_nxn)) {
+  is_NS[[i]] <- rownames(Pat_nxn[[i]]) == "NS"
+  is_S[[i]] <- rownames(Pat_nxn[[i]]) == "S" 
+}
+
+is_ND <- is_D <- list()
+for (i in seq_along(Dep_nxn)) {
+  is_ND[[i]] <- rownames(Dep_nxn[[i]]) == "ND"
+  is_D[[i]] <- rownames(Dep_nxn[[i]]) == "D" 
+}
+
+## Step 2: Extract the combinations
+
+### Function to extract combinations
+extract_combs <- function(HI_nxn, is_row, is_col) {
+  combs <- lapply(seq_along(HI_nxn), function(i) {
+    HI_nxn[[i]][is_row[[i]], is_col[[i]]]
+  })
+  return(combs)
+}
+
+#### Apply for each stat comb
+NB_NB <- extract_combs(Beg_nxn, is_NB, is_NB)
+NB_B <- extract_combs(Beg_nxn, is_NB, is_B)
+B_NB <- extract_combs(Beg_nxn, is_B, is_NB)
+B_B <- extract_combs(Beg_nxn, is_B, is_B)
+
+NS_NS <- extract_combs(Pat_nxn, is_NS, is_NS)
+NS_S <- extract_combs(Pat_nxn, is_NS, is_S)
+S_NS <- extract_combs(Pat_nxn, is_S, is_NS)
+S_S <- extract_combs(Pat_nxn, is_S, is_S)
+
+ND_ND <- extract_combs(Dep_nxn, is_ND, is_ND)
+ND_D <- extract_combs(Dep_nxn, is_ND, is_D)
+D_ND <- extract_combs(Dep_nxn, is_D, is_ND)
+D_D <- extract_combs(Dep_nxn, is_D, is_D)
+
+## Step 3: Calculate the average of non-diagonal elements in the 'NB-NB', 'NB-B', and 'B-B' submatrices
+
+### Function to calculate avg
+avg_comb <- function(a, b, c, d) {
+  avg_a <- lapply(seq_along(a), function(i) {
+    mean(a[[i]][lower.tri(a[[i]])])
+  })
+  avg_b <- lapply(seq_along(b), function(i) {
+    mean(b[[i]][lower.tri(b[[i]])])
+  })
+  avg_c <- lapply(seq_along(c), function(i) {
+    mean(c[[i]][lower.tri(c[[i]])])
+  })
+  avg_d <- lapply(seq_along(d), function(i) {
+    mean(d[[i]][lower.tri(d[[i]])])
+  })
+  avg_df <- data.frame(
+    Avg_A = unlist(avg_a),
+    Avg_B = unlist(avg_b),
+    Avg_C = unlist(avg_c),
+    Avg_D = unlist(avg_d)
+  )
+  return(avg_df)
+}
+
+
+avg_Beg <- avg_comb(NB_NB, NB_B, B_NB, B_B)
+colnames(avg_Beg) <- c("NB_NB", "NB_B", "B_NB", "B_B")
+avg_Pat <- avg_comb(NS_NS, NS_S, S_NS, S_S)
+colnames(avg_Beg) <- c("NS_NS", "NS_S", "S_NS", "S_S")
+avg_Dep <- avg_comb(ND_ND, ND_D, D_ND, D_D)
+colnames(avg_Beg) <- c("ND_ND", "ND_D", "D_ND", "D_D")
+

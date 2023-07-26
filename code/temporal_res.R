@@ -40,8 +40,8 @@ all_codes <- unique(sample_data$Code)
 # Create a function that counts the IDs in each element
 count_instances <- function(df) {
   code_counts <- table(df$Code)
-  code_counts <- code_counts[match(all_codes, names(code_counts))]
-  code_counts[is.na(code_counts)] <- 0
+  code_counts <- code_counts[match(all_codes, names(code_counts))] # Add codes to table even if they aren't in that time period
+  code_counts[is.na(code_counts)] <- 0 # Replace NAs with 0
   return(code_counts)
 }
 

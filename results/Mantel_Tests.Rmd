@@ -15,6 +15,8 @@ In this markdown I will:
 
 2. Run Mantel tests with different predictors.
 
+3. Create MRQAP Models.
+
 
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
 

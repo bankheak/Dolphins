@@ -33,68 +33,109 @@ dolp_dist <- 1-nxn[[year]]
 ## Remove the redundant cells and the diagonal 
 dolp_dist <- as.dist(dolp_dist)
 
-# Select variables from the raw data
-data <- list_years[[year]]
-aux <- data[, c('Code', 'Behaviors', 'HumanInteraction', 'ConfHI')]
+# Extract specific columns from each data frame in list_years
+aux <- lapply(list_years, function(df) {
+  data.frame(
+    Code = df$Code,
+    Behaviors = df$Behaviors,
+    HumanInteraction = df$HumanInteraction,
+    ConfHI = df$ConfHI
+  )
+})
 
-length(unique(aux$Code)) # individuals should stay consistent
-
-# Use 'Behaviors' variable to extract "Feed" and create another variable with two classes (Feed, Other)
-aux$Foraging <- "Other"
-aux$Foraging[grepl(pattern = 'Feed',
-                   x = aux$Behaviors,
-                   ignore.case = FALSE, perl = FALSE,
-                   fixed = FALSE, useBytes = FALSE)] = "Feed"
-#aux <- subset(aux, aux$Foraging == "Feed")
-#aux$ConfHI <- ifelse(aux$ConfHI == "0", 0, 1)
+# Add the 'Foraging' variable to each data frame in the 'aux' list
+aux <- lapply(aux, function(df) {
+  df$Foraging <- "Other"
+  df$Foraging[grepl(pattern = 'Feed', x = df$Behaviors, ignore.case = FALSE)] <- "Feed"
+  df
+})
 
 # Categorize ID to Foraging
-IDbehav <- table(aux$Code, aux$Foraging)
-IDbehav <- as.data.frame(IDbehav, stringsAsFactors = FALSE)
-IDbehav <- IDbehav[,c(1,3)]
-colnames(IDbehav) <- c("Code", "Forg_Freq")
-# Group by the 'Code' column and sum the frequencies
-IDbehav <- aggregate(. ~ Code, data = IDbehav, sum)
+IDbehav <- lapply(aux, function(df) {
+  df <- table(df$Code, df$Foraging)
+  df <- as.data.frame(df, stringsAsFactors = FALSE)
+  df <- df[, c(1, 3)]
+  colnames(df) <- c("Code", "Forg_Freq")
+  df <- aggregate(. ~ Code, data = df, sum)
+  df
+})
 
 # HI behaviors should be partitioned into 3 different types
 #' B = Begging (direct provisioning): F, G, H
 #' P = patrolling/scavenging (indirect): A, B, C
 #' D = foraging around fixed gear (humans not present):D, E, P
 # Fix the code using ifelse statements
-aux$ConfHI <- ifelse(aux$ConfHI %in% c("F", "G", "H"), "B",
-                     ifelse(aux$ConfHI %in% c("A", "B", "C"), "P", 
-                            ifelse(aux$ConfHI %in% c("D", "E", "P"), "D", "0")))
+for (i in seq_along(aux)) {
+  
+  aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "B",
+                            ifelse(aux[[1]]$ConfHI %in% c("A", "B", "C"), "S", 
+                                   ifelse(aux[[i]]$ConfHI %in% c("D", "E", "P"), "D", "0")))
+  
+}
 
 # Categorize ConfHI to IDs
-rawHI <- as.matrix(table(aux$Code, aux$ConfHI))
-rawHI <- as.data.frame(rawHI, stringsAsFactors = FALSE)
-colnames(rawHI) <- c("Code", "ConfHI", "Freq")
+rawHI <- lapply(aux, function(df) {
+  df <- as.matrix(table(df$Code, df$ConfHI))
+  df <- as.data.frame(df, stringsAsFactors = FALSE)
+  colnames(df) <- c("Code", "ConfHI", "Freq")
+  df
+})
 
-## Add up the # of times each ID was seen in HI
-HI <- "B"
-IDbehav$HI <- rawHI$Freq[rawHI$ConfHI == HI & rawHI$ConfHI != "0"]
-IDdata <- IDbehav
-colnames(IDdata) <- c("Code", "Foraging", "HI")
+# Create a different frequency count for each HI behavior
+get_IDHI <- function(confHI) {
+  lapply(seq_along(IDbehav), function(i) {
+    df <- IDbehav[[i]]
+    df$HI <- rawHI[[i]]$Freq[rawHI[[i]]$ConfHI == confHI & rawHI[[i]]$ConfHI != "0"]
+    colnames(df) <- c("Code", "Foraging", "HI")
+    df
+  })
+}
 
-## Proportion of time Foraging spent in HI
-IDdata$HIprop <- as.numeric(IDdata$HI)/as.numeric(IDdata$Foraging)
-IDdata[is.na(IDdata)] <- 0
+IDbehav_Beg <- get_IDHI("B")
+IDbehav_Pat <- get_IDHI("S")
+IDbehav_Dep <- get_IDHI("D")
 
-# Only ID to prop
-HIprop_ID <- IDdata[,c(1, 4)]
+saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
+saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
+saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
+
+# Proportion of time Foraging spent in HI
+Prop_HI <- function(IDbehav) {
+  lapply(seq_along(IDbehav), function(i) {
+    df <- IDbehav[[i]]
+    df$HIprop <- as.numeric(df$HI) / as.numeric(df$Foraging)
+    df$HIprop[is.na(df$HIprop)] <- 0
+    # Keep only 'Code' and 'HIprop' columns
+    df <- df[, c('Code', 'HIprop')]
+    df
+  })
+}
+
+prob_Beg <- Prop_HI(IDbehav_Beg)
+prob_Pat <- Prop_HI(IDbehav_Pat)
+prob_Dep <- Prop_HI(IDbehav_Dep)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
-fake_HIprop <- HIprop_ID$HIprop
-dissimilarity_HI <- as.matrix(dist(as.matrix(fake_HIprop), method = "euclidean"))
-dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
+dis_matr <- function(IDbehav) {
+  dissimilarity_HI <- list()
+  for (i in seq_along(IDbehav)) {
+    fake_HIprop <- IDbehav[[i]]$HIprop
+    dissimilarity_HI[[i]] <- as.matrix(dist(matrix(fake_HIprop), method = "euclidean"))
+    dissimilarity_HI[[i]][is.na(dissimilarity_HI[[i]])] <- 0
+    dissimilarity_HI[[i]] <- as.dist(dissimilarity_HI[[i]]) # HI dissimilarity
+  }
+  dissimilarity_HI
+}
 
-dissimilarity_HI <- as.dist(dissimilarity_HI) # HI dissimilarity
-
+dist_Beg <- dis_matr(prob_Beg)
+dist_Pat <- dis_matr(prob_Pat)
+dist_Dep <- dis_matr(prob_Dep)
 
 ###########################################################################
 # PART 2: Run Mantel Tests  ------------------------------------------------
 
 # Dissimilarity Mantel Test
+year <- 5
 HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, nrepet = 1000)
 plot(HI_test)
 # So far no correlation with HI engagement and associations
