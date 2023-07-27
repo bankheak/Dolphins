@@ -20,17 +20,41 @@ library(sfsmisc, verbose=F)
 # Read in file and add months
 sample_data <- read.csv("sample_data.csv")
 
-# Estimate sampling effort and size for each year
+# Estimate sampling effort and size for each triyear
+
 ## Get estimate of sampling effort
-effort <- tapply(sample_data$Date, sample_data$Year, function(x) length(unique(x)))
+effort <- as.data.frame(lapply(list_years, function(df) length(unique(df$Date))))
+colnames(effort) <- c(1:7)
+
 ## Get estimate of population size
-unique_ID_year <- tapply(sample_data$Code, sample_data$Year, function(x) length(unique(x)))
+unique_ID_year <- as.data.frame(lapply(list_years, function(df) length(unique(df$Code))))
+colnames(unique_ID_year) <- c(1:7)
+
+## Get estimate of population size within each HI group
+IDbehav_Beg <- readRDS("IDbehav_Beg.RData")
+IDbehav_Pat <- readRDS("IDbehav_Pat.RData")
+IDbehav_Dep <- readRDS("IDbehav_Dep.RData")
+
+Beg <- unique(unlist(sapply(IDbehav_Beg, function(df) df$Code[df$HI != 0])))
+Pat <- unique(unlist(sapply(IDbehav_Pat, function(df) df$Code[df$HI != 0])))
+Dep <- unique(unlist(sapply(IDbehav_Dep, function(df) df$Code[df$HI != 0])))
+
+common_individuals <- Reduce(intersect, list(Beg, Pat, Dep))
+length(common_individuals)
+
+Beg_effort <- as.data.frame(lapply(IDbehav_Beg, function(df) 
+  length(unique(df$Code[df$HI > 0]))))
+colnames(Beg_effort) <- c(1:7)
+Pat_effort <- as.data.frame(lapply(IDbehav_Pat, function(df) 
+  length(unique(df$Code[df$HI > 0]))))
+colnames(Pat_effort) <- c(1:7)
+Dep_effort <- as.data.frame(lapply(IDbehav_Dep, function(df) 
+  length(unique(df$Code[df$HI > 0]))))
+colnames(Dep_effort) <- c(1:7)
+
 ## Compare effort to population size
-effort <- as.data.frame(effort)
-pop <- as.data.frame(unique_ID_year)
-pop_effort <- cbind(effort, pop) # Days per year and pop size per year
-plot(pop_effort$effort ~ pop_effort$unique_ID_year)
-sd(pop_effort$effort)
+pop_effort <- as.data.frame(rbind(effort, unique_ID_year, Beg_effort, Pat_effort, Dep_effort)) # Days per year and pop size per year
+rownames(pop_effort) <- c('Days_Surveyed', 'Number_of_Indivduals', 'Beggars', 'Patrollers', 'Depredators')
 
 # Get all unique Code values in the entire sample_data
 all_codes <- unique(sample_data$Code)
