@@ -56,7 +56,6 @@ list_years <- split(sample_data, sample_data$Year)
 instances_per_year <- lapply(list_years, count_instances)
 # Convert the list of counts to a data frame
 p1y <- do.call(rbind, instances_per_year)
-p1y
 # Transforming into binary matrices
 p1y <- as.matrix(p1y); p1y[which(p1y>=1)] = 1; p1y[which(p1y<1)] = 0
 
@@ -69,7 +68,6 @@ list_twoyears <- split(sample_data, sample_data$TwoYearIncrement)
 instances_per_twoyear <- lapply(list_twoyears, count_instances)
 # Convert the list of counts to a data frame
 p2y <- do.call(rbind, instances_per_twoyear)
-p2y
 # Transforming into binary matrices
 p2y <- as.matrix(p2y); p2y[which(p2y>=1)] = 1; p2y[which(p2y<1)] = 0
 
@@ -82,7 +80,6 @@ list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
 instances_per_threeyear <- lapply(list_threeyears, count_instances)
 # Convert the list of counts to a data frame
 p3y <- do.call(rbind, instances_per_threeyear)
-p3y
 # Transforming into binary matrices
 p3y <- as.matrix(p3y); p3y[which(p3y>=1)] = 1; p3y[which(p3y<1)] = 0
 
@@ -95,7 +92,6 @@ list_fouryears <- split(sample_data, sample_data$FourYearIncrement)
 instances_per_fouryear <- lapply(list_fouryears, count_instances)
 # Convert the list of counts to a data frame
 p4y <- do.call(rbind, instances_per_fouryear)
-p4y
 # Transforming into binary matrices
 p4y <- as.matrix(p4y); p4y[which(p4y>=1)] = 1; p4y[which(p4y<1)] = 0
 
@@ -108,7 +104,6 @@ list_fiveyears <- split(sample_data, sample_data$FiveYearIncrement)
 instances_per_fiveyear <- lapply(list_fiveyears, count_instances)
 # Convert the list of counts to a data frame
 p5y <- do.call(rbind, instances_per_fiveyear)
-p5y
 # Transforming into binary matrices
 p5y <- as.matrix(p5y); p5y[which(p5y>=1)] = 1; p5y[which(p5y<1)] = 0
 
@@ -121,7 +116,6 @@ list_sixyears <- split(sample_data, sample_data$SixYearIncrement)
 instances_per_sixyear <- lapply(list_sixyears, count_instances)
 # Convert the list of counts to a data frame
 p6y <- do.call(rbind, instances_per_sixyear)
-p6y
 # Transforming into binary matrices
 p6y <- as.matrix(p6y); p6y[which(p6y>=1)] = 1; p6y[which(p6y<1)] = 0
 
@@ -134,7 +128,6 @@ list_sevenyears <- split(sample_data, sample_data$SevenYearIncrement)
 instances_per_sevenyear <- lapply(list_sevenyears, count_instances)
 # Convert the list of counts to a data frame
 p7y <- do.call(rbind, instances_per_sevenyear)
-p7y
 # Transforming into binary matrices
 p7y <- as.matrix(p7y); p7y[which(p7y>=1)] = 1; p7y[which(p7y<1)] = 0
 
@@ -147,7 +140,6 @@ list_eightyears <- split(sample_data, sample_data$EightYearIncrement)
 instances_per_eightyear <- lapply(list_eightyears, count_instances)
 # Convert the list of counts to a data frame
 p8y <- do.call(rbind, instances_per_eightyear)
-p8y
 # Transforming into binary matrices
 p8y <- as.matrix(p8y); p8y[which(p8y>=1)] = 1; p8y[which(p8y<1)] = 0
 

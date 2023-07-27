@@ -37,76 +37,54 @@ library(rgdal) # Overlap
 
 # Read in file
 sample_data <- read.csv("sample_data.csv")
+list_years <- readRDS("list_years.RData")
 
-# Add HI data
-sample_data$ConfHI <- ifelse(sample_data$ConfHI == 0, 0, 1)
+# # Test one year at a time
+year <- 7
+coord_data <- list_years[[year]]
 
 # Extract coordinates
-coord_data <- cbind(sample_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'subYear', 'ConfHI')]) # Subset Date and Coordinates #
+coord_data <- cbind(coord_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #
 ## Format date and year
 coord_data$Date <- as.Date(as.character(coord_data$Date), format="%Y-%m-%d")
 ## Give descriptive names
-colnames(coord_data) <- c("date", "y", "x", "id", "subyear", "HI")
-
-# Seperate map per years
-years <- unique(coord_data$subyear)
-coord_years <- list()
-for (i in 1:length(years)) {
-  coord_years[[i]] <- subset(coord_data, subset=c(coord_data$subyear == years[i]))
-}    
-
-# Test one year at a time
-coord_data <- coord_years[[5]]
-
-# Eliminate IDs with less than 5 locations
-coord_data <- subset(coord_data, subset=c(coord_data$id != "None"))
-coord_data <- coord_data[!is.na(coord_data$x) & !is.na(coord_data$y),]
-
-ID <- unique(coord_data$id)
-obs_vect <- NULL
-for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(coord_data$id == ID[i])
-}
-sub <- data.frame(ID, obs_vect)
-sub <- subset(sub, subset=c(sub$obs_vect > 10))
-coord_data <- subset(coord_data, coord_data$id %in% c(sub$ID))
+colnames(coord_data) <- c("date", "y", "x", "id", "year", "HI")
 
 # Only include three columns (id, x, and y coordinates) for making MCP's
 dolph.sp <- coord_data[, c("id", "y", "x")] 
-
 
 ```
 
 ## Convert coordinate degrees into meters
 
 ```{r meters, echo=TRUE, message=FALSE, warning=FALSE}
+
 # Create a simple feature data frame (sf)
 coord_data_sf <- st_as_sf(dolph.sp, coords = c("x", "y"), crs = 4326)
 
 # UTM zone for study area
 dolph.sf <- st_transform(coord_data_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+
 # Extract coordinates (latitude and longitude) and create new columns
 dolph.sp$x <- st_coordinates(dolph.sf)[, 1]
 dolph.sp$y <- st_coordinates(dolph.sf)[, 2]
-# Remove two rows with NA's
-dolph.sp <- dolph.sp[!is.na(dolph.sp$x) & !is.na(dolph.sp$y),]
 
 coordinates(dolph.sp) <- c("x", "y")
 
 # Set the initial CRS for data to WGS84 (latitude and longitude)
 proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
 
-
 ```
 
 ## Test which bandwidth parameter to use by investigating individuals of concern
 
-```{r SP, echo=TRUE, message=FALSE, warning=FALSE}
+```{r SP, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
 # Create kernel estimates for each id
 kernel.lscv <- kernelUD(dolph.sp, h = "LSCV")  # LSCV = least squares cross validation
 
 # Get the names or IDs of the individuals that are of concern
-selected_individuals <- c("F101", "F191", "F192", "FB15", "FB35", "FB41", "FB93")
+selected_individuals <- c("BEGR", "1091", "1316", "BRN1")
 
 # Repeat code above to calculate appropriate bandwidth for IDs of concern
 concern.sp <- coord_data[, c("id", "y", "x")] 
@@ -125,7 +103,6 @@ proj4string(concern.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_de
 # Now recalculate kernel estimates for each id
 kernel.con <- kernelUD(concern.sp, h = "LSCV")
 plotLSCV(kernel.con) # it looks like a bandwidth of 1000 will be good enough
-
 
 ```
 
@@ -160,8 +137,9 @@ plot(dolph.mcp, col = alpha(1:5, 0.5), add = TRUE)
 ## Plot only HI individual home ranges using kernel estimates
 
 ```{r HI, echo=TRUE, message=FALSE, warning=FALSE}
+
 # Find HI events among individuals
-ID_HI <- subset(coord_data, subset=c(coord_data$HI == 1))
+ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
 ID_HI <- ID_HI[,c('y', 'x', 'id')] 
 
 # Make sure there are at least 5 relocations
@@ -191,7 +169,7 @@ HI.kern <- kernelUD(ID_HI, h = 500)
 HI.kernel.poly <- getverticeshr(HI.kern, percent = 95)
 
 # Plot kernel density
-colors <- c("red", "green", "blue")
+colors <- rainbow(length(unique(ID_HI$id)))
 individuals <- unique(HI.kernel.poly@data$id)
 ## Match each individual to a color
 individual_color <- colors[match(individuals, unique(HI.kernel.poly@data$id))]
@@ -205,27 +183,19 @@ plot(HI.kernel.poly, col = color)
 ## Look into what HI behaviors these dolphins have performed
 
 ```{r typeHI, echo=TRUE, message=FALSE, warning=FALSE}
-# Categorize ConfHI to IDs
-ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
 
-HI_type <- as.matrix(table(ID_HI$id, ID_HI$HI))
+# Categorize ConfHI to IDs
+id_hi <- subset(coord_data, subset=c(coord_data$HI != 0))
+
+HI_type <- as.matrix(table(id_hi$id, id_hi$HI))
 HI_type <- data.frame(HI_type)
 colnames(HI_type) <- c("Code", "ConfHI", "Freq")
 
-HI <- subset(rawHI, subset=c(rawHI$ConfHI != 0))
-HI <- subset(HI, subset=c(HI$Freq != 0))
+HI <- subset(HI_type, subset=c(HI_type$Freq != 0))
+HI <- subset(HI, HI$Code %in% individuals)
+HI
 
 ```
-
-
-When looking at the observed behaviors of each individual, I found within the 3-year sample:
-
-* BEGR was caught begging 2 times and provisioning 2 times.
-
-* F222 was caught patrolling 2 times, scavenging 1 time, and entangled 2 times. 
-
-* F232 was caught patrolling 2 time, provisioning 1 time, interacting with fixed gear 1 time, and entangled 1 time.
-
 
 ## Plot only HI individual home ranges using MCP
 
@@ -246,7 +216,7 @@ HI.geo <- data.frame(HI.spgeo@coords,
 mybasemap <- get_stamenmap(bbox = c(left = -83, bottom = 27, right = -82, top = 28))
 
 # Plot HI ids
-ggmap(mybasemap) + 
+mymap.hr <- ggmap(mybasemap) + 
   geom_polygon(data = fortify(HI.mcpgeo),  
                # Polygon layer needs to be "fortified" to add geometry to the dataframe
                aes(long, lat, colour = id, fill = id),
@@ -256,11 +226,11 @@ ggmap(mybasemap) +
   theme(legend.position = c(0.15, 0.80)) +
   labs(x = "Longitude", y = "Latitude") +
   scale_fill_manual(name = "Dolphin ID", 
-                    values = c("red", "blue", "green"),
-                    breaks = c("BEGR", "F222", "F232")) +
+                    values = colors,
+                    breaks = individuals) +
   scale_colour_manual(name = "Dolphin ID", 
-                      values = c("red", "blue", "green"),
-                      breaks = c("BEGR", "F222", "F232"))
+                      values = colors,
+                      breaks = individuals)
 
 ```
 
@@ -272,6 +242,7 @@ ggmap(mybasemap) +
 ```{r dhro, echo=TRUE, message=FALSE, warning=FALSE}
 
 # Get HRO 
-kov <- kerneloverlaphr(kernel.lscv, method="HR", lev=95)
+kernel <- kernelUD(dolph.sp, h = 500)
+kov <- kerneloverlaphr(kernel, method="HR", lev=95)
 
 ```

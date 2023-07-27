@@ -25,8 +25,8 @@ library(rgdal) # Overlap
 sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 
-# # Test one year at a time
-year <- 5
+## Test one year at a time
+year <- 7
 coord_data <- list_years[[year]]
 
 # Extract coordinates
@@ -58,7 +58,7 @@ proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs
 kernel.lscv <- kernelUD(dolph.sp, h = "LSCV")  # LSCV = least squares cross validation
 
 # Get the names or IDs of the individuals that are of concern
-selected_individuals <- c("BEGR", "1091", "1314", "C872", "F108", "F109", "F118")
+selected_individuals <- c("BEGR", "1091", "1316", "BRN1")
 
 # Repeat code above to calculate appropriate bandwidth for IDs of concern
 concern.sp <- coord_data[, c("id", "y", "x")] 
@@ -79,6 +79,7 @@ kernel.con <- kernelUD(concern.sp, h = "LSCV")
 plotLSCV(kernel.con) # it looks like a bandwidth of 1000 will be good enough
 
 # 95% of estimated distribution
+kernel <- kernelUD(dolph.sp, h = 500)
 dolph.kernel.poly <- getverticeshr(kernel, percent = 95)  
 print(dolph.kernel.poly)  # returns the area of each polygon
 
@@ -93,7 +94,7 @@ ID_HI <- ID_HI[,c('y', 'x', 'id')]
 ID <- unique(ID_HI$id)
 obs_vect <- NULL
 for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(ID_HI$id == ID[1])
+  obs_vect[i]<- sum(ID_HI$id == ID[i])
 }
 sub <- data.frame(ID, obs_vect)
 sub <- subset(sub, subset=c(sub$obs_vect > 4))
@@ -116,7 +117,7 @@ HI.kern <- kernelUD(ID_HI, h = 500)
 HI.kernel.poly <- getverticeshr(HI.kern, percent = 95)
 
 # Plot kernel density
-colors <- c("red", "green", "blue")
+colors <- rainbow(length(unique(ID_HI$id)))
 individuals <- unique(HI.kernel.poly@data$id)
 ## Match each individual to a color
 individual_color <- colors[match(individuals, unique(HI.kernel.poly@data$id))]
@@ -150,12 +151,21 @@ mymap.hr <- ggmap(mybasemap) +
   theme(legend.position = c(0.15, 0.80)) +
   labs(x = "Longitude", y = "Latitude") +
   scale_fill_manual(name = "Dolphin ID", 
-                    values = c("red", "blue", "green"),
-                    breaks = c("BEGR", "F222", "F232")) +
+                    values = colors,
+                    breaks = individuals) +
   scale_colour_manual(name = "Dolphin ID", 
-                      values = c("red", "blue", "green"),
-                      breaks = c("BEGR", "F222", "F232"))
+                      values = colors,
+                      breaks = individuals)
 
+# Categorize ConfHI to IDs
+ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
+
+HI_type <- as.matrix(table(ID_HI$id, ID_HI$HI))
+HI_type <- data.frame(HI_type)
+colnames(HI_type) <- c("Code", "ConfHI", "Freq")
+
+HI <- subset(HI_type, subset=c(HI_type$Freq != 0))
+HI <- subset(HI, HI$Code %in% individuals)
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------

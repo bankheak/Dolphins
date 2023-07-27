@@ -17,6 +17,7 @@ In this markdown I will:
 
 3. Create MRQAP Models.
 
+# PART 1: *Organize Matrices*
 
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -117,7 +118,8 @@ dissimilarity_HI[is.na(dissimilarity_HI)] <- 0
 
 ```
 
-## Calculate Mantel test
+
+# PART 2: *Calculate Mantel Test*
 
 ```{r mantel, echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -138,3 +140,20 @@ plot(HI_test)
 ```
 
 So far there are no correlation with HI engagement and associations.
+
+
+# PART 3: *Create MRQAP Models*
+
+```{r MRQAP}
+
+# Set a number of permutations
+Nperm <- 1000
+
+# Calculate QAP correlations for the association response matrix
+mrqap <- mrqap.dsp(nxn[[year]] ~ dissimilarity_HI + kov,
+                   randomisations = Nperm,
+                   intercept = FALSE,
+                   test.statistic = "beta")
+
+```
+
