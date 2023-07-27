@@ -231,6 +231,7 @@ mymap.hr <- ggmap(mybasemap) +
   scale_colour_manual(name = "Dolphin ID", 
                       values = colors,
                       breaks = individuals)
+mymap.hr
 
 ```
 

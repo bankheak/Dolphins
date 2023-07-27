@@ -19,9 +19,9 @@ library(sfsmisc, verbose=F)
 
 # Read in file and add months
 sample_data <- read.csv("sample_data.csv")
+list_years <- readRDS("list_years.RData")
 
 # Estimate sampling effort and size for each triyear
-
 ## Get estimate of sampling effort
 effort <- as.data.frame(lapply(list_years, function(df) length(unique(df$Date))))
 colnames(effort) <- c(1:7)
