@@ -51,7 +51,7 @@ SRI.func<-  function (matr) {
 # Parallel processing
 reps <- 1000
 nF <- list()
-for (i in 1:7) {
+for (i in seq_along(gbi)) {
 nF[[i]] <- null(gbi[[i]], iter=reps)
 }
 
@@ -59,7 +59,7 @@ nF[[i]] <- null(gbi[[i]], iter=reps)
 #' create null distribution
 cv_years <- list()
 
-for (j in 1:7) {
+for (j in seq_along(gbi)) {
   cv_null <- rep(NA,reps)
   cv_null <- foreach(i = 1:reps, 
         .combine = c) %dopar% { 

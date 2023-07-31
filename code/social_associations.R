@@ -29,6 +29,16 @@ orig_data <- subset(orig_data, subset=c(orig_data$Code != "None"))
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
+# Match ID to sex and age data
+ILV <- read.csv("Individuals_Residency_Analysis.csv")
+## Sex
+ID_sex <- setNames(ILV$Sex, ILV$Alias)
+orig_data$Sex <- ID_sex[orig_data$Code]
+## Age
+ID_birth <- setNames(ILV$BirthYear, ILV$Alias)
+orig_data$Birth <- ID_birth[orig_data$Code]
+orig_data$Age <- as.numeric(orig_data$Year) - as.numeric(orig_data$Birth)
+
 # Get rid of any data with no location data
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
@@ -73,7 +83,7 @@ for (i in seq_along(list_years)) {
 saveRDS(gbi, file="gbi.RData")
 
 # Create association matrix
-source("../code/functioNP.R") # SRI & null permutation
+source("../code/functions.R") # SRI & null permutation
 
 n.cores <- detectCores()
 system.time({

@@ -33,6 +33,14 @@ dolp_dist <- 1-nxn[[year]]
 ## Remove the redundant cells and the diagonal 
 dolp_dist <- as.dist(dolp_dist)
 
+# Sex similarity matrix
+sexvec <- ifelse(is.na(list_years[[year]]$Sex) | list_years[[year]]$Sex == "Female", 2, 1)
+sex <- dist(sexvec)
+
+# Age similarity matrix
+agevec <- list_years[[year]]$Age
+age <- dist(agevec)
+
 # Extract specific columns from each data frame in list_years
 aux <- lapply(list_years, function(df) {
   data.frame(
@@ -136,7 +144,7 @@ dist_Dep <- dis_matr(prob_Dep)
 
 # Dissimilarity Mantel Test
 year <- 5
-HI_test <- mantel.rtest(dolp_dist, dissimilarity_HI, nrepet = 1000)
+HI_test <- mantel.rtest(dolp_dist, as.dist(dist_Beg[[year]]), nrepet = 1000)
 plot(HI_test)
 # So far no correlation with HI engagement and associations
 
@@ -152,7 +160,7 @@ plot(hro_test)
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
-mrqap <- mrqap.dsp(nxn[[year]] ~ dissimilarity_HI + kov,
+mrqap <- mrqap.dsp(nxn[[year]] ~ dist_Beg[[year]] + kov + sex + age,
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")
