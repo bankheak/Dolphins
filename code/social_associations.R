@@ -43,6 +43,9 @@ orig_data$Age <- as.numeric(orig_data$Year) - as.numeric(orig_data$Birth)
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 
+# Get rid of data with no sex or age data
+sample_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
+
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
@@ -281,17 +284,17 @@ avg_comb <- function(a, b, c, d) {
 
 avg_Beg <- avg_comb(NB_NB, NB_B, B_NB, B_B)
 colnames(avg_Beg) <- c("NB_NB", "NB_B", "B_NB", "B_B") # Only one beggar in period 4 (2002-2004)
-avg_Beg$NB.B <- (avg_Beg$NB_B + avg_Beg$B_NB) / 2
-boxplot(avg_Beg[,c(1,4,5)])
+avg_Beg$NB_B <- (avg_Beg$NB_B + avg_Beg$B_NB) / 2
+boxplot(avg_Beg[,c(1,2,4)])
 plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5, 
      xlab="3-Year Period", ylab="Avg SRI", main = "Beggar-Beggar Pairs")
 
 avg_Pat <- avg_comb(NP_NP, NP_P, P_NP, P_P)
 colnames(avg_Pat) <- c("NP_NP", "NP_P", "P_NP", "P_P")
-avg_Pat$NP.P <- (avg_Pat$NP_P + avg_Pat$P_NP) / 2
-boxplot(avg_Pat[,c(1,4,5)])
+avg_Pat$NP_P <- (avg_Pat$NP_P + avg_Pat$P_NP) / 2
+boxplot(avg_Pat[,c(1,2,4)])
 
 avg_Dep <- avg_comb(ND_ND, ND_D, D_ND, D_D)
 colnames(avg_Dep) <- c("ND_ND", "ND_D", "D_ND", "D_D") # Only one depredation in period 4 (2002-2004)
-avg_Dep$ND.D <- (avg_Dep$ND_D + avg_Dep$D_ND) / 2
-boxplot(avg_Dep[,c(1,4,5)])
+avg_Dep$ND_D <- (avg_Dep$ND_D + avg_Dep$D_ND) / 2
+boxplot(avg_Dep[,c(1,2,4)])

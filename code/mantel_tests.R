@@ -27,19 +27,49 @@ nxn <- readRDS("nxn.RData")
 list_years <- readRDS("list_years.RData")
 
 # Transforming SRI similarity into distance
-year <- 5
-dolp_dist = nxn[[year]] + 0.00001
-dolp_dist <- 1-nxn[[year]]
-## Remove the redundant cells and the diagonal 
-dolp_dist <- as.dist(dolp_dist)
+dolp_dist <- lapply(nxn, function(df) {
+  df + 0.00001
+  1 - df
+  ## Remove the redundant cells and the diagonal 
+  as.dist(df)
+})
 
 # Sex similarity matrix
-sexvec <- ifelse(is.na(list_years[[year]]$Sex) | list_years[[year]]$Sex == "Female", 2, 1)
-sex <- dist(sexvec)
+sex_list <- lapply(list_years, function(df) {
+  
+  ## Empty matrix to store sex similarity
+  num_ID <- length(unique(df$Code))
+  sex_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
+  
+  # Fill in similarity of sex
+  for (i in 1:num_ID) {
+    for (j in 1:num_ID) {
+      if (df$Sex[i] == df$Sex[j]) {
+        sex_matrix[i, j] <- 1  # Same sex
+      } else {
+        sex_matrix[i, j] <- 0  # Different sex
+      }
+    }
+  }
+  
+  return(sex_matrix)
+})
 
 # Age similarity matrix
-agevec <- list_years[[year]]$Age
-age <- dist(agevec)
+age_list <- lapply(list_years, function(df) {
+  
+  ## Empty matrix to store sex similarity
+  num_ID <- length(unique(df$Code))
+  age_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
+  
+  # Fill in similarity of sex
+  for (i in 1:num_ID) {
+    for (j in 1:num_ID) {
+      age_matrix[i, j] <- abs(df$Age[i] - df$Age[j])
+    }
+  }
+  return(age_matrix)
+})
 
 # Extract specific columns from each data frame in list_years
 aux <- lapply(list_years, function(df) {
@@ -76,8 +106,8 @@ IDbehav <- lapply(aux, function(df) {
 for (i in seq_along(aux)) {
   
   aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "B",
-                            ifelse(aux[[1]]$ConfHI %in% c("A", "B", "C"), "S", 
-                                   ifelse(aux[[i]]$ConfHI %in% c("D", "E", "P"), "D", "0")))
+                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C", "D", "E"), "S", 
+                                   ifelse(aux[[i]]$ConfHI %in% c("P"), "D", "0")))
   
 }
 
@@ -144,7 +174,7 @@ dist_Dep <- dis_matr(prob_Dep)
 
 # Dissimilarity Mantel Test
 year <- 5
-HI_test <- mantel.rtest(dolp_dist, as.dist(dist_Beg[[year]]), nrepet = 1000)
+HI_test <- mantel.rtest(dolp_dist[[year]], dist_Pat[[year]], nrepet = 1000)
 plot(HI_test)
 # So far no correlation with HI engagement and associations
 
