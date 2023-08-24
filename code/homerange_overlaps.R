@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("../data")
 
 ###########################################################################
 # PART 1: calculate dyadic home range overlaps ----------------------------
@@ -25,65 +25,56 @@ library(rgdal) # Overlap
 sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 
-## Make a list of years
-coord_data <- list_years
+# Make a list of years
+coord_data_list <- list_years
 
-# Extract coordinates
-coord_data <- cbind(coord_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #
-## Format date and year
-coord_data$Date <- as.Date(as.character(coord_data$Date), format="%Y-%m-%d")
-## Give descriptive names
-colnames(coord_data) <- c("date", "y", "x", "id", "year", "HI")
+# Process the coord_data_list
+dolph.sp <- lapply(coord_data_list, function(df) {
+  # Extract IDs and coordinates
+  ids <- df$Code
+  coordinates <- df[, c("StartLon", "StartLat")]
+  
+  # Convert to data frame
+  ids_df <- data.frame(id = ids)
+  
+  # Create a SpatialPointsDataFrame with coordinates
+  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
+  
+  # Set CRS and transform to UTM
+  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+  
+  # Calculate kernel density estimates
+  kernel_obj <- kernelUD(coords_sp_utm, h = 1000)
+  
+  # Add the kernel density estimates to the SpatialPointsDataFrame
+  coords_sp_utm$estUD <- kernel_obj$estUD
+  
+  coords_sp_utm
+})
 
-# Only include three columns (id, x, and y coordinates) for making MCP's
-dolph.sp <- coord_data[, c("id", "y", "x")] 
-
-# Create a simple feature data frame (sf)
-coord_data_sf <- st_as_sf(dolph.sp, coords = c("x", "y"), crs = 4326)
-
-# UTM zone for study area
-dolph.sf <- st_transform(coord_data_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-
-# Extract coordinates (latitude and longitude) and create new columns
-dolph.sp$x <- st_coordinates(dolph.sf)[, 1]
-dolph.sp$y <- st_coordinates(dolph.sf)[, 2]
-
-coordinates(dolph.sp) <- c("x", "y")
-
-# Set the initial CRS for data to WGS84 (latitude and longitude)
-proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
-
-# Create kernel estimates for each id
-kernel.lscv <- kernelUD(dolph.sp, h = "LSCV")  # LSCV = least squares cross validation
-
-# Get the names or IDs of the individuals that are of concern
-selected_individuals <- c("BEGR", "1091", "1316", "BRN1")
-
-# Repeat code above to calculate appropriate bandwidth for IDs of concern
-concern.sp <- coord_data[, c("id", "y", "x")] 
-concern.sp <- subset(concern.sp, id %in% selected_individuals) # Only include selected ids
-
-concern_sf <- st_as_sf(concern.sp, coords = c("x", "y"), crs = 4326)
-concern.sf <- st_transform(concern_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-concern.sp$x <- st_coordinates(concern.sf)[, 1]
-concern.sp$y <- st_coordinates(concern.sf)[, 2]
-concern.sp <- concern.sp[!is.na(concern.sp$x) & !is.na(concern.sp$y),]
-
-coordinates(concern.sp) <- c("x", "y")
-
-proj4string(concern.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
-
-# Now recalculate kernel estimates for each id
-kernel.con <- kernelUD(concern.sp, h = "LSCV")
-plotLSCV(kernel.con) # it looks like a bandwidth of 1000 will be good enough
-
-# 95% of estimated distribution
-kernel <- kernelUD(dolph.sp, h = 500)
-dolph.kernel.poly <- getverticeshr(kernel, percent = 95)  
-print(dolph.kernel.poly)  # returns the area of each polygon
+# Create area of each polygon
+year <- 5
+dolph.kernel.poly <- getverticeshr(kernel[[year]], percent = 95)
+print(dolph.kernel.poly)  
 
 ###########################################################################
-# PART 2: Plot HRO for HI Dolphins ------------------------------------------------------------
+# PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
+
+# Calculate kernel values
+kernel <- lapply(dolph.sp, function(sp_obj) {
+  kernelUD(sp_obj, h = 1000)
+})
+
+# Calculate kernel overlap values
+kov <- lapply(kernel, function(kern) {
+  kerneloverlaphr(kern, method = "HR", lev = 95)
+})
+
+saveRDS(kov, "kov.RDS")
+
+###########################################################################
+# PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------
 
 # Find HI events among individuals
 ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
@@ -165,13 +156,3 @@ colnames(HI_type) <- c("Code", "ConfHI", "Freq")
 
 HI <- subset(HI_type, subset=c(HI_type$Freq != 0))
 HI <- subset(HI, HI$Code %in% individuals)
-
-###########################################################################
-# PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
-
-# Get HRO 
-kernel <- kernelUD(dolph.sp, h = 1000)
-
-kov <- kerneloverlaphr(kernel, method="HR", lev=95)
-
-saveRDS(kov, "kov.RDS")

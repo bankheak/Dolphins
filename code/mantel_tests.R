@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("../data")
 
 ###########################################################################
 # PART 1: Create HI Disimilarity Matrix  ------------------------------------------------
@@ -104,14 +104,14 @@ IDbehav <- lapply(aux, function(df) {
 #' B = Positive: F, G, H
 #' P = Neutral: A, B, C
 #' D = Negative: D, E, P
-# Fix the code using ifelse statements
-# for (i in seq_along(aux)) {
-#   
-#   aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Pro",
-#                             ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Neu", 
-#                                    ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Neg", "0")))
-#   
-# }
+# Change the code using ifelse statements
+for (i in seq_along(aux)) {
+
+  aux[[i]]$DiffHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Pro",
+                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Neu",
+                                   ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Neg", "0")))
+
+}
 
 # Clump all the HI behaviors together
 for (i in seq_along(aux)) {
@@ -126,6 +126,18 @@ rawHI <- lapply(aux, function(df) {
   merged_df <- merge(unique_codes_df, aggregated_df, by = "Code", all.x = TRUE)
   # Fill missing Freq values (if any) with 0
   merged_df$ConfHI[is.na(merged_df$ConfHI)] <- 0
+  return(merged_df)
+})
+
+# Categorize DiffHI to IDs
+rawHI_diff <- lapply(aux, function(df) {
+  # Sum up the frequencies of HI by code
+  aggregated_df <- aggregate(DiffHI ~ Code, data = df, sum)
+  unique_codes_df <- data.frame(Code = unique(df$Code))
+  # Merge the unique codes data frame with the aggregated data frame
+  merged_df <- merge(unique_codes_df, aggregated_df, by = "Code", all.x = TRUE)
+  # Fill missing Freq values (if any) with 0
+  merged_df$DiffHI[is.na(merged_df$DiffHI)] <- 0
   return(merged_df)
 })
 
@@ -211,7 +223,7 @@ Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
 year <- 5
-mrqap <- mrqap.dsp(nxn[[year]] ~ dist_HI[[year]] + kov,
+mrqap <- mrqap.dsp(nxn[[year]] ~ dist_HI[[year]] + kov[[year]],
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")
