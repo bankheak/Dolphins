@@ -25,9 +25,8 @@ library(rgdal) # Overlap
 sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 
-## Test one year at a time
-year <- 7
-coord_data <- list_years[[year]]
+## Make a list of years
+coord_data <- list_years
 
 # Extract coordinates
 coord_data <- cbind(coord_data[,c('Date', 'StartLat', 'StartLon', 'Code', 'Year', 'ConfHI')]) # Subset Date and Coordinates #

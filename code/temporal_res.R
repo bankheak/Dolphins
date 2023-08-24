@@ -39,9 +39,6 @@ Beg <- unique(unlist(sapply(IDbehav_Beg, function(df) df$Code[df$HI != 0])))
 Pat <- unique(unlist(sapply(IDbehav_Pat, function(df) df$Code[df$HI != 0])))
 Dep <- unique(unlist(sapply(IDbehav_Dep, function(df) df$Code[df$HI != 0])))
 
-common_individuals <- Reduce(intersect, list(Beg, Pat, Dep))
-length(common_individuals)
-
 Beg_effort <- as.data.frame(lapply(IDbehav_Beg, function(df) 
   length(unique(df$Code[df$HI > 0]))))
 colnames(Beg_effort) <- c(1:7)

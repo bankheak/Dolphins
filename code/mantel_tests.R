@@ -16,11 +16,13 @@ library(ncf) # For weights
 library(vegan)
 library(igraph) # graph_adj
 require(asnipe) # mrqap.dsp
+library(assortnet)
+library(ggplot2)
+library(doParallel)
 
 # Read file in to retain ILV
 sample_data <- read.csv("sample_data.csv")
 kov <- readRDS("kov.RDS")  # Home range overlap
-kov <- as.dist(kov)
 
 # Read in social association matrix and data
 nxn <- readRDS("nxn.RData")
@@ -99,43 +101,59 @@ IDbehav <- lapply(aux, function(df) {
 })
 
 # HI behaviors should be partitioned into 3 different types
-#' B = Begging (direct provisioning): F, G, H
-#' P = patrolling/scavenging (indirect): A, B, C
-#' D = foraging around fixed gear (humans not present):D, E, P
+#' B = Positive: F, G, H
+#' P = Neutral: A, B, C
+#' D = Negative: D, E, P
 # Fix the code using ifelse statements
+# for (i in seq_along(aux)) {
+#   
+#   aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Pro",
+#                             ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Neu", 
+#                                    ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Neg", "0")))
+#   
+# }
+
+# Clump all the HI behaviors together
 for (i in seq_along(aux)) {
-  
-  aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "B",
-                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C", "D", "E"), "S", 
-                                   ifelse(aux[[i]]$ConfHI %in% c("P"), "D", "0")))
-  
-}
+aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI != "0", 1, 0)}
 
 # Categorize ConfHI to IDs
 rawHI <- lapply(aux, function(df) {
-  df <- as.matrix(table(df$Code, df$ConfHI))
-  df <- as.data.frame(df, stringsAsFactors = FALSE)
-  colnames(df) <- c("Code", "ConfHI", "Freq")
-  df
+  # Sum up the frequencies of HI by code
+  aggregated_df <- aggregate(ConfHI ~ Code, data = df, sum)
+  unique_codes_df <- data.frame(Code = unique(df$Code))
+  # Merge the unique codes data frame with the aggregated data frame
+  merged_df <- merge(unique_codes_df, aggregated_df, by = "Code", all.x = TRUE)
+  # Fill missing Freq values (if any) with 0
+  merged_df$ConfHI[is.na(merged_df$ConfHI)] <- 0
+  return(merged_df)
 })
 
-# Create a different frequency count for each HI behavior
-get_IDHI <- function(confHI) {
-  lapply(seq_along(IDbehav), function(i) {
-    df <- IDbehav[[i]]
-    df$HI <- rawHI[[i]]$Freq[rawHI[[i]]$ConfHI == confHI & rawHI[[i]]$ConfHI != "0"]
-    colnames(df) <- c("Code", "Foraging", "HI")
-    df
-  })
-}
+# Create a frequency count for each HI behavior
+# get_IDHI <- function(confHI) {
+#   lapply(seq_along(IDbehav), function(i) {
+#     df <- IDbehav[[i]]
+#     df$HI <- rawHI[[i]]$Freq[rawHI[[i]]$ConfHI == confHI & rawHI[[i]]$ConfHI != "0"]
+#     colnames(df) <- c("Code", "Foraging", "HI")
+#     df
+#   })
+# }
 
-IDbehav_Beg <- get_IDHI("B")
-IDbehav_Pat <- get_IDHI("S")
-IDbehav_Dep <- get_IDHI("D")
+# IDbehav_Pro <- get_IDHI("Pro")
+# IDbehav_Neu <- get_IDHI("Neu")
+# IDbehav_Neg <- get_IDHI("Neg")
 
-saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
-saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
-saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
+# saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
+# saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
+# saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
+
+# Get HI Freq
+IDbehav_HI <- lapply(seq_along(IDbehav), function(i) {
+      df <- IDbehav[[i]]
+      df$HI <- rawHI[[i]]$ConfHI
+      colnames(df) <- c("Code", "Foraging", "HI")
+      df
+    })
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -149,9 +167,10 @@ Prop_HI <- function(IDbehav) {
   })
 }
 
-prob_Beg <- Prop_HI(IDbehav_Beg)
-prob_Pat <- Prop_HI(IDbehav_Pat)
-prob_Dep <- Prop_HI(IDbehav_Dep)
+prob_HI <- Prop_HI(IDbehav_HI)
+# prob_Beg <- Prop_HI(IDbehav_Beg)
+# prob_Pat <- Prop_HI(IDbehav_Pat)
+# prob_Dep <- Prop_HI(IDbehav_Dep)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(IDbehav) {
@@ -160,14 +179,15 @@ dis_matr <- function(IDbehav) {
     fake_HIprop <- IDbehav[[i]]$HIprop
     dissimilarity_HI[[i]] <- as.matrix(dist(matrix(fake_HIprop), method = "euclidean"))
     dissimilarity_HI[[i]][is.na(dissimilarity_HI[[i]])] <- 0
-    dissimilarity_HI[[i]] <- as.dist(dissimilarity_HI[[i]]) # HI dissimilarity
+    #dissimilarity_HI[[i]] <- as.dist(dissimilarity_HI[[i]]) # HI dissimilarity
   }
   dissimilarity_HI
 }
 
-dist_Beg <- dis_matr(prob_Beg)
-dist_Pat <- dis_matr(prob_Pat)
-dist_Dep <- dis_matr(prob_Dep)
+dist_HI <- dis_matr(prob_HI)
+# dist_Beg <- dis_matr(prob_Beg)
+# dist_Pat <- dis_matr(prob_Pat)
+# dist_Dep <- dis_matr(prob_Dep)
 
 ###########################################################################
 # PART 2: Run Mantel Tests  ------------------------------------------------
@@ -190,8 +210,50 @@ plot(hro_test)
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
-mrqap <- mrqap.dsp(nxn[[year]] ~ dist_Beg[[year]] + kov + sex + age,
+year <- 5
+mrqap <- mrqap.dsp(nxn[[year]] ~ dist_HI[[year]] + kov,
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")
+
+mrqap
+
+###########################################################################
+# PART 4: Assortivity Index Based on HI Over Time  ------------------------------------------------
+
+# Match Code with matrix and vector
+HI_vector <- lapply(seq_along(nxn), function(i) {
+  matrix_index <- match(rownames(nxn[[i]]), prob_HI[[i]]$Code)
+  reordered_prob_HI <- prob_HI[[i]][matrix_index, ]
+  return(reordered_prob_HI)
+})
+
+# Look at HI assortivity coefficient over periods
+n.cores <- detectCores()
+system.time({
+  registerDoParallel(n.cores)
+  
+  assort_HI <- NULL
+  se <- NULL
+  for (i in seq_along(nxn)) {
+    coeff <- assortment.continuous(nxn[[i]], HI_vector[[1]][,"HIprop"], SE = F)
+    assort_HI[i] <- coeff$r}
+    # se[i] <- coeff$se}
+  
+  # End parallel processing
+  stopImplicitCluster()
+})
+
+assort_HI <- data.frame(HI_assort = unlist(assort_HI), 
+                        #Std.Err = unlist(se), 
+                        Year = c(1:7))
+
+# Whisker plot of HI assortivity over each time period
+ggplot(assort_HI, aes(x = Year, y = HI_assort)) +
+  #geom_errorbar(aes(ymin = HI_assort - se, ymax = HI_assort + se), width = 0.2) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Year", y = "HI_assort") +
+  ggtitle("Whisker Plot of assort_HI with Standard Error") +
+  theme_minimal()
 

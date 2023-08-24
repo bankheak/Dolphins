@@ -53,7 +53,7 @@ sample_data <- read.csv("sample_data.csv")
 sample_data$ThreeYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 3, by = 3), labels = FALSE)
 list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
 
-# Eliminate IDs with less than 5 locatioNP
+# Eliminate IDs with less than 5 locations
 ID <- list()
 for (i in seq_along(list_threeyears)) {
 ID[[i]] <- unique(list_threeyears[[i]]$Code)
