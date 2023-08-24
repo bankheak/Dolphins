@@ -100,20 +100,46 @@ IDbehav <- lapply(aux, function(df) {
   df
 })
 
-# HI behaviors should be partitioned into 3 different types
-#' B = Positive: F, G, H
-#' P = Neutral: A, B, C
-#' D = Negative: D, E, P
+# HI behaviors should be partitioned into 3 different types---------------------
+#' B = Beg: F, G, H
+#' P = Patrol: A, B, C
+#' D = Depredation: D, E, P
 # Change the code using ifelse statements
 for (i in seq_along(aux)) {
 
-  aux[[i]]$DiffHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Pro",
-                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Neu",
-                                   ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Neg", "0")))
+  aux[[i]]$DiffHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Beg",
+                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Pat",
+                                   ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Dep", "0")))
 
 }
 
-# Clump all the HI behaviors together
+# Categorize DiffHI to IDs
+rawHI_diff <- lapply(aux, function(df) {
+  table_df <- as.data.frame(table(df$Code, df$DiffHI))
+  colnames(table_df) <- c("Code", "DiffHI", "Freq")
+  return(table_df)
+})
+
+# Create a frequency count for each HI behavior
+get_IDHI <- function(HI) {
+  lapply(seq_along(IDbehav), function(i) {
+    df <- IDbehav[[i]]
+    HI_freq <- rawHI_diff[[i]]$Freq[rawHI_diff[[i]]$DiffHI == HI]
+    df$HI <- HI_freq[match(df$Code, rawHI_diff[[i]]$Code)]
+    colnames(df) <- c("Code", "Foraging", "HI")
+    df
+  })
+}
+
+IDbehav_Beg <- get_IDHI("Beg")
+IDbehav_Pat <- get_IDHI("Pat")
+IDbehav_Dep <- get_IDHI("Dep")
+
+saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
+saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
+saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
+
+# Clump all the HI behaviors together------------------------------------------
 for (i in seq_along(aux)) {
 aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI != "0", 1, 0)}
 
@@ -128,36 +154,6 @@ rawHI <- lapply(aux, function(df) {
   merged_df$ConfHI[is.na(merged_df$ConfHI)] <- 0
   return(merged_df)
 })
-
-# Categorize DiffHI to IDs
-rawHI_diff <- lapply(aux, function(df) {
-  # Sum up the frequencies of HI by code
-  aggregated_df <- aggregate(DiffHI ~ Code, data = df, sum)
-  unique_codes_df <- data.frame(Code = unique(df$Code))
-  # Merge the unique codes data frame with the aggregated data frame
-  merged_df <- merge(unique_codes_df, aggregated_df, by = "Code", all.x = TRUE)
-  # Fill missing Freq values (if any) with 0
-  merged_df$DiffHI[is.na(merged_df$DiffHI)] <- 0
-  return(merged_df)
-})
-
-# Create a frequency count for each HI behavior
-# get_IDHI <- function(confHI) {
-#   lapply(seq_along(IDbehav), function(i) {
-#     df <- IDbehav[[i]]
-#     df$HI <- rawHI[[i]]$Freq[rawHI[[i]]$ConfHI == confHI & rawHI[[i]]$ConfHI != "0"]
-#     colnames(df) <- c("Code", "Foraging", "HI")
-#     df
-#   })
-# }
-
-# IDbehav_Pro <- get_IDHI("Pro")
-# IDbehav_Neu <- get_IDHI("Neu")
-# IDbehav_Neg <- get_IDHI("Neg")
-
-# saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
-# saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
-# saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
 
 # Get HI Freq
 IDbehav_HI <- lapply(seq_along(IDbehav), function(i) {
@@ -180,9 +176,9 @@ Prop_HI <- function(IDbehav) {
 }
 
 prob_HI <- Prop_HI(IDbehav_HI)
-# prob_Beg <- Prop_HI(IDbehav_Beg)
-# prob_Pat <- Prop_HI(IDbehav_Pat)
-# prob_Dep <- Prop_HI(IDbehav_Dep)
+prob_Beg <- Prop_HI(IDbehav_Beg)
+prob_Pat <- Prop_HI(IDbehav_Pat)
+prob_Dep <- Prop_HI(IDbehav_Dep)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(IDbehav) {
@@ -228,44 +224,64 @@ mrqap <- mrqap.dsp(nxn[[year]] ~ dist_HI[[year]] + kov[[year]],
                    intercept = FALSE,
                    test.statistic = "beta")
 
-mrqap
-
 ###########################################################################
 # PART 4: Assortivity Index Based on HI Over Time  ------------------------------------------------
 
 # Match Code with matrix and vector
-HI_vector <- lapply(seq_along(nxn), function(i) {
-  matrix_index <- match(rownames(nxn[[i]]), prob_HI[[i]]$Code)
-  reordered_prob_HI <- prob_HI[[i]][matrix_index, ]
-  return(reordered_prob_HI)
-})
+get_HI_vector <- function(prop_HI) {
+  HI_vector <- lapply(seq_along(nxn), function(i) {
+    matrix_index <- match(rownames(nxn[[i]]), prop_HI[[i]]$Code)
+    reordered_prob_HI <- prop_HI[[i]][matrix_index, ]
+    return(reordered_prob_HI)
+  })
+  return(HI_vector)
+}
+
+# Get each combined and seperate HI
+HI_vector <- get_HI_vector(prob_HI)
+Beg_vector <- get_HI_vector(prob_Beg)
+Pat_vector <- get_HI_vector(prob_Pat)
+Dep_vector <- get_HI_vector(prob_Dep)
 
 # Look at HI assortivity coefficient over periods
-n.cores <- detectCores()
-system.time({
+calculate_assortment <- function(HI_vector) {
+  n.cores <- detectCores()
   registerDoParallel(n.cores)
   
   assort_HI <- NULL
-  se <- NULL
+  # se <- NULL
   for (i in seq_along(nxn)) {
-    coeff <- assortment.continuous(nxn[[i]], HI_vector[[1]][,"HIprop"], SE = F)
-    assort_HI[i] <- coeff$r}
-    # se[i] <- coeff$se}
+    coeff <- assortment.continuous(nxn[[i]], HI_vector[[i]][, "HIprop"], SE = FALSE)
+    assort_HI[i] <- coeff$r
+    # se[i] <- coeff$se
+  }
   
   # End parallel processing
   stopImplicitCluster()
-})
+  
+  assort_HI_df <- data.frame(HI_assort = unlist(assort_HI), Year = c(1:7))
+  return(assort_HI_df)
+}
 
-assort_HI <- data.frame(HI_assort = unlist(assort_HI), 
-                        #Std.Err = unlist(se), 
-                        Year = c(1:7))
+# Look at HI combined and separate
+assort_HI <- calculate_assortment(HI_vector)
+assort_Beg <- calculate_assortment(Beg_vector)
+assort_Pat <- calculate_assortment(Pat_vector)
+assort_Dep <- calculate_assortment(Dep_vector)
 
-# Whisker plot of HI assortivity over each time period
-ggplot(assort_HI, aes(x = Year, y = HI_assort)) +
-  #geom_errorbar(aes(ymin = HI_assort - se, ymax = HI_assort + se), width = 0.2) +
+# Combine the assort dataframes and add a behavior column
+assort_Beg$Behavior <- "Beg"
+assort_Pat$Behavior <- "Pat"
+assort_Dep$Behavior <- "Dep"
+
+combined_assort <- rbind(assort_Beg, assort_Pat, assort_Dep)
+combined_assort$HI_assort <- ifelse(is.na(combined_assort$HI_assort), 0.75, combined_assort$HI_assort)
+
+# Create the combined plot with facets
+ggplot(combined_assort, aes(x = Year, y = HI_assort)) +
   geom_point() +
   geom_line() +
-  labs(x = "Year", y = "HI_assort") +
-  ggtitle("Whisker Plot of assort_HI with Standard Error") +
-  theme_minimal()
-
+  labs(x = "Period", y = "HI assortment") +
+  ggtitle("Whisker Plot of HI assortment") +
+  theme_minimal() +
+  facet_grid(Behavior ~ ., scales = "free_y", space = "free_y")
