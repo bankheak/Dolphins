@@ -181,10 +181,10 @@ prob_Pat <- Prop_HI(IDbehav_Pat)
 prob_Dep <- Prop_HI(IDbehav_Dep)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
-dis_matr <- function(IDbehav) {
+dis_matr <- function(Prop_HI) {
   dissimilarity_HI <- list()
-  for (i in seq_along(IDbehav)) {
-    fake_HIprop <- IDbehav[[i]]$HIprop
+  for (i in seq_along(Prop_HI)) {
+    fake_HIprop <- Prop_HI[[i]]$HIprop
     dissimilarity_HI[[i]] <- as.matrix(dist(matrix(fake_HIprop), method = "euclidean"))
     dissimilarity_HI[[i]][is.na(dissimilarity_HI[[i]])] <- 0
     #dissimilarity_HI[[i]] <- as.dist(dissimilarity_HI[[i]]) # HI dissimilarity
@@ -193,33 +193,21 @@ dis_matr <- function(IDbehav) {
 }
 
 dist_HI <- dis_matr(prob_HI)
-# dist_Beg <- dis_matr(prob_Beg)
-# dist_Pat <- dis_matr(prob_Pat)
-# dist_Dep <- dis_matr(prob_Dep)
+dist_Beg <- dis_matr(prob_Beg)
+dist_Pat <- dis_matr(prob_Pat)
+dist_Dep <- dis_matr(prob_Dep)
+
 
 ###########################################################################
-# PART 2: Run Mantel Tests  ------------------------------------------------
+# PART 2: Create MRQAP Models  ------------------------------------------------
 
-# Dissimilarity Mantel Test
+# Set a number of permutations and year
 year <- 5
-HI_test <- mantel.rtest(dolp_dist[[year]], dist_Pat[[year]], nrepet = 1000)
-plot(HI_test)
-# So far no correlation with HI engagement and associations
-
-## HRO
-hro_test <- mantel.rtest(dolp_dist, kov, nrepet = 1000)
-plot(hro_test)
-
-
-###########################################################################
-# PART 3: Create MRQAP Models  ------------------------------------------------
-
-# Set a number of permutations
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
-year <- 5
-mrqap <- mrqap.dsp(nxn[[year]] ~ dist_HI[[year]] + kov[[year]],
+mrqap <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]] +
+                     dist_Beg[[year]] + dist_Dep[[year]] + dist_Pat[[year]],
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")

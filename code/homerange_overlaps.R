@@ -43,14 +43,19 @@ dolph.sp <- lapply(coord_data_list, function(df) {
   # Set CRS and transform to UTM
   proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
   coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-  
-  # Calculate kernel density estimates
-  kernel_obj <- kernelUD(coords_sp_utm, h = 1000)
-  
-  # Add the kernel density estimates to the SpatialPointsDataFrame
-  coords_sp_utm$estUD <- kernel_obj$estUD
-  
-  coords_sp_utm
+})
+
+# Visualize data extent
+dolph.sf <- lapply(dolph.sp, function (df) {st_as_sf(df)})
+ggplot(dolph.sf[[3]]) +
+  geom_sf(aes(color = "Data Points"), size = 2, alpha = 0.5) +
+  theme_bw() +
+  labs(title = "Distribution of Data Points") +
+  scale_color_manual(values = c("Data Points" = "blue"))
+
+# Calculate kernel values
+kernel <- lapply(dolph.sp, function(sp_obj) {
+  kernelUD(sp_obj, h = 10000)
 })
 
 # Create area of each polygon
@@ -60,11 +65,6 @@ print(dolph.kernel.poly)
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
-
-# Calculate kernel values
-kernel <- lapply(dolph.sp, function(sp_obj) {
-  kernelUD(sp_obj, h = 1000)
-})
 
 # Calculate kernel overlap values
 kov <- lapply(kernel, function(kern) {
@@ -77,34 +77,57 @@ saveRDS(kov, "kov.RDS")
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------
 
 # Find HI events among individuals
-ID_HI <- subset(coord_data, subset=c(coord_data$HI != 0))
-ID_HI <- ID_HI[,c('y', 'x', 'id')] 
-
-# Make sure there are at least 5 relocations
-ID <- unique(ID_HI$id)
-obs_vect <- NULL
-for (i in 1:length(ID)) {
-  obs_vect[i]<- sum(ID_HI$id == ID[i])
-}
-sub <- data.frame(ID, obs_vect)
-sub <- subset(sub, subset=c(sub$obs_vect > 4))
-ID_HI <- subset(ID_HI, ID_HI$id %in% sub$ID)
+ID_HI <- lapply(coord_data_list, function(df) {
+  subset_df <- subset(df, subset = df$ConfHI != 0)
+  subset_df <- subset_df[, c('StartLat', 'StartLon', 'Code')]
+  
+  # Make sure there are at least 5 relocations
+  ID_df <- unique(subset_df$Code)
+  
+  obs_vect <- numeric(length(ID_df))
+  for (i in seq_along(ID_df)) {
+    obs_vect[i] <- sum(subset_df$Code == ID_df[i])
+  }
+  
+  sub <- data.frame(ID_df, obs_vect)
+  sub <- subset(sub, subset = obs_vect > 4)
+  
+  subset_df <- subset_df[subset_df$Code %in% sub$ID_df, ]
+  
+  return(subset_df)
+})
 
 # Recalculate Coordinate data
-ID_HI_sf <- st_as_sf(ID_HI, coords = c("x", "y"), crs = 4326)
-HI.sf <- st_transform(ID_HI_sf, crs = paste0("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-ID_HI$x <- st_coordinates(HI.sf)[, 1]
-ID_HI$y <- st_coordinates(HI.sf)[, 2]
-
-ID_HI <- ID_HI[!is.na(ID_HI$x) & !is.na(ID_HI$y),]
-
-coordinates(ID_HI) <- c("x", "y")
-
-proj4string(ID_HI) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
+HI.sp <- lapply(ID_HI, function(df) {
+  # Extract IDs and coordinates
+  ids <- df$Code
+  coordinates <- df[, c("StartLon", "StartLat")]
+  
+  # Convert to data frame
+  ids_df <- data.frame(id = ids)
+  
+  # Create a SpatialPointsDataFrame with coordinates
+  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
+  
+  # Set CRS and transform to UTM
+  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+  
+  # Calculate kernel density estimates
+  kernel_obj <- kernelUD(coords_sp_utm, h = 1000)
+  
+  # Add the kernel density estimates to the SpatialPointsDataFrame
+  coords_sp_utm$estUD <- kernel_obj$estUD
+  
+  coords_sp_utm
+})
 
 # Kernel estimate
-HI.kern <- kernelUD(ID_HI, h = 500)
-HI.kernel.poly <- getverticeshr(HI.kern, percent = 95)
+HI.kern <- lapply(HI.sp, function(sp_obj) {
+  kernelUD(sp_obj, h = 500)
+})
+
+HI.kernel.poly <- getverticeshr(HI.kern[[year]], percent = 95)
 
 # Plot kernel density
 colors <- rainbow(length(unique(ID_HI$id)))

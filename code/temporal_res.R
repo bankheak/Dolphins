@@ -14,7 +14,6 @@ setwd("../data")
 library(vegan)  
 # Run multiple cores for faster computing
 require(doParallel)
-require(parallel)
 library(sfsmisc, verbose=F) 
 
 # Read in file and add months
