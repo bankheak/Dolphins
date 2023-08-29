@@ -24,6 +24,10 @@ library(rgdal) # Overlap
 # Read in file
 sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
+list_sexage_years <- readRDS("list_sexage_years.RData")
+
+# Make a function that calculates all of the following code with and without sex and age
+create_coord_data <- function(list_years) {
 
 # Make a list of years
 coord_data_list <- list_years
@@ -44,19 +48,36 @@ dolph.sp <- lapply(coord_data_list, function(df) {
   proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
   coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
 })
+return(dolph.sp)
+}
+
+dolph.sp <- create_coord_data(list_years)
+dolph.sp_sexage <- create_coord_data(list_sexage_years)
 
 # Visualize data extent
+vis.sf <- function(dolph.sp) {
 dolph.sf <- lapply(dolph.sp, function (df) {st_as_sf(df)})
 ggplot(dolph.sf[[3]]) +
   geom_sf(aes(color = "Data Points"), size = 2, alpha = 0.5) +
   theme_bw() +
   labs(title = "Distribution of Data Points") +
   scale_color_manual(values = c("Data Points" = "blue"))
+return(dolph.sf)
+}
+
+dolph.sf <- vis.sf(dolph.sp)
+dolph.sf_sexage <- vis.sf(dolph.sp_sexage)
 
 # Calculate kernel values
+create_kernel <- function(dolph.sp) {
 kernel <- lapply(dolph.sp, function(sp_obj) {
   kernelUD(sp_obj, h = 10000)
 })
+return(kernel)
+}
+
+kernel <- create_kernel(dolph.sp)
+kernel_sexage <- create_kernel(dolph.sp_sexage)
 
 # Create area of each polygon
 year <- 5
@@ -67,11 +88,18 @@ print(dolph.kernel.poly)
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
 
 # Calculate kernel overlap values
+create_kov <- function(kernel) {
 kov <- lapply(kernel, function(kern) {
   kerneloverlaphr(kern, method = "HR", lev = 95)
 })
+return(kov)
+}
+
+kov <- create_kov(kernel)
+kov_sexage <- create_kov(kernel_sexage)
 
 saveRDS(kov, "kov.RDS")
+saveRDS(kov_sexage, "kov_sexage.RDS")
 
 ###########################################################################
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------

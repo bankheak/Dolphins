@@ -1,7 +1,7 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
 ###########################################################################
-# DYATIC SOCIAL ASSOCIATIONP
+# DYATIC SOCIAL ASSOCIATIONS
 ###########################################################################
 
 # Set working directory here
@@ -44,7 +44,7 @@ orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 
 # Get rid of data with no sex or age data
-sample_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
+sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
 
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
@@ -53,23 +53,40 @@ sample_data <- read.csv("sample_data.csv")
 sample_data$ThreeYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 3, by = 3), labels = FALSE)
 list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
 
+# Make a list of three years per dataframe for sex and age data
+sample_sexage_data$ThreeYearIncrement <- cut(sample_sexage_data$Year, breaks = seq(min(sample_sexage_data$Year), max(sample_sexage_data$Year) + 3, by = 3), labels = FALSE)
+list_sexage_threeyears <- split(sample_sexage_data, sample_sexage_data$ThreeYearIncrement)
+
 # Eliminate IDs with less than 5 locations
-ID <- list()
-for (i in seq_along(list_threeyears)) {
-ID[[i]] <- unique(list_threeyears[[i]]$Code)
-obs_vect <- NULL
-for (j in 1:length(ID[[i]])) {
-  obs_vect[j] <- sum(list_threeyears[[i]]$Code == ID[[i]][j])
+sub_locations <- function(list_years) {
+  updated_list_years <- list()  # Initialize an empty list to store the updated datasets
+  
+  for (i in seq_along(list_years)) {
+    ID <- unique(list_years[[i]]$Code)
+    obs_vect <- numeric(length(ID))
+    
+    for (j in seq_along(ID)) {
+      obs_vect[j] <- sum(list_years[[i]]$Code == ID[j])
+    }
+    
+    sub <- data.frame(ID = ID, obs_vect = obs_vect)
+    sub <- subset(sub, subset = obs_vect > 10)
+    
+    updated_list_years[[i]] <- subset(list_years[[i]], Code %in% sub$ID)
+  }
+  return(updated_list_years)
 }
-sub <- data.frame(ID = ID[[i]], obs_vect = obs_vect)
-sub <- subset(sub, subset=c(sub$obs_vect > 10))
-list_threeyears[[i]] <- subset(list_threeyears[[i]], list_threeyears[[i]]$Code %in% c(sub$ID))}
+
+list_threeyears <- sub_locations(list_threeyears)
+list_sexage_threeyears <- sub_locations(list_sexage_threeyears)
 
 # Save list
+saveRDS(list_sexage_threeyears, file="list_sexage_years.RData")
 saveRDS(list_threeyears, file="list_years.RData")
 list_years <- readRDS("list_years.RData")
 
 # Calculate Gambit of the group
+create_gbi <- function(list_years) {
 gbi <- list()
 group_data <- list()
 for (i in seq_along(list_years)) {
@@ -82,25 +99,37 @@ for (i in seq_along(list_years)) {
   # Gambit of the group index
   gbi[[i]] <- get_group_by_individual(group_data[[i]][,c("Code", "Group")], data_format = "individuals")
 }
+          return(gbi)                                      
+                                      }
 
+gbi <- create_gbi(list_years)
+gbi_sexage <- create_gbi(list_sexage_years)
+
+# Save gbi list
 saveRDS(gbi, file="gbi.RData")
 
 # Create association matrix
+create_nxn <- function(list_years, gbi) {
 source("../code/functions.R") # SRI & null permutation
-
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
 nxn <- list()
 for (i in seq_along(list_years)) {
   nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
-}
+}                                 
 # End parallel processing
 stopImplicitCluster()
 })
+return(nxn)
+}
 
-# Save nxn list
+nxn <- create_nxn(list_years, gbi)
+nxn_sexage <- create_nxn(list_sexage_years, gbi_sexage)
+
+# Save nxn lists
 saveRDS(nxn, file="nxn.RData")
+saveRDS(nxn_sexage, file="nxn_sexage.RData")
 nxn <- readRDS("nxn.RData")
 
 ###########################################################################

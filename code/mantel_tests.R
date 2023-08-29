@@ -16,17 +16,19 @@ library(ncf) # For weights
 library(vegan)
 library(igraph) # graph_adj
 require(asnipe) # mrqap.dsp
-library(assortnet)
+library(assortnet) # associative indices
 library(ggplot2)
 library(doParallel)
 
-# Read file in to retain ILV
-sample_data <- read.csv("sample_data.csv")
+# Read in social association matrix and listed data
 kov <- readRDS("kov.RDS")  # Home range overlap
+nxn <- readRDS("nxn.RData") # Association Matrix
+list_years <- readRDS("list_years.RData") # Data listed into periods
 
-# Read in social association matrix and data
-nxn <- readRDS("nxn.RData")
-list_years <- readRDS("list_years.RData")
+# Read file in to retain ILV
+kov_sexage <- readRDS("kov_sexage.RDS")  
+nxn_sexage <- readRDS("nxn_sexage.RData")
+list_sexage_years <- readRDS("list_sexage_years.RData")
 
 # Transforming SRI similarity into distance
 dolp_dist <- lapply(nxn, function(df) {
@@ -37,7 +39,7 @@ dolp_dist <- lapply(nxn, function(df) {
 })
 
 # Sex similarity matrix
-sex_list <- lapply(list_years, function(df) {
+sex_list <- lapply(list_sexage_years, function(df) {
   
   ## Empty matrix to store sex similarity
   num_ID <- length(unique(df$Code))
@@ -58,7 +60,7 @@ sex_list <- lapply(list_years, function(df) {
 })
 
 # Age similarity matrix
-age_list <- lapply(list_years, function(df) {
+age_list <- lapply(list_sexage_years, function(df) {
   
   ## Empty matrix to store sex similarity
   num_ID <- length(unique(df$Code))
@@ -74,14 +76,13 @@ age_list <- lapply(list_years, function(df) {
 })
 
 # Extract specific columns from each data frame in list_years
+aux_data <- function(list_years) {
 aux <- lapply(list_years, function(df) {
   data.frame(
     Code = df$Code,
     Behaviors = df$Behaviors,
     HumanInteraction = df$HumanInteraction,
-    ConfHI = df$ConfHI
-  )
-})
+    ConfHI = df$ConfHI)})
 
 # Add the 'Foraging' variable to each data frame in the 'aux' list
 aux <- lapply(aux, function(df) {
@@ -89,8 +90,14 @@ aux <- lapply(aux, function(df) {
   df$Foraging[grepl(pattern = 'Feed', x = df$Behaviors, ignore.case = FALSE)] <- "Feed"
   df
 })
+return(aux)
+}
+
+aux <- aux_data(list_years)
+aux_sexage <- aux_data(list_sexage_years)
 
 # Categorize ID to Foraging
+ID_forg <- function(aux_data) {
 IDbehav <- lapply(aux, function(df) {
   df <- table(df$Code, df$Foraging)
   df <- as.data.frame(df, stringsAsFactors = FALSE)
@@ -99,6 +106,11 @@ IDbehav <- lapply(aux, function(df) {
   df <- aggregate(. ~ Code, data = df, sum)
   df
 })
+return(IDbehav)
+}
+
+IDbehav <- ID_forg(aux)
+IDbehav_sexage <- ID_forg(aux_sexage)
 
 # HI behaviors should be partitioned into 3 different types---------------------
 #' B = Beg: F, G, H
@@ -140,11 +152,12 @@ saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
 saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
 
 # Clump all the HI behaviors together------------------------------------------
-for (i in seq_along(aux)) {
-aux[[i]]$ConfHI <- ifelse(aux[[i]]$ConfHI != "0", 1, 0)}
+clump_behav <- function(aux_data) {
+for (i in seq_along(aux_data)) {
+  aux_data[[i]]$ConfHI <- ifelse(aux_data[[i]]$ConfHI != "0", 1, 0)}
 
 # Categorize ConfHI to IDs
-rawHI <- lapply(aux, function(df) {
+rawHI <- lapply(aux_data, function(df) {
   # Sum up the frequencies of HI by code
   aggregated_df <- aggregate(ConfHI ~ Code, data = df, sum)
   unique_codes_df <- data.frame(Code = unique(df$Code))
@@ -154,14 +167,25 @@ rawHI <- lapply(aux, function(df) {
   merged_df$ConfHI[is.na(merged_df$ConfHI)] <- 0
   return(merged_df)
 })
+return(rawHI)
+}
+
+rawHI <- clump_behav(aux)
+rawHI_sexage <- clump_behav(aux_sexage)
 
 # Get HI Freq
+create_IDbehav_HI <- function(IDbehav){
 IDbehav_HI <- lapply(seq_along(IDbehav), function(i) {
       df <- IDbehav[[i]]
       df$HI <- rawHI[[i]]$ConfHI
       colnames(df) <- c("Code", "Foraging", "HI")
       df
     })
+return(IDbehav_HI)
+}
+
+IDbehav_HI <- create_IDbehav_HI(IDbehav)
+IDbehav_HI_sexage <- create_IDbehav_HI(IDbehav_sexage)
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -176,6 +200,7 @@ Prop_HI <- function(IDbehav) {
 }
 
 prob_HI <- Prop_HI(IDbehav_HI)
+prop_HI_sexage <- Prop_HI(IDbehav_HI_sexage)
 prob_Beg <- Prop_HI(IDbehav_Beg)
 prob_Pat <- Prop_HI(IDbehav_Pat)
 prob_Dep <- Prop_HI(IDbehav_Dep)
@@ -193,6 +218,7 @@ dis_matr <- function(Prop_HI) {
 }
 
 dist_HI <- dis_matr(prob_HI)
+dist_HI_sexage <- dis_matr(prop_HI_sexage)
 dist_Beg <- dis_matr(prob_Beg)
 dist_Pat <- dis_matr(prob_Pat)
 dist_Dep <- dis_matr(prob_Dep)
@@ -206,11 +232,27 @@ year <- 5
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
-mrqap <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]] +
+
+## Without sex and age included
+mrqap_full <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]],
+                   randomisations = Nperm,
+                   intercept = FALSE,
+                   test.statistic = "beta")
+
+## Without sex and age included and with behaviors divided
+mrqap_sepHI <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]] +
                      dist_Beg[[year]] + dist_Dep[[year]] + dist_Pat[[year]],
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")
+
+## With sex and age included
+mrqap_sexage <- mrqap.dsp(nxn_sexage[[year]] ~ kov_sexage[[year]] + 
+                            dist_HI_sexage[[year]],
+                   randomisations = Nperm,
+                   intercept = FALSE,
+                   test.statistic = "beta")
+
 
 ###########################################################################
 # PART 4: Assortivity Index Based on HI Over Time  ------------------------------------------------
