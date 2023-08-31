@@ -98,7 +98,7 @@ aux_sexage <- aux_data(list_sexage_years)
 
 # Categorize ID to Foraging
 ID_forg <- function(aux_data) {
-IDbehav <- lapply(aux, function(df) {
+IDbehav <- lapply(aux_data, function(df) {
   df <- table(df$Code, df$Foraging)
   df <- as.data.frame(df, stringsAsFactors = FALSE)
   df <- df[, c(1, 3)]
@@ -174,18 +174,18 @@ rawHI <- clump_behav(aux)
 rawHI_sexage <- clump_behav(aux_sexage)
 
 # Get HI Freq
-create_IDbehav_HI <- function(IDbehav){
-IDbehav_HI <- lapply(seq_along(IDbehav), function(i) {
-      df <- IDbehav[[i]]
-      df$HI <- rawHI[[i]]$ConfHI
+create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
+IDbehav_HI <- lapply(seq_along(IDbehav_data), function(i) {
+      df <- IDbehav_data[[i]]
+      df$HI <- rawHI_data[[i]]$ConfHI
       colnames(df) <- c("Code", "Foraging", "HI")
       df
     })
 return(IDbehav_HI)
 }
 
-IDbehav_HI <- create_IDbehav_HI(IDbehav)
-IDbehav_HI_sexage <- create_IDbehav_HI(IDbehav_sexage)
+IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
+IDbehav_HI_sexage <- create_IDbehav_HI(IDbehav_sexage, rawHI_sexage)
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -211,10 +211,8 @@ dis_matr <- function(Prop_HI) {
   for (i in seq_along(Prop_HI)) {
     fake_HIprop <- Prop_HI[[i]]$HIprop
     dissimilarity_HI[[i]] <- as.matrix(dist(matrix(fake_HIprop), method = "euclidean"))
-    dissimilarity_HI[[i]][is.na(dissimilarity_HI[[i]])] <- 0
-    #dissimilarity_HI[[i]] <- as.dist(dissimilarity_HI[[i]]) # HI dissimilarity
   }
-  dissimilarity_HI
+  return(dissimilarity_HI)
 }
 
 dist_HI <- dis_matr(prob_HI)
@@ -227,8 +225,28 @@ dist_Dep <- dis_matr(prob_Dep)
 ###########################################################################
 # PART 2: Create MRQAP Models  ------------------------------------------------
 
+# Check for collinearity 
+# Check if it is based off zeros
+## Create a list of predictor matrices
+predictor_matrices <- list(dist_HI[[year]], dist_Beg[[year]], 
+                           dist_Pat[[year]], dist_Dep[[year]])
+
+## Calculate correlation matrix
+num_predictors <- length(predictor_matrices)
+correlation_matrix <- matrix(NA, nrow = num_predictors, ncol = num_predictors)
+
+for (i in 1:num_predictors) {
+  for (j in 1:num_predictors) {
+    mtest <- mantel.rtest(as.dist(predictor_matrices[[i]]), as.dist(predictor_matrices[[j]]), nrepet=999)
+    correlation_matrix[i, j] <- mtest$obs
+  }
+}
+
+## Print the correlation matrix
+print(correlation_matrix) # It seems that BEG and HI are highly correlated
+
 # Set a number of permutations and year
-year <- 5
+year <- 4
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
@@ -240,7 +258,7 @@ mrqap_full <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]],
                    test.statistic = "beta")
 
 ## Without sex and age included and with behaviors divided
-mrqap_sepHI <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]] +
+mrqap_sepHI <- mrqap.dsp(nxn[[year]] ~ kov[[year]] +
                      dist_Beg[[year]] + dist_Dep[[year]] + dist_Pat[[year]],
                    randomisations = Nperm,
                    intercept = FALSE,
@@ -248,6 +266,7 @@ mrqap_sepHI <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]] +
 
 ## With sex and age included
 mrqap_sexage <- mrqap.dsp(nxn_sexage[[year]] ~ kov_sexage[[year]] + 
+                            sex_list[[year]] + age_list[[year]] + 
                             dist_HI_sexage[[year]],
                    randomisations = Nperm,
                    intercept = FALSE,

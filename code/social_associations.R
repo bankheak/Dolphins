@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("../data")
 
 # Load all necessary packages
 require(asnipe) # get_group_by_individual--Damien Farine
