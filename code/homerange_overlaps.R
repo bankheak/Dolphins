@@ -25,6 +25,7 @@ library(rgdal) # Overlap
 sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 list_sexage_years <- readRDS("list_sexage_years.RData")
+list_HI_years <- readRDS("list_HI_years.RData")
 
 # Make a function that calculates all of the following code with and without sex and age
 create_coord_data <- function(list_years) {
@@ -53,6 +54,7 @@ return(dolph.sp)
 
 dolph.sp <- create_coord_data(list_years)
 dolph.sp_sexage <- create_coord_data(list_sexage_years)
+dolph.sp_HI <- create_coord_data(list_HI_years)
 
 # Visualize data extent
 vis.sf <- function(dolph.sp) {
@@ -67,6 +69,7 @@ return(dolph.sf)
 
 dolph.sf <- vis.sf(dolph.sp)
 dolph.sf_sexage <- vis.sf(dolph.sp_sexage)
+dolph.sf_HI <- vis.sf(dolph.sp_HI)
 
 # Calculate kernel values
 create_kernel <- function(dolph.sp) {
@@ -78,6 +81,8 @@ return(kernel)
 
 kernel <- create_kernel(dolph.sp)
 kernel_sexage <- create_kernel(dolph.sp_sexage)
+kernel_HI <- create_kernel(dolph.sp_HI) 
+# looks like only period 5 has enough HI individuals
 
 # Create area of each polygon
 year <- 5
@@ -97,9 +102,11 @@ return(kov)
 
 kov <- create_kov(kernel)
 kov_sexage <- create_kov(kernel_sexage)
+kov_HI <- kerneloverlaphr(kernel_HI[[year]], method = "HR", lev = 95)
 
 saveRDS(kov, "kov.RDS")
 saveRDS(kov_sexage, "kov_sexage.RDS")
+saveRDS(kov_HI, "kov_HI.RDS")
 
 ###########################################################################
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------

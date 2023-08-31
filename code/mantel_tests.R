@@ -12,13 +12,12 @@ setwd("../data")
 
 ## load all necessary packages
 library(ade4) # Look at Dai Shizuka/Jordi Bascompte
-library(ncf) # For weights
-library(vegan)
-library(igraph) # graph_adj
 require(asnipe) # mrqap.dsp
 library(assortnet) # associative indices
-library(ggplot2)
-library(doParallel)
+library(ggplot2) # Visualization
+library(doParallel) # For faster coding
+library(MCMCglmm) # MCMC models
+library(brms) # Baysian
 
 # Read in social association matrix and listed data
 kov <- readRDS("kov.RDS")  # Home range overlap
@@ -29,6 +28,10 @@ list_years <- readRDS("list_years.RData") # Data listed into periods
 kov_sexage <- readRDS("kov_sexage.RDS")  
 nxn_sexage <- readRDS("nxn_sexage.RData")
 list_sexage_years <- readRDS("list_sexage_years.RData")
+
+# Read file in to retain only HI IDs
+kov_HI <- readRDS("kov_HI.RDS") 
+nxn_HI <- readRDS("nxn_HI.RData") 
 
 # Transforming SRI similarity into distance
 dolp_dist <- lapply(nxn, function(df) {
@@ -95,6 +98,7 @@ return(aux)
 
 aux <- aux_data(list_years)
 aux_sexage <- aux_data(list_sexage_years)
+aux_HI <- aux_data(list_HI_years)
 
 # Categorize ID to Foraging
 ID_forg <- function(aux_data) {
@@ -111,45 +115,56 @@ return(IDbehav)
 
 IDbehav <- ID_forg(aux)
 IDbehav_sexage <- ID_forg(aux_sexage)
+IDbehav_HI <- ID_forg(aux_HI)
 
 # HI behaviors should be partitioned into 3 different types---------------------
 #' B = Beg: F, G, H
 #' P = Patrol: A, B, C
 #' D = Depredation: D, E, P
 # Change the code using ifelse statements
-for (i in seq_along(aux)) {
+subset_HI <- function(aux_data) {
+for (i in seq_along(aux_data)) {
 
-  aux[[i]]$DiffHI <- ifelse(aux[[i]]$ConfHI %in% c("F", "G", "H"), "Beg",
-                            ifelse(aux[[i]]$ConfHI %in% c("A", "B", "C"), "Pat",
-                                   ifelse(aux[[i]]$ConfHI %in% c("P", "D", "E"), "Dep", "0")))
+  aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G", "H"), "Beg",
+                            ifelse(aux_data[[i]]$ConfHI %in% c("A", "B", "C"), "Pat",
+                                   ifelse(aux_data[[i]]$ConfHI %in% c("P", "D", "E"), "Dep", "0")))
 
-}
+}}
+
+aux <- subset_HI(aux)
+aux_HI <- subset_HI(aux_HI)
 
 # Categorize DiffHI to IDs
-rawHI_diff <- lapply(aux, function(df) {
+diff_raw <- function(aux_data) {
+rawHI_diff <- lapply(aux_data, function(df) {
   table_df <- as.data.frame(table(df$Code, df$DiffHI))
   colnames(table_df) <- c("Code", "DiffHI", "Freq")
   return(table_df)
-})
+})}
+
+rawHI_diff <- diff_raw(aux)
+rawHI_diff_HI <- diff_raw(aux_HI)
 
 # Create a frequency count for each HI behavior
-get_IDHI <- function(HI) {
-  lapply(seq_along(IDbehav), function(i) {
-    df <- IDbehav[[i]]
-    HI_freq <- rawHI_diff[[i]]$Freq[rawHI_diff[[i]]$DiffHI == HI]
-    df$HI <- HI_freq[match(df$Code, rawHI_diff[[i]]$Code)]
+get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
+  lapply(seq_along(IDbehav_data), function(i) {
+    df <- IDbehav_data[[i]]
+    HI_freq <- rawHI_diff_data[[i]]$Freq[rawHI_diff_data[[i]]$DiffHI == HI]
+    df$HI <- HI_freq[match(df$Code, rawHI_diff_data[[i]]$Code)]
     colnames(df) <- c("Code", "Foraging", "HI")
     df
   })
 }
 
-IDbehav_Beg <- get_IDHI("Beg")
-IDbehav_Pat <- get_IDHI("Pat")
-IDbehav_Dep <- get_IDHI("Dep")
+# Including zeros
+IDbehav_Beg <- get_IDHI("Beg", IDbehav, rawHI_diff)
+IDbehav_Pat <- get_IDHI("Pat", IDbehav, rawHI_diff)
+IDbehav_Dep <- get_IDHI("Dep", IDbehav, rawHI_diff)
 
-saveRDS(IDbehav_Beg, file = "../data/IDbehav_Beg.RData")
-saveRDS(IDbehav_Pat, file = "../data/IDbehav_Pat.RData")
-saveRDS(IDbehav_Dep, file = "../data/IDbehav_Dep.RData")
+# Not including zeros
+IDbehav_Beg <- get_IDHI("Beg", IDbehav_HI, rawHI_diff_HI)
+IDbehav_Pat <- get_IDHI("Pat", IDbehav_HI, rawHI_diff_HI)
+IDbehav_Dep <- get_IDHI("Dep", IDbehav_HI, rawHI_diff_HI)
 
 # Clump all the HI behaviors together------------------------------------------
 clump_behav <- function(aux_data) {
@@ -172,6 +187,7 @@ return(rawHI)
 
 rawHI <- clump_behav(aux)
 rawHI_sexage <- clump_behav(aux_sexage)
+rawHI_HI <- clump_behav(aux_HI)
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
@@ -186,6 +202,7 @@ return(IDbehav_HI)
 
 IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
 IDbehav_HI_sexage <- create_IDbehav_HI(IDbehav_sexage, rawHI_sexage)
+IDbehav_HI_HI <- create_IDbehav_HI(IDbehav_HI, rawHI_HI)
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -201,6 +218,7 @@ Prop_HI <- function(IDbehav) {
 
 prob_HI <- Prop_HI(IDbehav_HI)
 prop_HI_sexage <- Prop_HI(IDbehav_HI_sexage)
+prop_HI_HI <- Prop_HI(IDbehav_HI_HI)
 prob_Beg <- Prop_HI(IDbehav_Beg)
 prob_Pat <- Prop_HI(IDbehav_Pat)
 prob_Dep <- Prop_HI(IDbehav_Dep)
@@ -217,6 +235,7 @@ dis_matr <- function(Prop_HI) {
 
 dist_HI <- dis_matr(prob_HI)
 dist_HI_sexage <- dis_matr(prop_HI_sexage)
+dist_HI_HI <- dis_matr(prop_HI_HI)
 dist_Beg <- dis_matr(prob_Beg)
 dist_Pat <- dis_matr(prob_Pat)
 dist_Dep <- dis_matr(prob_Dep)
@@ -246,7 +265,7 @@ for (i in 1:num_predictors) {
 print(correlation_matrix) # It seems that BEG and HI are highly correlated
 
 # Set a number of permutations and year
-year <- 4
+year <- 5
 Nperm <- 1000
 
 # Calculate QAP correlations for the association response matrix
@@ -271,6 +290,43 @@ mrqap_sexage <- mrqap.dsp(nxn_sexage[[year]] ~ kov_sexage[[year]] +
                    randomisations = Nperm,
                    intercept = FALSE,
                    test.statistic = "beta")
+
+## With only HI individuals included
+mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
+                        randomisations = Nperm,
+                        intercept = FALSE,
+                        test.statistic = "beta")
+
+
+###########################################################################
+# PART 3: Create MCMC GLMMs  ------------------------------------------------
+
+# Prepare dataframe for MCMC
+num_nodes <- lapply(nxn_sexage, function(df) {dim(df)[1]})
+
+## Seperate IDs into i and j
+node_ids_i <- lapply(num_nodes, function(df) {matrix(rep(1:df, df), df, df)})
+node_ids_j <- lapply(node_ids_i, function(df) {t(df)})
+
+df_list <- list()  
+for (i in seq_along(nxn_sexage)) {
+  df_dolp <- data.frame(edge_weight = nxn_sexage[[i]][upper.tri(nxn_sexage[[i]])], 
+                        age_difference = age_list[[i]][upper.tri(age_list[[i]])],
+                        sex_difference = sex_list[[i]][upper.tri(sex_list[[i]])],
+                        HI_differences = dist_HI_sexage[[i]][upper.tri(dist_HI_sexage[[i]])],
+                        HRO = kov_sexage[[i]][upper.tri(kov_sexage[[i]])],
+                        node_id_1 = factor(node_ids_i[[i]][upper.tri(node_ids_i[[i]])],
+                                           levels = 1:num_nodes[[i]]),
+                        node_id_2 = factor(node_ids_j[[i]][upper.tri(node_ids_j[[i]])], 
+                                           levels = 1:num_nodes[[i]]))
+  df_list[[i]] <- df_dolp
+}
+
+# Multimembership models in MCMCglmm
+year <- 5
+fit_mcmc <- MCMCglmm(edge_weight ~ HI_differences + HRO + age_difference + sex_difference, 
+                     random=~mm(node_id_1 + node_id_2), data=df_list[[year]])
+summary(fit_mcmc)
 
 
 ###########################################################################
