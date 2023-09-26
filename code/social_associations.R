@@ -208,9 +208,9 @@ abline(v= cv_ci[2], col="blue")
 # PART 3: SRI Within HI Pairs---------------------------------------------------------
 
 # Read in different behavior's data frames
-IDbehav_Beg <- readRDS("IDbehav_Beg.RData")
-IDbehav_Pat <- readRDS("IDbehav_Pat.RData")
-IDbehav_Dep <- readRDS("IDbehav_Dep.RData")
+IDbehav_BG <- readRDS("IDbehav_BG.RData")
+IDbehav_SD <- readRDS("IDbehav_SD.RData")
+IDbehav_FG <- readRDS("IDbehav_FG.RData")
 
 # Get unique behavior assignments
 status <- function(IDbehav, HI, NonHI){
@@ -222,9 +222,9 @@ status <- function(IDbehav, HI, NonHI){
 }
 
 ## Match each individual with it's behavior
-Beg <- status(IDbehav_Beg, "B", "NB")
-Pat <- status(IDbehav_Pat, "P", "NP")
-Dep <- status(IDbehav_Dep, "D", "ND")
+BG <- status(IDbehav_BG, "BG", "NBG")
+SD <- status(IDbehav_SD, "SD", "NSD")
+FG <- status(IDbehav_FG, "FG", "NFG")
 
 # Replace individuals in the matrix with their assigned behavior
 replace_ID_with_HI <- function(sri_matrix, ID_HI_df) {
@@ -244,15 +244,15 @@ replace_ID_with_HI <- function(sri_matrix, ID_HI_df) {
 }
 
 # Make a replaced nxn for each behavior
-Beg_nxn <- lapply(seq_along(nxn), function(i) {
+BG_nxn <- lapply(seq_along(nxn), function(i) {
   replace_ID_with_HI(nxn[[i]], Beg[[i]])
 })
                   
-Pat_nxn <- lapply(seq_along(nxn), function(i) {
+SD_nxn <- lapply(seq_along(nxn), function(i) {
   replace_ID_with_HI(nxn[[i]], Pat[[i]])
 })
 
-Dep_nxn <- lapply(seq_along(nxn), function(i) {
+FG_nxn <- lapply(seq_along(nxn), function(i) {
   replace_ID_with_HI(nxn[[i]], Dep[[i]])
 })
 

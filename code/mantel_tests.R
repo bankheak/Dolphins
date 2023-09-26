@@ -78,7 +78,8 @@ age_list <- lapply(list_sexage_years, function(df) {
   return(age_matrix)
 })
 
-# Boat simularity matrices
+# Boat similarity matrices
+Hactivity_data <- list_years[[7]]
 Hactivity_list <- function(df, Hactivity) {
   
   ## Empty matrix to store boat similarity
@@ -93,9 +94,19 @@ Hactivity_list <- function(df, Hactivity) {
   }
   return(Hactivity_matrix)
 }
-boat_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.Boats)
-line_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.Lines)
-pot_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.CrabPots)
+boat_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Boats)
+line_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Lines)
+pot_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.CrabPots)
+## pred & density 
+### Boat
+boat_density <- sum(Hactivity_data$X.Boats)/length(Hactivity_data$X.Boats)
+boat_pred <- sd(Hactivity_data$X.Boats)/mean(Hactivity_data$X.Boats)
+### Line
+line_density <- sum(Hactivity_data$X.Lines)/length(Hactivity_data$X.Lines)
+line_pred <- sd(Hactivity_data$X.Lines)/mean(Hactivity_data$X.Lines)
+### CrabPot
+pot_density <- sum(Hactivity_data$X.CrabPots)/length(Hactivity_data$X.CrabPots)
+pot_pred <- sd(Hactivity_data$X.CrabPots)/mean(Hactivity_data$X.CrabPots)
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -179,6 +190,9 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
+saveRDS(IDbehav_BG, "IDbehav_BG.RData")
+saveRDS(IDbehav_SD, "IDbehav_SD.RData")
+saveRDS(IDbehav_FG, "IDbehav_FG.RData")
 
 # Not including zeros
 IDbehav_BG <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)

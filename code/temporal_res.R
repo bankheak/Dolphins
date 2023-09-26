@@ -21,6 +21,8 @@ sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 
 # Estimate sampling effort and size for each triyear
+## List years
+year_list <- lapply(list_years, function(df) unique(df$Year))
 ## Get estimate of sampling effort
 effort <- as.data.frame(lapply(list_years, function(df) length(unique(df$Date))))
 colnames(effort) <- c(1:7)
@@ -38,19 +40,19 @@ BG <- unique(unlist(sapply(IDbehav_BG, function(df) df$Code[df$HI != 0])))
 SD <- unique(unlist(sapply(IDbehav_SD, function(df) df$Code[df$HI != 0])))
 FG <- unique(unlist(sapply(IDbehav_FG, function(df) df$Code[df$HI != 0])))
 
-Beg_effort <- as.data.frame(lapply(IDbehav_BG, function(df) 
+BG_effort <- as.data.frame(lapply(IDbehav_BG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(Beg_effort) <- c(1:7)
-Pat_effort <- as.data.frame(lapply(IDbehav_SD, function(df) 
+colnames(BG_effort) <- c(1:7)
+SD_effort <- as.data.frame(lapply(IDbehav_SD, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(Pat_effort) <- c(1:7)
-Dep_effort <- as.data.frame(lapply(IDbehav_FG, function(df) 
+colnames(SD_effort) <- c(1:7)
+FG_effort <- as.data.frame(lapply(IDbehav_FG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(Dep_effort) <- c(1:7)
+colnames(FG_effort) <- c(1:7)
 
 ## Compare effort to population size
-pop_effort <- as.data.frame(rbind(effort, unique_ID_year, Beg_effort, Pat_effort, Dep_effort)) # Days per year and pop size per year
-rownames(pop_effort) <- c('Days_Surveyed', 'Number_of_Indivduals', 'Beggars', 'Patrollers', 'Depredators')
+pop_effort <- as.data.frame(rbind(effort, unique_ID_year, BG_effort, SD_effort, FG_effort)) # Days per year and pop size per year
+rownames(pop_effort) <- c('Number of Days Surveyed', 'Number of Individuals', 'Beggars', 'Scavengers/Depredators', 'Fixed Gear Interactors')
 
 # Get all unique Code values in the entire sample_data
 all_codes <- unique(sample_data$Code)
