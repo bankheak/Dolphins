@@ -78,6 +78,25 @@ age_list <- lapply(list_sexage_years, function(df) {
   return(age_matrix)
 })
 
+# Boat simularity matrices
+Hactivity_list <- function(df, Hactivity) {
+  
+  ## Empty matrix to store boat similarity
+  num_ID <- length(unique(df$Code))
+  Hactivity_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
+  
+  # Fill in similarity of boat activity
+  for (i in 1:num_ID) {
+    for (j in 1:num_ID) {
+      Hactivity_matrix[i, j] <- abs(Hactivity[i] - Hactivity[j])
+    }
+  }
+  return(Hactivity_matrix)
+}
+boat_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.Boats)
+line_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.Lines)
+pot_list <- Hactivity_list(df = list_years[[7]], Hactivity = list_years[[7]]$X.CrabPots)
+
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
 aux <- lapply(list_years, function(df) {

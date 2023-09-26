@@ -29,8 +29,10 @@ orig_data <- subset(orig_data, subset=c(orig_data$Code != "None"))
 orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
-# Match ID to sex and age data
+# Match ID to sex, age and human data
 ILV <- read.csv("Individuals_Residency_Analysis.csv")
+human_data <- read.csv("human_dolphin_data.csv")
+
 ## Sex
 ID_sex <- setNames(ILV$Sex, ILV$Alias)
 orig_data$Sex <- ID_sex[orig_data$Code]
@@ -38,6 +40,12 @@ orig_data$Sex <- ID_sex[orig_data$Code]
 ID_birth <- setNames(ILV$BirthYear, ILV$Alias)
 orig_data$Birth <- ID_birth[orig_data$Code]
 orig_data$Age <- as.numeric(orig_data$Year) - as.numeric(orig_data$Birth)
+## Human
+human_data_subset <- human_data[, c("SightingFID", "X.Boats", "X.Lines", "X.CrabPots")]
+orig_data <- merge(orig_data, human_data_subset, by = "SightingFID", all = TRUE)
+columns_to_replace <- c("X.Boats", "X.Lines", "X.CrabPots")
+orig_data[, columns_to_replace][is.na(orig_data[, columns_to_replace])] <- 0
+orig_data[, columns_to_replace][orig_data[, columns_to_replace] == -999] <- 0
 
 # Get rid of any data with no location data
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
@@ -85,8 +93,8 @@ list_sexage_threeyears <- sub_locations(list_sexage_threeyears)
 list_HI_threeyears <- sub_locations(list_HI_threeyears)
 
 # Save list
-saveRDS(list_sexage_threeyears, file="list_sexage_years.RData")
 saveRDS(list_threeyears, file="list_years.RData")
+saveRDS(list_sexage_threeyears, file="list_sexage_years.RData")
 saveRDS(list_HI_threeyears, file="list_HI_years.RData")
 
 list_years <- readRDS("list_years.RData")
