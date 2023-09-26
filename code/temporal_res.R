@@ -30,21 +30,21 @@ unique_ID_year <- as.data.frame(lapply(list_years, function(df) length(unique(df
 colnames(unique_ID_year) <- c(1:7)
 
 ## Get estimate of population size within each HI group
-IDbehav_Beg <- readRDS("IDbehav_Beg.RData")
-IDbehav_Pat <- readRDS("IDbehav_Pat.RData")
-IDbehav_Dep <- readRDS("IDbehav_Dep.RData")
+IDbehav_BG <- readRDS("IDbehav_BG.RData")
+IDbehav_SD <- readRDS("IDbehav_SD.RData")
+IDbehav_FG <- readRDS("IDbehav_FG.RData")
 
-Beg <- unique(unlist(sapply(IDbehav_Beg, function(df) df$Code[df$HI != 0])))
-Pat <- unique(unlist(sapply(IDbehav_Pat, function(df) df$Code[df$HI != 0])))
-Dep <- unique(unlist(sapply(IDbehav_Dep, function(df) df$Code[df$HI != 0])))
+BG <- unique(unlist(sapply(IDbehav_BG, function(df) df$Code[df$HI != 0])))
+SD <- unique(unlist(sapply(IDbehav_SD, function(df) df$Code[df$HI != 0])))
+FG <- unique(unlist(sapply(IDbehav_FG, function(df) df$Code[df$HI != 0])))
 
-Beg_effort <- as.data.frame(lapply(IDbehav_Beg, function(df) 
+Beg_effort <- as.data.frame(lapply(IDbehav_BG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
 colnames(Beg_effort) <- c(1:7)
-Pat_effort <- as.data.frame(lapply(IDbehav_Pat, function(df) 
+Pat_effort <- as.data.frame(lapply(IDbehav_SD, function(df) 
   length(unique(df$Code[df$HI > 0]))))
 colnames(Pat_effort) <- c(1:7)
-Dep_effort <- as.data.frame(lapply(IDbehav_Dep, function(df) 
+Dep_effort <- as.data.frame(lapply(IDbehav_FG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
 colnames(Dep_effort) <- c(1:7)
 

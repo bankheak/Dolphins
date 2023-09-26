@@ -118,18 +118,18 @@ IDbehav_sexage <- ID_forg(aux_sexage)
 IDbehav_HI <- ID_forg(aux_HI)
 
 # HI behaviors should be partitioned into 3 different types---------------------
-#' B = Beg: F, G, H
-#' P = Patrol: A, B, C
-#' D = Depredation: D, E, P
+#' B = Beg: F, G
+#' P = Scavenge and Depredation: B, C, D, E
+#' D = Fixed Gear Interaction: P
 # Change the code using ifelse statements
 subset_HI <- function(aux_data) {
-for (i in seq_along(aux_data)) {
-
-  aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G", "H"), "Beg",
-                            ifelse(aux_data[[i]]$ConfHI %in% c("A", "B", "C"), "Pat",
-                                   ifelse(aux_data[[i]]$ConfHI %in% c("P", "D", "E"), "Dep", "0")))
-
-}}
+  for (i in seq_along(aux_data)) {
+    aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
+                                   ifelse(aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E"), "SD",
+                                          ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
+  }
+  return(aux_data)  # Return the modified list of data frames
+}
 
 aux <- subset_HI(aux)
 aux_HI <- subset_HI(aux_HI)
@@ -157,14 +157,14 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
 }
 
 # Including zeros
-IDbehav_Beg <- get_IDHI("Beg", IDbehav, rawHI_diff)
-IDbehav_Pat <- get_IDHI("Pat", IDbehav, rawHI_diff)
-IDbehav_Dep <- get_IDHI("Dep", IDbehav, rawHI_diff)
+IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
+IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
+IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 
 # Not including zeros
-IDbehav_Beg <- get_IDHI("Beg", IDbehav_HI, rawHI_diff_HI)
-IDbehav_Pat <- get_IDHI("Pat", IDbehav_HI, rawHI_diff_HI)
-IDbehav_Dep <- get_IDHI("Dep", IDbehav_HI, rawHI_diff_HI)
+IDbehav_BG <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)
+IDbehav_SD <- get_IDHI("SD", IDbehav_HI, rawHI_diff_HI)
+IDbehav_FG <- get_IDHI("FG", IDbehav_HI, rawHI_diff_HI)
 
 # Clump all the HI behaviors together------------------------------------------
 clump_behav <- function(aux_data) {
