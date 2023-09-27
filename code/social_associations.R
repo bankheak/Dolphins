@@ -58,8 +58,8 @@ write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
 # Make a list of three years per dataframe
-sample_data$ThreeYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 3, by = 3), labels = FALSE)
-list_threeyears <- split(sample_data, sample_data$ThreeYearIncrement)
+sample_data$SplitYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 11, by = 11), labels = FALSE)
+list_splityears <- split(sample_data, sample_data$SplitYearIncrement)
 
 # Make a list of three years per dataframe for sex and age data
 sample_sexage_data$ThreeYearIncrement <- cut(sample_sexage_data$Year, breaks = seq(min(sample_sexage_data$Year), max(sample_sexage_data$Year) + 3, by = 3), labels = FALSE)
@@ -88,12 +88,12 @@ sub_locations <- function(list_years) {
   return(updated_list_years)
 }
 
-list_threeyears <- sub_locations(list_threeyears)
+list_splityears <- sub_locations(list_splityears)
 list_sexage_threeyears <- sub_locations(list_sexage_threeyears)
 list_HI_threeyears <- sub_locations(list_HI_threeyears)
 
 # Save list
-saveRDS(list_threeyears, file="list_years.RData")
+saveRDS(list_splityears, file="list_years.RData")
 saveRDS(list_sexage_threeyears, file="list_sexage_years.RData")
 saveRDS(list_HI_threeyears, file="list_HI_years.RData")
 
@@ -207,7 +207,7 @@ abline(v= cv_ci[2], col="blue")
 ###########################################################################
 # PART 3: SRI Within HI Pairs---------------------------------------------------------
 
-# Read in different behavior's data frames
+# Read in different behavior's data frames from "GLMM.R"
 IDbehav_BG <- readRDS("IDbehav_BG.RData")
 IDbehav_SD <- readRDS("IDbehav_SD.RData")
 IDbehav_FG <- readRDS("IDbehav_FG.RData")

@@ -8,7 +8,7 @@
 setwd("../data")
 
 ###########################################################################
-# PART 1: calculate dyadic home range overlaps ----------------------------
+# PART 1: calculate dyadic home range overlaps of individuals----------------------------
 
 ## load all necessary packages
 library(sf) # Convert degrees to meters
@@ -20,6 +20,8 @@ library(viridis) # Color pallette
 library(gridExtra) # grid.arrange function
 library(ggplot2)
 library(rgdal) # Overlap
+library(tidyr)
+library(dplyr)
 
 # Read in file
 sample_data <- read.csv("sample_data.csv")
@@ -85,9 +87,9 @@ kernel_HI <- create_kernel(dolph.sp_HI)
 # looks like only period 5 has enough HI individuals
 
 # Create area of each polygon
-year <- 5
+year <- 1
 dolph.kernel.poly <- getverticeshr(kernel[[year]], percent = 95)
-print(dolph.kernel.poly)  
+print(dolph.kernel.poly)
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
@@ -214,3 +216,108 @@ colnames(HI_type) <- c("Code", "ConfHI", "Freq")
 
 HI <- subset(HI_type, subset=c(HI_type$Freq != 0))
 HI <- subset(HI, HI$Code %in% individuals)
+
+
+#################################################################################
+# PART 4: calculate home range overlaps of individuals with human activity-------
+
+# Subset the data that contains human activity
+human_data <- subset(sample_data, subset=c(sample_data$Year > 2012))
+
+# Eliminate IDs with less than 5 locations
+relocate_lim <- function(df) {
+  ID <- unique(df$Code)
+  obs_vect <- numeric(length(ID))
+  
+  for (j in seq_along(ID)) {
+    obs_vect[j] <- sum(df$Code == ID[j])}
+  
+  sub <- data.frame(ID = ID, obs_vect = obs_vect)
+  sub <- subset(sub, subset = obs_vect > 5)
+  
+  df <- subset(df, Code %in% sub$ID)
+}
+human_data <- relocate_lim(human_data)
+
+# Calculate kernel values
+create_kd <- function(df) {
+  ## Extract IDs and coordinates
+  ids <- df$Code
+  coordinates <- df[, c("StartLon", "StartLat")]
+  # Convert to data frame
+  ids_df <- data.frame(id = ids)
+  
+  # Create a SpatialPointsDataFrame with coordinates
+  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
+  
+  # Set CRS and transform to UTM
+  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+  
+  # Calculate kernel values
+  kernel <- kernelUD(coords_sp, h = 10000)
+  
+  return(kernel)
+}
+homerange_kernel <- create_kd(human_data, Code)
+
+# Subset data
+boat_data <- subset(human_data, subset=c(human_data$X.Boats > 0))
+line_data <- subset(human_data, subset=c(human_data$X.Lines > 0))
+pot_data <- subset(human_data, subset=c(human_data$X.CrabPots > 0))
+
+# Seperate each number of boats into their own row
+boat_data_split <- human_data %>%
+  slice(rep(1:n(), times = human_data$X.Boats))
+boat_data_split$ID <- 1:nrow(boat_data_split)
+
+line_data_split <- human_data %>%
+  slice(rep(1:n(), times = human_data$X.Lines))
+line_data_split$ID <- 1:nrow(line_data_split)
+
+pot_data_split <- human_data %>%
+  slice(rep(1:n(), times = human_data$X.CrabPots))
+pot_data_split$ID <- 1:nrow(pot_data_split)
+
+# Eliminate IDs with less than 5 locations
+relocate_lim <- function(df) {
+  ID <- unique(df$ID)
+  obs_vect <- numeric(length(ID))
+  
+  for (j in seq_along(ID)) {
+    obs_vect[j] <- sum(df$ID == ID[j])}
+  
+  sub <- data.frame(ID = ID, obs_vect = obs_vect)
+  sub <- subset(sub, subset = obs_vect > 5)
+  
+  df <- subset(df, ID %in% sub$ID)
+}
+
+boat_data_split <- relocate_lim(boat_data_split)
+line_data_split <- relocate_lim(line_data_split)
+pot_data_split <- relocate_lim(pot_data_split)
+
+# Make a kernel density of each human activity
+create_kd <- function(df) {
+  ## Extract IDs and coordinates
+  ids <- df$ID
+  coordinates <- df[, c("StartLon", "StartLat")]
+  # Convert to data frame
+  ids_df <- data.frame(id = ids)
+  
+  # Create a SpatialPointsDataFrame with coordinates
+  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
+  
+  # Set CRS and transform to UTM
+  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+  
+  # Calculate kernel values
+  kernel <- kernelUD(coords_sp, h = 10000)
+  
+  return(kernel)
+}
+
+kernel_boat <- create_kd(boat_data_split)
+kernel_line <- create_kd(boat_data_split)
+kernel_pot <- create_kd(boat_data_split)

@@ -25,11 +25,11 @@ list_years <- readRDS("list_years.RData")
 year_list <- lapply(list_years, function(df) unique(df$Year))
 ## Get estimate of sampling effort
 effort <- as.data.frame(lapply(list_years, function(df) length(unique(df$Date))))
-colnames(effort) <- c(1:7)
+colnames(effort) <- c(1,2)
 
 ## Get estimate of population size
 unique_ID_year <- as.data.frame(lapply(list_years, function(df) length(unique(df$Code))))
-colnames(unique_ID_year) <- c(1:7)
+colnames(unique_ID_year) <- c(1,2)
 
 ## Get estimate of population size within each HI group
 IDbehav_BG <- readRDS("IDbehav_BG.RData")
@@ -42,13 +42,13 @@ FG <- unique(unlist(sapply(IDbehav_FG, function(df) df$Code[df$HI != 0])))
 
 BG_effort <- as.data.frame(lapply(IDbehav_BG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(BG_effort) <- c(1:7)
+colnames(BG_effort) <- c(1,2)
 SD_effort <- as.data.frame(lapply(IDbehav_SD, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(SD_effort) <- c(1:7)
+colnames(SD_effort) <- c(1,2)
 FG_effort <- as.data.frame(lapply(IDbehav_FG, function(df) 
   length(unique(df$Code[df$HI > 0]))))
-colnames(FG_effort) <- c(1:7)
+colnames(FG_effort) <- c(1,2)
 
 ## Compare effort to population size
 pop_effort <- as.data.frame(rbind(effort, unique_ID_year, BG_effort, SD_effort, FG_effort)) # Days per year and pop size per year

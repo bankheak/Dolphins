@@ -5,7 +5,7 @@
 ###########################################################################
 
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("../data")
 
 ###########################################################################
 # PART 1: Structure Network ------------------------------------------------
@@ -20,9 +20,10 @@ require(doParallel)
 # Read in social association matrix
 nxn <- readRDS("nxn.RData")
 sample_data <- read.csv("sample_data.csv")
+list_years <- readRDS("list_years.RData")
 
 # Test one year at a time
-year <- 5
+year <- 1
 
 ## Create social network
 ig <- graph_from_adjacency_matrix(as.matrix(nxn[[year]]),
@@ -54,12 +55,11 @@ plot(ig,
 # Edgelist: Nodes (i & j) and edge (or link) weight
 source("../code/functions.R") # SRI & null permutation
 ## Edgelist for each year
-years <- unique(sample_data$subYear)
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
   el_years <- list()
-  for (i in 1:length(years)) {
+  for (i in seq_along(list_years)) {
     el_years[[i]] <- matrix_to_edgelist(nxn[[i]], rawdata = FALSE, idnodes = FALSE)
   }  
   ### End parallel processing
@@ -67,7 +67,7 @@ system.time({
 })
 
 saveRDS(el_years, "el_years.RData")
-el <- as.matrix(readRDS("../data/el_years.RData"))
+el <- readRDS("el_years.RData")
 
 #' Breakdown: connectance = length(which(as.dist(orca_hwi)!=0))/(N*(N-1)/2)
 #' Number of nodes (number of rows in the association matrix)
@@ -87,8 +87,9 @@ real/total
 system.time({
   registerDoParallel(n.cores)
   dolphin_ig <- list()
-  for (j in 1:length(years)) {
-    dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),mode="undirected",weighted=TRUE,diag=FALSE)
+  for (j in seq_along(list_years)) {
+    dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
+                                       mode="undirected",weighted=TRUE,diag=FALSE)
   }  
   ### End parallel processing
   stopImplicitCluster()
@@ -98,7 +99,7 @@ system.time({
 system.time({
   registerDoParallel(n.cores)
   dolphin_walk <- list()
-  for (k in 1:length(years)) {
+  for (k in seq_along(list_years)) {
     dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], weights = E(dolphin_ig[[k]])$weight, 
                                      steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
   } 
@@ -114,8 +115,6 @@ groups(dolphin_walk[[year]])
 membership(dolphin_walk[[year]])
 ## Save the edgelist into a new object
 auxrand <- as.data.frame(el[[year]])
-## Link weight distribution
-auxrand$vw
 
 # Permutate the link weights
 sample(auxrand$vw)
@@ -144,7 +143,6 @@ modularity(dolphin_walk[[year]])
 modularity(rmod)
 
 # Run modularity permutations 1000 times
-year <- 5
 iter = 1000
 randmod = numeric()
 for(i in 1:iter){
@@ -184,7 +182,7 @@ abline(v= ci[2], col="blue")
 system.time({
   registerDoParallel(n.cores)
   dolp_ig <- list()
-  for (l in 1:length(years)) {
+  for (l in seq_along(list_years)) {
     dolp_ig[[l]] <- graph.edgelist(el[[l]][,1:2])
     # Add the edge weights to this network
     E(dolp_ig[[l]])$weight <- as.numeric(el[[l]][,3])
