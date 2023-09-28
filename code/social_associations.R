@@ -57,13 +57,9 @@ sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$A
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
-# Make a list of three years per dataframe
+# Make a list of 10 years per dataframe
 sample_data$SplitYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 11, by = 11), labels = FALSE)
 list_splityears <- split(sample_data, sample_data$SplitYearIncrement)
-
-# Make a list of three years per dataframe for sex and age data
-sample_sexage_data$ThreeYearIncrement <- cut(sample_sexage_data$Year, breaks = seq(min(sample_sexage_data$Year), max(sample_sexage_data$Year) + 3, by = 3), labels = FALSE)
-list_sexage_threeyears <- split(sample_sexage_data, sample_sexage_data$ThreeYearIncrement)
 
 # Subset only individuals that engage in HI
 list_HI_threeyears <- lapply(list_threeyears, function(df) {subset(df, subset=c(df$ConfHI != "0"))})
@@ -87,16 +83,10 @@ sub_locations <- function(list_years) {
   }
   return(updated_list_years)
 }
-
 list_splityears <- sub_locations(list_splityears)
-list_sexage_threeyears <- sub_locations(list_sexage_threeyears)
-list_HI_threeyears <- sub_locations(list_HI_threeyears)
 
 # Save list
 saveRDS(list_splityears, file="list_years.RData")
-saveRDS(list_sexage_threeyears, file="list_sexage_years.RData")
-saveRDS(list_HI_threeyears, file="list_HI_years.RData")
-
 list_years <- readRDS("list_years.RData")
 
 # Calculate Gambit of the group
@@ -117,8 +107,6 @@ for (i in seq_along(list_years)) {
                                       }
 
 gbi <- create_gbi(list_years)
-gbi_sexage <- create_gbi(list_sexage_years)
-gbi_HI <- create_gbi(list_HI_years)
 
 # Save gbi list
 saveRDS(gbi, file="gbi.RData")
@@ -138,16 +126,10 @@ stopImplicitCluster()
 })
 return(nxn)
 }
-
 nxn <- create_nxn(list_years, gbi)
-nxn_sexage <- create_nxn(list_sexage_years, gbi_sexage)
-nxn_HI <- create_nxn(list_HI_years, gbi_HI)
 
 # Save nxn lists
 saveRDS(nxn, file="nxn.RData")
-saveRDS(nxn_sexage, file="nxn_sexage.RData")
-saveRDS(nxn_HI, file="nxn_HI.RData")
-
 nxn <- readRDS("nxn.RData")
 
 ###########################################################################
