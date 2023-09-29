@@ -221,7 +221,7 @@ relocate_lim <- function(df) {
   
   df <- subset(df, Code %in% sub$ID)
 }
-human_data <- relocate_lim(human_data)
+dolphin_data <- relocate_lim(human_data)
 
 # Calculate kernel values
 create_kd <- function(df) {
@@ -246,8 +246,7 @@ create_kd <- function(df) {
   
   return(kernel)
 }
-
-homerange_kernel <- create_kd(human_data)
+homerange_kernel <- create_kd(dolphin_data)
 
 # Subset data
 boat_data <- subset(human_data, subset=c(human_data$X.Boats > 0))
@@ -265,45 +264,55 @@ pot_data_split <- human_data %>%
   slice(rep(1:n(), times = human_data$X.CrabPots))
 
 # Eliminate IDs with less than 5 locations
-relocate_lim <- function(df) {
-  ID <- unique(df$SightingFID)
+relocate_limh <- function(df) {
+  ID <- unique(df$SurveyNum)
   obs_vect <- numeric(length(ID))
   
   for (j in seq_along(ID)) {
-    obs_vect[j] <- sum(df$SightingFID == ID[j])}
+    obs_vect[j] <- sum(df$SurveyNum == ID[j])}
   
   sub <- data.frame(ID = ID, obs_vect = obs_vect)
   sub <- subset(sub, subset = obs_vect > 5)
   
-  df <- subset(df, SightingFID %in% sub$ID)
+  df <- subset(df, SurveyNum %in% sub$ID)
 }
 
-boat_data_split <- relocate_lim(boat_data_split)
-line_data_split <- relocate_lim(line_data_split)
-pot_data_split <- relocate_lim(pot_data_split)
+boat_data_split <- relocate_limh(boat_data)
+line_data_split <- relocate_limh(line_data)
+pot_data_split <- relocate_limh(pot_data)
 
 # Make a kernel density of each human activity
+df<- boat_data
 create_kdh <- function(df) {
-  
-  # Extract IDs and coordinates
-  ids <- df$SightingFID
+  ## Extract IDs and coordinates
+  ids <- df$SurveyNum
   coordinates <- df[, c("StartLon", "StartLat")]
+  # Convert to data frame
+  ids_df <- data.frame(id = ids)
   
-  # Check if we have more than one point
-  if (nrow(coordinates) > 1) {
-    # Create a SpatialPoints object with coordinates
-    coords_sp <- SpatialPoints(coordinates, proj4string = CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-    
-    # Calculate kernel values
-    kernel <- kernelUD(coords_sp, h = 10000)
-    # Explicitly set the class to estUDm
-    class(kernel) <- "estUDm"
-    return(kernel)
-  } else {
-    print("Error: Need more than one point to calculate kernel.")
-    # Return a message indicating the error
-    return(NULL)
-  }
+  # Create a SpatialPointsDataFrame with coordinates
+  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
+  
+  # Set CRS and transform to UTM
+  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+  
+  # Turn this into coordinates
+  coordinates_matrix <- coordinates(coords_sp_utm)
+  coordinates_df <- as.data.frame(coordinates(coords_sp_utm))
+  
+  coordinates_df_sp <- SpatialPointsDataFrame(
+    coords = coordinates_df, 
+    data = data.frame(Number_of_boats = df$X.Boats)
+  )
+  
+  # Calculate kernel values
+  kernel <- kernelUD(coordinates_df, h = 10000)
+  
+  # Explicitly set the class to estUDm
+  class(kernel) <- "estUDm"
+  
+  return(kernel)
 }
 
 kernel_boat <- create_kdh(boat_data_split)
@@ -311,21 +320,22 @@ kernel_line <- create_kdh(boat_data_split)
 kernel_pot <- create_kdh(boat_data_split)
 
 # Calculate kernel overlap values
+kernel_Hactivity<-kernel_boat
 create_kov_Hactivity <- function(kernel_Hactivity) {
   
-  ## Initialize an empty list to store the overlap results
+  # Initialize an empty list to store the overlap results
   overlap_results <- list()
   
-  ## Iterate over each dolphin and calculate the overlap with boat density
-  for (dolphin_id in length(homerange_kernel)) {
-    dolphin_kernel <- homerange_kernel[[dolphin_id]]
+  # Iterate over each dolphin and calculate the overlap with boat density
+  for (i in seq_along(homerange_kernel)) {
+    dolphin_kernel <- homerange_kernel[[i]]
     
-    # Calculate the overlap using kerneloverlaphr for Large estUDm
+    # Calculate the overlap using kerneloverlaphr for Formal class estUDm
     overlap <- kerneloverlaphr(dolphin_kernel, kernel_Hactivity, method = "HR", lev = 95)
     
     # Store the overlap result in the list
-    overlap_results[[dolphin_id]] <- overlap
-  } 
+    overlap_results[[i]] <- overlap
+  }
 }
 
 kov_boat <- create_kov_Hactivity(kernel_boat)

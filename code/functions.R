@@ -118,7 +118,6 @@ matrix_to_edgelist=function(mat, rawdata, idnodes){
     print(nodes)}
 }
 
-
 # HRO ------------------------------------------------------
 #' @description This function calculateS home range overlap using the formula: 
 #' HRO = (Rij/Ri) * (Rij/Rj), where Rij is the overlap in range between individuals i and j, 

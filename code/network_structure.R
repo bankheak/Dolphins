@@ -7,54 +7,78 @@
 # Set working directory here
 setwd("../data")
 
+# Add helpful functions
+source("../code/functions.R") # edgelist function
+
 ###########################################################################
 # PART 1: Structure Network ------------------------------------------------
 
 ## load all necessary packages
-require(igraph) # Look at Dai Shizuka/Jordi Bascompte
-require(tnet) # For weights
-require(sna)
-require(statnet)
-require(doParallel)
+library(igraph) # Look at Dai Shizuka/Jordi Bascompte
+library(tnet) # For weights
+library(sna)
+library(statnet)
+library(doParallel)
+library(png)
 
 # Read in social association matrix
 nxn <- readRDS("nxn.RData")
-sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
+img.3 =readPNG("Dolphin.png") 
 
 # Test one year at a time
 year <- 1
 
 ## Create social network
-ig <- graph_from_adjacency_matrix(as.matrix(nxn[[year]]),
-                                  mode = c("undirected"),
-                                  weighted = TRUE,
-                                  diag = F, # No loops
-                                  add.colnames = T,
-                                  add.rownames = NA)
+ig <- lapply(nxn, function (df) {
+  graph_from_adjacency_matrix(
+  df,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE)})
+
+# Set the node names based on row names
+row_names <- lapply(nxn, function (df) {rownames(df)})
+for (i in seq_along(ig)) {
+  V(ig[[i]])$name <- row_names[[i]]
+}
+
+## Only show IDs of HI dolphins
+### subset_HI in "GLMM.R"
+HI_data <-  diff_raw(subset_HI(list_years))
+row_names_HI <- lapply(HI_data, function (df) {
+  as.vector(df$Code[(df$DiffHI == "BG" | df$DiffHI == "SD" | 
+                                    df$DiffHI == "FG") & df$Freq > 0])})
 
 # Plot network
-plot(ig,
-     layout = layout_with_fr(ig),
-     # link weight, rescaled for better visualization
-     edge.width= E(ig)$weight*4,
-     # node size as degree (rescaled)
-     vertex.size= sqrt(igraph::strength(ig, vids = V(ig), mode = c("all"), loops = TRUE) *10 ),
-     vertex.frame.color= NA, #"black",
-     vertex.label.family = "Helvetica",
-     vertex.label.color="black", 
-     vertex.label.cex=0.8, 
-     vertex.label.dist=2, 
-     # edge.curved=0,
-     vertex.frame.width=0.01,
-)
+# Set up the plotting area with 1 row and 2 columns for side-by-side plots
+par(mfrow=c(1, 2))
+
+# Loop through the list of graphs and plot them side by side
+for (i in 1:length(ig)) {
+  plot(ig[[i]],
+       layout = layout_with_fr(ig[[i]]),
+       edge.width = E(ig[[i]])$weight * 4,
+       vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10),
+       vertex.frame.color = NA,
+       vertex.label.family = "Helvetica",
+       vertex.label = ifelse(V(ig[[i]])$name %in% row_names_HI[[i]], V(ig[[i]])$name, NA),
+       vertex.label.color = "black",
+       vertex.label.cex = 0.8,
+       vertex.label.dist = 2,
+       vertex.frame.width = 0.01)
+}
+
+# rasterImage(img.3, xleft=0, xright=1.9, ybottom=0, ytop=1.5)
+
+# Reset the plotting area to its default configuration
+par(mfrow=c(1, 1))
+
 
 ###########################################################################
-# PART 2: Network & Global Properties ------------------------------------------------
+# PART 2: Network & Local Properties ------------------------------------------------
 
 # Edgelist: Nodes (i & j) and edge (or link) weight
-source("../code/functions.R") # SRI & null permutation
-## Edgelist for each year
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
@@ -69,6 +93,21 @@ system.time({
 saveRDS(el_years, "el_years.RData")
 el <- readRDS("el_years.RData")
 
+# Weighted clustering coefficients
+cluster <- lapply(el, function (df) {clustering_local_w(df, measure=c("am", "gm", "mi", "ma", "bi"))})
+
+## Betweenness centrality
+between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
+
+# Closeness centrality
+close <- lapply(el, function (df) {closeness_w(df, alpha=1)})
+
+# Degree and strength centrality
+strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
+
+###########################################################################
+# PART 3: Network & Global Properties ------------------------------------------------
+
 #' Breakdown: connectance = length(which(as.dist(orca_hwi)!=0))/(N*(N-1)/2)
 #' Number of nodes (number of rows in the association matrix)
 N = nrow(nxn[[year]])
@@ -80,8 +119,13 @@ real = length(which(as.dist(nxn[[year]])!=0))
 # Connectance: realized/total
 real/total
 
+# Shortest path lengths (geodesics) and diameter
+# # mean shortest path
+dist <- lapply(ig, function(df) {mean_distance(df)})
+dist
+
 ###########################################################################
-# PART 3: Permutate Link Weights ------------------------------------------------
+# PART 4: Permutate Link Weights ------------------------------------------------
 
 ## igraph format with weight
 system.time({
@@ -89,7 +133,8 @@ system.time({
   dolphin_ig <- list()
   for (j in seq_along(list_years)) {
     dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
-                                       mode="undirected",weighted=TRUE,diag=FALSE)
+                                       mode="undirected",
+                                       weighted=TRUE, diag=FALSE)
   }  
   ### End parallel processing
   stopImplicitCluster()
@@ -176,7 +221,7 @@ abline(v= ci[2], col="blue")
 
 
 ###########################################################################
-# PART 4: Modularity ------------------------------------------------
+# PART 5: Modularity ------------------------------------------------
 
 # Create an unweighted network
 system.time({
@@ -194,24 +239,76 @@ system.time({
 })
 
 # Newman's Q modularity
-newman <- cluster_leading_eigen(dolp_ig[[year]], steps = -1, weights = E(dolp_ig[[year]])$weight, 
+newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
                                 start = NULL, options = arpack_defaults, callback = NULL, 
-                                extra = NULL, env = parent.frame())
+                                extra = NULL, env = parent.frame())})
 
+
+# Set the node names based on row names
+BG <- SD <- FG <- vector("list", length = length(dolp_ig))
+
+for (i in seq_along(dolp_ig)) {
+  # Set the node names
+  V(dolp_ig[[i]])$name <- rownames(nxn[[i]])
+  
+  ## Parse out what HI behavior they engage in
+  BG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "BG" & HI_data[[i]]$Freq > 0])
+  SD[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "SD" & HI_data[[i]]$Freq > 0])
+  FG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "FG" & HI_data[[i]]$Freq > 0])
+  
+  ## Initialize label_color attribute for each node
+  V(dolp_ig[[i]])$label_color <- "black"
+  
+  ## Make a different text color for each category
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% BG[[i]]] <- "red"  
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% SD[[i]]] <- "yellow" 
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% FG[[i]]] <- "blue"
+}
+# BGSD <- intersect(BG, SD)
+# BGFG <- intersect(BG, FG)
+# SDFG <- intersect(SD, FG)
+# BGSDFG <- intersect(BGSD, FG)
+# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGSD] <- "orange"  
+# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGFG] <- "purple" 
+# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% SDFG] <- "green"  
+# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGSDFG] <- "brown" 
 
 # Generate a vector of colors based on the number of unique memberships
-V(dolp_ig[[year]])$color <- NA
-col <- rainbow(max(newman$membership))
-
-# Create a vector of individual IDs
-individual_ids <- 1:vcount(dolp_ig[[year]])
-
-# Assign individual IDs as labels to the nodes
-V(dolp_ig[[year]])$label <- individual_ids
-
-for (i in 1:max(newman$membership)){
-  V(dolp_ig[[year]])$color[which(newman$membership==i)] <- col[i]
+for (i in seq_along(dolp_ig)) {
+  V(dolp_ig[[i]])$color <- NA
+  col <- rainbow(max(newman[[i]]$membership))
+  
+  for (j in 1:max(newman[[i]]$membership)){
+    V(dolp_ig[[i]])$color[which(newman[[i]]$membership==j)] <- col[j]
+  }
 }
 
+# Make sure the HI dolphins stand out
+for (i in seq_along(dolp_ig)) {
+  V(dolp_ig[[i]])$size <- ifelse(V(dolp_ig[[i]])$name %in% row_names_HI[[i]], 10, 5)
+}
+
+# Set up the plotting area with 1 row and 2 columns for side-by-side plots
+par(mfrow=c(1, 2))
+# Main labels for the plots
+main_labels <- c("1993-2004 Network", "2005-2014 Network")  # Replace with appropriate main labels
+
 # Plot the graph with individual IDs as labels
-plot(dolp_ig[[year]], vertex.label = V(dolp_ig[[year]])$label)
+for (i in seq_along(dolp_ig)) {
+plot(dolp_ig[[i]],
+     layout = layout_with_fr(dolp_ig[[i]]),
+     # link weight, rescaled for better visualization
+     edge.width= E(dolp_ig[[i]])$weight*4,
+     # node size as degree (rescaled)
+     vertex.size= V(dolp_ig[[i]])$size,
+     vertex.frame.color= NA, #"black",
+     vertex.label.family = "Helvetica",
+     vertex.label=ifelse(V(dolp_ig[[i]])$name %in% row_names_HI[[i]], as.character(V(dolp_ig[[i]])$name), NA), 
+     vertex.label.color = V(dolp_ig[[i]])$label_color, 
+     vertex.label.cex=0.8, 
+     vertex.label.dist=0.5, 
+     # edge.curved=0,
+     vertex.frame.width=0.01)
+  # Add the main label above the plot
+  title(main = main_labels[i], line = -1)
+  }
