@@ -194,7 +194,7 @@ sim.func<-  function (matr) {
 #' @value Returns the empirical turnover (average Whittaker index), the standard deviation (SD) and the 95% confidence intervals (two-tailed test). Significant results are shown by empirical values falling outside than the 97.5% CI or 2.5%. The funciton also returns the null distribution of Whittaker indices, where the red line represents the empirical value and the blue ones represent the 95% confidence intervals.
 #' @author Mauricio Cantor (m.cantor@ymail.com)
 #' @references Cantor et al. 2012 Disentangling social networks from spatiotemporal dynamics: the temporal structure of a dolphin society. Animal Behaviour 84 (2012) 641-651
-#' @return
+#' @return Graph of pop turnover over period resolution
 
 turnover_w <- function(data, iter=1000, subseq=FALSE, plot=FALSE){
   
@@ -243,4 +243,27 @@ turnover_w <- function(data, iter=1000, subseq=FALSE, plot=FALSE){
 }
 
 
+# SUBSET HI DATA ------------------------------------------------------
+#' @description Subsets the three different HI categories into a new column and adds counts of each for each individual
+#' B = Beg: F, G
+#' P = Scavenge and Depredation: B, C, D, E
+#' D = Fixed Gear Interaction: P
+#' @param aux_data List of HI data and ID to be sorted
+#' @return A new column of categorized data and a table with counts within each category for each individual
+
+subset_HI <- function(aux_data) {
+  for (i in seq_along(aux_data)) {
+    aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
+                                   ifelse(aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E"), "SD",
+                                          ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
+  }
+  return(aux_data)  # Return the modified list of data frames
+}
+
+diff_raw <- function(aux_data) {
+  rawHI_diff <- lapply(aux_data, function(df) {
+    table_df <- as.data.frame(table(df$Code, df$DiffHI))
+    colnames(table_df) <- c("Code", "DiffHI", "Freq")
+    return(table_df)
+  })}
 

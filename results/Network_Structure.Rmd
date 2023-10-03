@@ -31,21 +31,19 @@ require(statnet)
 library(doParallel) # For faster computing
 
 # Read in social association matrix
-setwd("../data")
+setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+
 # Add helpful functions
 source("../code/functions.R") # edgelist function
 
 # Read in social association matrix
-nxn <- readRDS("nxn.RData")
-list_years <- readRDS("list_years.RData")
+nxn <- readRDS("../data/nxn.RData")
+list_years <- readRDS("../data/list_years.RData")
 
 ```
 
 
 ```{r network, echo=TRUE, message=FALSE, warning=FALSE}
-
-# Test one year at a time
-year <- 1
 
 ## Create social network
 ig <- lapply(nxn, function (df) {
@@ -57,9 +55,17 @@ ig <- lapply(nxn, function (df) {
 
 # Set the node names based on row names
 row_names <- lapply(nxn, function (df) {rownames(df)})
+
 for (i in seq_along(ig)) {
   V(ig[[i]])$name <- row_names[[i]]
 }
+
+## Only show IDs of HI dolphins
+### subset_HI in "GLMM.R"
+HI_data <-  diff_raw(subset_HI(list_years))
+row_names_HI <- lapply(HI_data, function (df) {
+  as.vector(df$Code[(df$DiffHI == "BG" | df$DiffHI == "SD" | 
+                                    df$DiffHI == "FG") & df$Freq > 0])})
 
 # Plot network
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
@@ -73,14 +79,12 @@ for (i in 1:length(ig)) {
        vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10),
        vertex.frame.color = NA,
        vertex.label.family = "Helvetica",
-       vertex.label = V(ig[[i]])$name,
+       vertex.label = ifelse(V(ig[[i]])$name %in% row_names_HI[[i]], V(ig[[i]])$name, NA),
        vertex.label.color = "black",
        vertex.label.cex = 0.8,
        vertex.label.dist = 2,
        vertex.frame.width = 0.01)
 }
-
-# rasterImage(img.3, xleft=0, xright=1.9, ybottom=0, ytop=1.5)
 
 # Reset the plotting area to its default configuration
 par(mfrow=c(1, 1))
@@ -92,7 +96,7 @@ par(mfrow=c(1, 1))
 
 ## Local Network Metrics
 
-- Local clustering coefficient: Measure of the prevalence of node clusters in a network.
+- Local clustering coefficient: Measure of the prevalence of node clusters in a network (i.e. if dolphin associates all know each other, the clustering coefficient will be high).
 
 - Betweeness: A high betweenness means that the individual is in the communication path of other individuals, therefore, the individuals it interacts with, depend on its presence.
 
@@ -103,36 +107,180 @@ par(mfrow=c(1, 1))
 - Strength: Total strength of an individuals’ associations
 
 ```{r lmetrics, echo=TRUE, message=FALSE, warning=FALSE}
+
 # Edgelist: Nodes (i & j) and edge (or link) weight
-n.cores <- detectCores()
-system.time({
-  registerDoParallel(n.cores)
-  el_years <- list()
-  for (i in seq_along(list_years)) {
-    el_years[[i]] <- matrix_to_edgelist(nxn[[i]], rawdata = FALSE, idnodes = FALSE)
-  }  
-  ### End parallel processing
-  stopImplicitCluster()
-})
+el <- readRDS("../data/el_years.RData")
 
-saveRDS(el_years, "el_years.RData")
-el <- readRDS("el_years.RData")
+# Set the node names based on row names
+get_names <- function (matrix, metric) {
+  row_names <- lapply(matrix, function (df) {rownames(df)})
+for (i in seq_along(metric)) {
+  metric[[i]][,1] <- row_names[[i]]
+}
+  return(metric)
+  }
 
-# Centrality measures
 # Weighted clustering coefficients
-cluster <- lapply(el, function (df) {clustering_local_w(df, measure=c("am", "gm", "mi", "ma", "bi"))})
+cluster <- readRDS("../data/cluster.RData")
+cluster_diffs <- get_names(nxn, cluster)
+cluster_diffs_HI <- lapply(seq_along(cluster_diffs), function(i) {
+  df <- cluster_diffs[[i]]
+  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  return(df_new)
+})
+compare_cluster <- merge(
+  cluster_diffs_HI[[1]][, c(1, 2)], 
+  cluster_diffs_HI[[2]][, c(1, 2)], 
+  by.x = "node", 
+  by.y = "node"
+)
+colnames(compare_cluster) <- c("ID", "Period.1", "Period.2")
+compare_cluster[, c(2, 3)] <- sapply(compare_cluster[, c(2, 3)], as.numeric)
+# Calculate differences
+compare_cluster$Difference <- compare_cluster$Period.2 - compare_cluster$Period.1
 
-## Betweenness centrality
+
+# Betweenness centrality
 between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
+between_diffs <- get_names(nxn, between)
+between_diffs_HI <- lapply(seq_along(between_diffs), function(i) {
+  df <- between_diffs[[i]]
+  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  return(df_new)
+})
+compare_between <- merge(
+  between_diffs_HI[[1]], 
+  between_diffs_HI[[2]], 
+  by.x = "node", 
+  by.y = "node"
+)
+colnames(compare_between) <- c("ID", "Period.1", "Period.2")
+compare_between[, c(2, 3)] <- sapply(compare_between[, c(2, 3)], as.numeric)
+# Calculate differences
+compare_between$Difference <- compare_between$Period.2 - compare_between$Period.1
+
 
 # Closeness centrality
 close <- lapply(el, function (df) {closeness_w(df, alpha=1)})
+close_diffs <- get_names(nxn, close)
+close_diffs_HI <- lapply(seq_along(close_diffs), function(i) {
+  df <- close_diffs[[i]]
+  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  return(df_new)
+})
+compare_close <- merge(
+  close_diffs_HI[[1]][, c(1, 2)], 
+  close_diffs_HI[[2]][, c(1, 2)], 
+  by.x = "node", 
+  by.y = "node"
+)
+colnames(compare_close) <- c("ID", "Period.1", "Period.2")
+compare_close[, c(2, 3)] <- sapply(compare_close[, c(2, 3)], as.numeric)
+# Calculate differences
+compare_close$Difference <- compare_close$Period.2 - compare_close$Period.1
+
 
 # Degree and strength centrality
 strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
+strength_diffs <- get_names(nxn, strength)
+strength_diffs_HI <- lapply(seq_along(strength_diffs), function(i) {
+  df <- strength_diffs[[i]]
+  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  return(df_new)
+})
+compare_strength <- merge(
+  strength_diffs_HI[[1]], 
+  strength_diffs_HI[[2]], 
+  by.x = "node", 
+  by.y = "node"
+)
+colnames(compare_strength) <- c("ID", "Period.1_degree", "Period.1_strength", "Period.2_degree", "Period.2_strength")
+compare_strength[, c(2:5)] <- sapply(compare_strength[, c(2:5)], as.numeric)
+# Calculate differences
+compare_strength$Difference_degree <- compare_strength$Period.2_degree - compare_strength$Period.1_degree
+compare_strength$Difference_strength <- compare_strength$Period.2_strength - compare_strength$Period.1_strength
+
+# Look at all of the local metrics together
+## Add a column containing HI type
+names_BG <- unlist(lapply(HI_data, function (df) {
+  as.vector(df$Code[df$DiffHI == "BG" & df$Freq > 0])}))
+names_SD <- unlist(lapply(HI_data, function (df) {
+  as.vector(df$Code[df$DiffHI == "SD" & df$Freq > 0])}))
+names_FG <- unlist(lapply(HI_data, function (df) {
+  as.vector(df$Code[df$DiffHI == "FG" & df$Freq > 0])}))
+
+HI_type <- ifelse(compare_cluster$ID %in% names_BG, "BG", 
+                                   ifelse(compare_cluster$ID %in% names_SD, "SD", 
+                                          ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
+
+local_metrics_HI <- as.data.frame(cbind(ID = compare_cluster$ID, HI_type = HI_type, Cluster_diff = compare_cluster$Difference, 
+                               Between_diff = compare_between$Difference, Close_diff = compare_close$Difference, 
+                               Degree_diff = compare_strength$Difference_degree, Strength_diff = compare_strength$Difference_strength))
+
+## Add a rown to compare the averages of each metric with HI IDs
+avg_metrics <- data.frame(ID = "Average", HI_type = "NA",
+  Cluster_diff = mean(cluster[[2]][, 2]) - mean(cluster[[1]][, 2]),
+  Between_diff = mean(between[[2]][, 2]) - mean(between[[1]][, 2]),
+  Close_diff = mean(close[[2]][, 2]) - mean(close[[1]][, 2]),
+  Degree_diff = mean(strength[[2]][, 2]) - mean(strength[[1]][, 2]),
+  Strength_diff = mean(strength[[2]][, 3]) - mean(strength[[1]][, 3]))
+
+local_metrics_HI <- merge(local_metrics_HI, avg_metrics, all = T)
+
+# Make sure the metrics are numeric and HI_type is a factor
+columns_to_convert <- c(3:7)  # Columns to be converted to numeric
+local_metrics_HI[, columns_to_convert] <- sapply(local_metrics_HI[, columns_to_convert], as.numeric)
+local_metrics_HI$HI_type <- as.factor(local_metrics_HI$HI_type)
 
 
 ```
+
+
+# Plot different Metrics within HI types
+
+```{r plotmetric, echo=TRUE, message=FALSE, warning=FALSE}
+
+# Set up the plotting area with 1 row and 5 columns
+par(mfrow = c(1, 5))
+
+# Get different metric values in a vector
+metric_value <- colnames(local_metrics_HI[, columns_to_convert])
+
+# Define the desired order for HI types
+desired_order <- c("NA", "BG", "FG", "SD")
+
+# Loop over each metric
+for (i in seq_along(columns_to_convert)) {
+  
+  # Extract the metric for the current column
+  metric <- local_metrics_HI[, columns_to_convert[i]]
+  
+  # Convert HI_type to factor with the desired order
+  local_metrics_HI$HI_type <- factor(local_metrics_HI$HI_type, levels = desired_order)
+  
+  # Group the metric by HI_type and order the names
+  grouped_metric <- split(metric, local_metrics_HI$HI_type)
+  
+  # Set up colors based on HI type
+  colors <- rainbow(length(names(grouped_metric)))
+  
+  # Create the boxplot
+  boxplot(
+    grouped_metric,
+    names = names(grouped_metric),
+    col = colors,
+    notch = FALSE,
+    main = metric_value[i],
+    border = "black"
+  )
+  # Draw a horizontal line at y = 0
+  abline(h = 0, col = "red")
+}
+
+
+```
+
+
 
 # Global Network Metrics
 
@@ -149,17 +297,20 @@ strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"),
 - Clustering coefficient: Tendency of nodes to cluster in the network (Are the friends’ friends also friends?).
 
 
-```{r gmetrics, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+```{r gmetrics, echo=TRUE, message=FALSE, warning=FALSE}
+
 #' Breakdown: connectance = length(which(as.dist(orca_hwi)!=0))/(N*(N-1)/2)
-#' Number of nodes (number of rows in the association matrix)
-N = nrow(nxn[[year]])
-#' Number of possible links: 
-#' Nodes*(Nodes-1)/2: (-1 removes the node itself; /2 removes repetitions)
-total = N*(N-1)/2
-# Number of realized links: all non-zero cells in the association matrix
-real = length(which(as.dist(nxn[[year]])!=0))
-# Connectance: realized/total
-real/total
+## Calculate connectance for each matrix
+calculate_connectance <- function(matrix) {
+  N <- nrow(matrix)
+  total <- N * (N - 1) / 2
+  real <- sum(matrix != 0)  # Count non-zero elements
+  connectance <- real / total
+  return(connectance)
+}
+
+connectance_list <- lapply(nxn, calculate_connectance)
+connectance_list
 
 # Shortest path lengths (geodesics) and diameter
 # # mean shortest path
@@ -173,9 +324,10 @@ dist
 
 ## Walktrap algorithm breakdown with one interation
 
-```{r data, message=FALSE, warning=FALSE, include=FALSE}
+```{r edgedata, message=FALSE, warning=FALSE, include=FALSE}
 ## Edgelist
 ## igraph format with weight
+n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
   dolphin_ig <- list()
@@ -204,40 +356,6 @@ system.time({
   stopImplicitCluster()
 })
 
-## Modularity Q-value
-modularity(dolphin_walk[[year]])
-## Number of modules
-groups(dolphin_walk[[year]])
-## Membership of modules
-membership(dolphin_walk[[year]])
-## Save the edgelist into a new object
-auxrand <- as.data.frame(el[[year]])
-
-# Permutate the link weights
-sample(auxrand$vw)
-## Save in the auxrand object
-auxrand[,3] <- sample(auxrand$vw)
-
-# Calculate the modularity Q-value for a new permutated edge list
-## Create a network from the list of nodes
-igrand <- graph.edgelist(el[[year]][,1:2]) 
-### Add link weights
-E(igrand)$weight <- el[[year]][,2]
-### Make undirected graph
-igrand <- as.undirected(igrand)
-## Permutate the link weights
-E(igrand)$weight <- sample(E(igrand)$weight)
-## Calculate modularity Q-value
-rmod <- walktrap.community(igrand)
-modularity(rmod)
-## Number of modules
-groups(rmod)
-## Membership of modules
-membership(rmod)
-
-# Difference from our empirical data?
-modularity(dolphin_walk[[year]])
-modularity(rmod)
 
 ```
 
@@ -245,37 +363,50 @@ modularity(rmod)
 ## Permutate with multiple interations
 
 ```{r mult, echo=TRUE, message=FALSE, warning=FALSE}
-# Run modularity permutations 1000 times
-iter = 1000
-randmod = numeric()
-for(i in 1:iter){
-  # Save the edgelist into a new object
-  auxrand <- el[[year]]
-  # igraph format
-  igrand <- graph.edgelist(auxrand[,1:2]) # Create a network from the list of nodes
-  E(igrand)$weight <- auxrand[,2] # Add link weights
-  igrand <- as.undirected(igrand) # Make undirected graph
-  # Permutate the link weights
-  E(igrand)$weight <- sample(E(igrand)$weight)
-  # calculate the modularity Q-value
-  rand_walk <- walktrap.community(igrand)
-  randmod[i] <- modularity(rand_walk) # Save Q-value into a vector
+# Run modularity permutations 1000 times for each matrix
+run_mod <- function(el_list, dolphin_walk_list) {
+  iter <- 1000
+  randmod <- numeric(iter)  # Initialize a numeric vector to store Q-values
+  
+  for (i in 1:iter) {
+    # Save the edgelist into a new object and permutate the link weights
+    auxrand <- el_list
+    auxrand[, 2] <- sample(auxrand[, 2])
+    
+    # Create an igraph graph from the permuted edgelist
+    igrand <- graph.edgelist(as.matrix(auxrand[, 1:2]), directed = FALSE)
+    E(igrand)$weight <- auxrand[, 2]  # Assign link weights
+    
+    # Calculate modularity using walktrap community detection
+    rand_walk <- walktrap.community(igrand)
+    randmod[i] <- modularity(rand_walk)  # Save Q-value into the vector
+  }
+  
+  # Calculate the 95% confidence interval (two-tailed test)
+  ci <- quantile(randmod, probs = c(0.025, 0.975), type = 2)
+  
+  # Visualization of the random Q distribution
+  hist(randmod, xlim = c(0, 0.6), main = "Random Q Distribution", xlab = "Q-value", ylab = "Frequency", col = "lightblue")
+  
+  # Empirical Q-value
+  abline(v = modularity(dolphin_walk_list), col = "red")
+  
+  # 2.5% CI
+  abline(v = ci[1], col = "blue")
+  
+  # 97.5% CI
+  abline(v = ci[2], col = "blue")
+  
+  # Return a data frame with Q-value and confidence intervals
+  result <- data.frame(Q = modularity(dolphin_walk_list), LowCI = ci[1], HighCI = ci[2])
+  return(result)
 }
 
-## Calculate the 95% confidence interval (two-tailed test)
-ci = quantile(randmod, probs=c(0.025, 0.975), type=2)
-
-## Compare with the empirical Q-value
-data.frame(Q=modularity(dolphin_walk[[year]]), LowCI=ci[1], HighCI=ci[2])
-
-## Visualization random Q distribution
-hist(randmod, xlim=c(0,0.6))
-### Empirical Q-value
-abline(v= modularity(dolphin_walk[[year]]), col="red")
-### 2.5% CI
-abline(v= ci[1], col="blue")
-### 97.5% CI
-abline(v= ci[2], col="blue")
+# Plot null distributions for modularity
+# Set up the plotting area with 2 rows and 2 column
+par(mfrow=c(2, 1))
+run_mod(el_list = el[[1]], dolphin_walk_list = dolphin_walk[[1]])
+run_mod(el_list = el[[2]], dolphin_walk_list = dolphin_walk[[2]])
 
 
 ```
@@ -288,32 +419,87 @@ We can reject the null hypothesis that individuals cluster at random and conclud
 - Newman's Q modularity: Stopping parameter Q removes links according to the betweenness. 
 
 ```{r modular, echo=TRUE, message=FALSE, warning=FALSE}
-# Create a network from the first two columns
-dolp_ig <- graph.edgelist(el[,1:2])
-# Add the edge weights to this network by assigning an edge attribute called 'weight'.
-E(dolp_ig)$weight <- as.numeric(el[,3])
-# Create undirect network
-dolp_ig <- as.undirected(dolp_ig)
-
-# Plot
-plot(dolp_ig, edge.width=E(dolp_ig)$weight*4, vertex.size=10, vertex.label=NA, edge.curved=F)
+# Create an unweighted network
+system.time({
+  registerDoParallel(n.cores)
+  dolp_ig <- list()
+  for (l in seq_along(list_years)) {
+    dolp_ig[[l]] <- graph.edgelist(el[[l]][,1:2])
+    # Add the edge weights to this network
+    E(dolp_ig[[l]])$weight <- as.numeric(el[[l]][,3])
+    # Create undirected network
+    dolp_ig[[l]] <- as.undirected(dolp_ig[[l]])
+  }   
+  ### End parallel processing
+  stopImplicitCluster()
+})
 
 # Newman's Q modularity
-newman <- cluster_leading_eigen(dolp_ig, steps = -1, weights = E(dolp_ig)$weight, 
+newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
                                 start = NULL, options = arpack_defaults, callback = NULL, 
-                                extra = NULL, env = parent.frame())
+                                extra = NULL, env = parent.frame())})
 
-# Assign a random color to individuals of each module ('modules')
-# Random color scheme
-col <- rgb(runif(14), runif(14), runif(14))
 
-V(dolp_ig)$color <- NA
-for (i in 1:max(newman$membership)){
-  sample(col)
-  V(dolp_ig)$color[which(newman$membership==i)] = col[i]
+# Set the node names based on row names
+BG <- SD <- FG <- vector("list", length = length(dolp_ig))
+
+for (i in seq_along(dolp_ig)) {
+  # Set the node names
+  V(dolp_ig[[i]])$name <- rownames(nxn[[i]])
+  
+  ## Parse out what HI behavior they engage in
+  BG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "BG" & HI_data[[i]]$Freq > 0])
+  SD[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "SD" & HI_data[[i]]$Freq > 0])
+  FG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "FG" & HI_data[[i]]$Freq > 0])
+  
+  ## Initialize label_color attribute for each node
+  V(dolp_ig[[i]])$label_color <- "black"
+  
+  ## Make a different text color for each category
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% BG[[i]]] <- "red"  
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% SD[[i]]] <- "yellow" 
+  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% FG[[i]]] <- "blue"
 }
 
-plot(dolp_ig)
+# Generate a vector of colors based on the number of unique memberships
+for (i in seq_along(dolp_ig)) {
+  V(dolp_ig[[i]])$color <- NA
+  col <- rainbow(max(newman[[i]]$membership))
+  
+  for (j in 1:max(newman[[i]]$membership)){
+    V(dolp_ig[[i]])$color[which(newman[[i]]$membership==j)] <- col[j]
+  }
+}
+
+# Make sure the HI dolphins stand out
+for (i in seq_along(dolp_ig)) {
+  V(dolp_ig[[i]])$size <- ifelse(V(dolp_ig[[i]])$name %in% row_names_HI[[i]], 10, 5)
+}
+
+# Set up the plotting area with 1 row and 2 columns for side-by-side plots
+par(mfrow=c(1, 2))
+# Main labels for the plots
+main_labels <- c("1993-2004 Network", "2005-2014 Network")  # Replace with appropriate main labels
+
+# Plot the graph with individual IDs as labels
+for (i in seq_along(dolp_ig)) {
+plot(dolp_ig[[i]],
+     layout = layout_with_fr(dolp_ig[[i]]),
+     # link weight, rescaled for better visualization
+     edge.width= E(dolp_ig[[i]])$weight*4,
+     # node size as degree (rescaled)
+     vertex.size= V(dolp_ig[[i]])$size,
+     vertex.frame.color= NA, #"black",
+     vertex.label.family = "Helvetica",
+     vertex.label=ifelse(V(dolp_ig[[i]])$name %in% row_names_HI[[i]], as.character(V(dolp_ig[[i]])$name), NA), 
+     vertex.label.color = V(dolp_ig[[i]])$label_color, 
+     vertex.label.cex=0.8, 
+     vertex.label.dist=0.5, 
+     # edge.curved=0,
+     vertex.frame.width=0.01)
+  # Add the main label above the plot
+  title(main = main_labels[i], line = -1)
+  }
 
 ```
 
