@@ -18,11 +18,11 @@ library(igraph) # Look at Dai Shizuka/Jordi Bascompte
 library(tnet) # For weights
 library(sna)
 library(statnet)
-library(doParallel)
+library(doParallel) # For faster computing
 library(ggplot2)
-library(gridExtra)
-library(reshape)
-library(png)
+library(gridExtra) # To combine plots
+library(reshape) # To rearrange a data frame
+library(cowplot) # To add a legend
 
 # Read in social association matrix
 nxn <- readRDS("nxn.RData")
@@ -259,19 +259,14 @@ for (i in seq_along(unique_metrics)) {
     ggtitle(paste(metric)) +
     theme(panel.background = element_blank()) +
     geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
-    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed")
+    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed") +
+    theme(legend.position = "none")
   
-  # Store the legend on the last plot
-  if (i == length(unique_metrics)) {
-    plot_list[[i]] <- current_plot + theme(legend.position = "bottom")
-  } else {
-    plot_list[[i]] <- current_plot + theme(legend.position = "none")
-  }
+  plot_list[[i]] <- current_plot
 }
 
 # Arrange plots side by side
 grid.arrange(grobs = plot_list, ncol = 5)
-
 
 ###########################################################################
 # PART 3: Network & Global Properties ------------------------------------------------

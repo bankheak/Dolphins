@@ -279,12 +279,7 @@ for (i in seq_along(unique_metrics)) {
     geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
     geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed")
   
-  # Store the legend on the last plot
-  if (i == length(unique_metrics)) {
-    plot_list[[i]] <- current_plot + theme(legend.position = "bottom")
-  } else {
-    plot_list[[i]] <- current_plot + theme(legend.position = "none")
-  }
+  plot_list[[i]] <- current_plot
 }
 
 # Arrange plots side by side
@@ -296,40 +291,40 @@ grid.arrange(grobs = plot_list, ncol = 5)
 
 ## Results of local metrics after HAB event
 
-- Local clustering coefficient: Measure of the prevalence of node clusters in a network (i.e. if dolphin associates all know each other, the clustering coefficient will be high).
+Local clustering coefficient: Measure of the prevalence of node clusters in a network (i.e. if dolphin associates all know each other, the clustering coefficient will be high).
 
-+ Average: The clustering coefficient has stayed roughly the same before and after HAB.
-+ Beggars: Large difference in clustering before and after the HAB event. Before the HAB beggars had a much lower than average coefficient and after it was much higher.
-+ Fixed Gear Foragers: Same clustering as average before and after HAB, but it increased after event. 
-+ Scavengers/Depredators: Same result as the beggars but much closer to average clustering. 
+- Average: The clustering coefficient has stayed roughly the same before and after HAB.
+- Beggars: Large difference in clustering before and after the HAB event. Before the HAB beggars had a much lower than average coefficient and after it was much higher.
+- Fixed Gear Foragers: Same clustering as average before and after HAB, but it increased after event. 
+- Scavengers/Depredators: Same result as the beggars but much closer to average clustering. 
 
-- Betweeness: A high betweeness means that the individual is in the communication path of other individuals, therefore, the individuals it interacts with, depend on its presence.
+Betweeness: A high betweeness means that the individual is in the communication path of other individuals, therefore, the individuals it interacts with, depend on its presence.
 
-+ Average: Node betweeness has decreased after HAB, therefore there is less connections between different clusters.
-+ Beggars: Equally in the communication path of others as average before HAB. Then much lower betweeness after HAB.
-+ Fixed Gear Foragers: Same results as beggars with less of a difference after HAB.
-+ Scavengers/Depredators: These individuals are in the communication path of other individuals before HAB, then less so after HAB.
+- Average: Node betweeness has decreased after HAB, therefore there is less connections between different clusters.
+- Beggars: Equally in the communication path of others as average before HAB. Then much lower betweeness after HAB.
+- Fixed Gear Foragers: Same results as beggars with less of a difference after HAB.
+- Scavengers/Depredators: These individuals are in the communication path of other individuals before HAB, then less so after HAB.
 
-- Closeness: The larger the closeness centrality is for an individual, the more rapidly and easily it can influence the behavior of others.
+Closeness: The larger the closeness centrality is for an individual, the more rapidly and easily it can influence the behavior of others.
 
-+ Average: Individuals are much more rapidly and easily influencing the behavior of others.
-+ Beggars: Before the HAB, these individuals are within the average range of closeness. After HAB the individuals have less of an influence on others.
-+ Fixed Gear Foragers: These individuals have a high influence on others before HAB. Then they range in closeness more and are roughly equal to the average.
-+ Scavengers/Depredators: Same result as the FG.
+- Average: Individuals are much more rapidly and easily influencing the behavior of others.
+- Beggars: Before the HAB, these individuals are within the average range of closeness. After HAB the individuals have less of an influence on others.
+- Fixed Gear Foragers: These individuals have a high influence on others before HAB. Then they range in closeness more and are roughly equal to the average.
+- Scavengers/Depredators: Same result as the FG.
 
-- Degree: # Individual’s associates
+Degree: # Individual’s associates
 
-+ Average: Individuals' number of associates remain the same while slightly decreasing after HAB.
-+ Beggars: These individuals have the same number of associates as the average population for before and after HAB.
-+ Fixed Gear Foragers: These individuals have many more associated than the average population before and after HAB, with a larger gap after HAB.
-+ Scavengers/Depredators: Same result as FG, but the # of associates decreases after HAB.
+- Average: Individuals' number of associates remain the same while slightly decreasing after HAB.
+- Beggars: These individuals have the same number of associates as the average population for before and after HAB.
+- Fixed Gear Foragers: These individuals have many more associated than the average population before and after HAB, with a larger gap after HAB.
+- Scavengers/Depredators: Same result as FG, but the # of associates decreases after HAB.
 
-- Strength: Total strength of an individuals’ associations
+Strength: Total strength of an individuals’ associations
 
-+ Average: The strength of associations decrease after HAB. 
-+ Beggars: These individuals' association strengths are consistently lower than average.
-+ Fixed Gear Foragers: The strength of individuals' associates is average before HAB. Then after HAB, the strength of associates increase.
-+ Scavengers/Depredators: Before and after HAB, the strengths of association is consistently higher than average.
+- Average: The strength of associations decrease after HAB. 
+- Beggars: These individuals' association strengths are consistently lower than average.
+- Fixed Gear Foragers: The strength of individuals' associates is average before HAB. Then after HAB, the strength of associates increase.
+- Scavengers/Depredators: Before and after HAB, the strengths of association is consistently higher than average.
 
 
 # Global Network Metrics

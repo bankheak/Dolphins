@@ -18,6 +18,11 @@ library(ggplot2) # Visualization
 library(doParallel) # For faster coding
 library(MCMCglmm) # MCMC models
 library(brms) # Baysian
+library(nimble) # For MCMC
+library(mcmcplots) # For MCMC plots
+library(MCMCvis)
+source("attach.nimble_v2.R")
+
 
 # Read in social association matrix and listed data
 kov <- readRDS("kov.RDS")  # Home range overlap
@@ -333,6 +338,82 @@ mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
 
 ###########################################################################
 # PART 3: Create MCMC GLMMs  ------------------------------------------------
+
+# Write a Nimble model:
+model1 <- nimbleCode({
+  
+  #Priors
+  Intercept ~ dunif(-10, 10)
+  Slope ~ dunif(-10, 10)
+  Sigma ~ dunif(0, 10)
+  
+  for(i in 1:n.obs){
+    
+    #Process Model: 
+    Exp.Bill_Length[i] <- Intercept + Slope * Mass[i]
+    
+    #Observation Model (Likelihood)
+    Bill_Length[i] ~ dnorm(mean = Exp.Bill_Length[i], sd = Sigma)
+    
+  }#i
+  
+})#model
+
+
+# Parameters monitored
+parameters <- c("Intercept", "Slope", "Sigma")
+
+# MCMC Settings
+ni <- 40000 # Iterations
+nt <- 40 # Thinning
+nb <- 20000 # Burn-in
+nc <- 3 # Number of chains
+
+# Data
+
+nimble.data = list(Mass = c(scale(penguins_complete$body_mass_g)),
+                   Bill_Length = c(scale(penguins_complete$bill_length_mm)))
+
+nimble.constants = list(n.obs = length(penguins_complete$bill_length_mm))
+
+mcmc.output <- nimbleMCMC(code = model1,
+                          data = nimble.data,
+                          constants=nimble.constants,
+                          monitors = parameters,
+                          niter = ni,
+                          nburnin = nb,
+                          nchains = nc,
+                          thin=nt,
+                          summary=TRUE,
+                          samplesAsCodaMCMC = TRUE)
+
+
+attach.nimble(mcmc.output$samples)
+
+# Look for if convergence happened (if different chains are sitting on top of one another)
+MCMCtrace(object = mcmc.output$samples,
+          pdf = FALSE, # no export to PDF
+          ind = TRUE, # separate density lines per chain
+          params = "Intercept")
+
+# Gelman-Rubin diagnostic (AKA RHat or PSRF)
+gelman.diag(mcmc.output$samples) 
+#' How much the precision of the posterior distributions would change with 
+#' infinite interations (1.05 or lower is good)
+autocorr.plot(mcmc.output$samples)
+#' Want to see a drop to zero before 1
+
+# Visualize all of the relevant plots at the same time:
+mcmcplot(mcmc.output$samples)
+
+# Summarize the posterior distributions:
+hist(Slope)
+
+Slope>0
+mean(Slope>0)
+
+mean(Slope>0.55 & Slope<0.6)
+
 
 # Prepare dataframe for MCMC
 num_nodes <- lapply(nxn_sexage, function(df) {dim(df)[1]})
