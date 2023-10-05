@@ -19,6 +19,9 @@ library(tnet) # For weights
 library(sna)
 library(statnet)
 library(doParallel)
+library(ggplot2)
+library(gridExtra)
+library(reshape)
 library(png)
 
 # Read in social association matrix
@@ -50,14 +53,16 @@ row_names_HI <- lapply(HI_data, function (df) {
 
 # Plot network
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow=c(1, 2))
+par(mfrow=c(1, 2), mar = c(0.5, 0.5, 0.5, 0.5))
+
+main_labels <- c("1993-2004 Network", "2005-2014 Network")
 
 # Loop through the list of graphs and plot them side by side
 for (i in 1:length(ig)) {
   plot(ig[[i]],
        layout = layout_with_fr(ig[[i]]),
-       edge.width = E(ig[[i]])$weight * 4,
-       vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10),
+       edge.width = E(ig[[i]])$weight * 4, # edge thickness
+       vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individuals strength (centrality)
        vertex.frame.color = NA,
        vertex.label.family = "Helvetica",
        vertex.label = ifelse(V(ig[[i]])$name %in% row_names_HI[[i]], V(ig[[i]])$name, NA),
@@ -65,6 +70,8 @@ for (i in 1:length(ig)) {
        vertex.label.cex = 0.8,
        vertex.label.dist = 2,
        vertex.frame.width = 0.01)
+  # Add the main label above the plot
+  title(main = main_labels[i], line = -1)
 }
 
 # rasterImage(img.3, xleft=0, xright=1.9, ybottom=0, ytop=1.5)
@@ -192,64 +199,78 @@ names_FG <- unlist(lapply(HI_data, function (df) {
   as.vector(df$Code[df$DiffHI == "FG" & df$Freq > 0])}))
 
 HI_type <- ifelse(compare_cluster$ID %in% names_BG, "BG", 
-                                   ifelse(compare_cluster$ID %in% names_SD, "SD", 
-                                          ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
+                  ifelse(compare_cluster$ID %in% names_SD, "SD", 
+                         ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
 
-local_metrics_HI <- as.data.frame(cbind(ID = compare_cluster$ID, HI_type = HI_type, Cluster_diff = compare_cluster$Difference, 
-                               Between_diff = compare_between$Difference, Close_diff = compare_close$Difference, 
-                               Degree_diff = compare_strength$Difference_degree, Strength_diff = compare_strength$Difference_strength))
+# Combine the data
+local_metrics_HI <- data.frame(ID = compare_cluster$ID, HI_type = HI_type,
+  Period = c("Period.1", "Period.2"),
+  Cluster = c(compare_cluster$Period.1, compare_cluster$Period.2),
+  Between = c(compare_between$Period.1, compare_between$Period.2),
+  Close = c(compare_close$Period.1, compare_close$Period.2),
+  Degree = c(compare_strength$Period.1_degree, compare_strength$Period.2_degree),
+  Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
 
 ## Add a rown to compare the averages of each metric with HI IDs
 avg_metrics <- data.frame(ID = "Average", HI_type = "NA",
-  Cluster_diff = mean(cluster[[2]][, 2]) - mean(cluster[[1]][, 2]),
-  Between_diff = mean(between[[2]][, 2]) - mean(between[[1]][, 2]),
-  Close_diff = mean(close[[2]][, 2]) - mean(close[[1]][, 2]),
-  Degree_diff = mean(strength[[2]][, 2]) - mean(strength[[1]][, 2]),
-  Strength_diff = mean(strength[[2]][, 3]) - mean(strength[[1]][, 3]))
+                          Period = c("Period.1", "Period.2"),
+                          Cluster = c(mean(cluster[[2]][, 2]), mean(cluster[[1]][, 2])),
+                          Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
+                          Close = c(mean(close[[2]][, 2]), mean(close[[1]][, 2])),
+                          Degree = c(mean(strength[[2]][, 2]), mean(strength[[1]][, 2])),
+                          Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
 
-local_metrics_HI <- merge(local_metrics_HI, avg_metrics, all = T)
-# Make sure the metrics are numeric and HI_type is a factor
-columns_to_convert <- c(3:7)  # Columns to be converted to numeric
-local_metrics_HI[, columns_to_convert] <- sapply(local_metrics_HI[, columns_to_convert], as.numeric)
-local_metrics_HI$HI_type <- as.factor(local_metrics_HI$HI_type)
+local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
 
+# Reshape the data from wide to long format
+local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
+colnames(local_metrics_HI) <- c("ID", "HI_type", "Period", "Metric", "value")
 
-# Set up the plotting area with 1 row and 5 columns
-par(mfrow = c(1, 5))
+# Make sure metric is in character
+local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
 
-# Get different metric values in a vector
-metric_value <- colnames(local_metrics_HI[, columns_to_convert])
+# Get rid of the average values
+local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
 
-# Define the desired order for HI types
-desired_order <- c("NA", "BG", "FG", "SD")
+# Plot for each Metric
+plot_list <- list()
+unique_metrics <- unique(local_met_HI$Metric)
 
-# Loop over each metric
-for (i in seq_along(columns_to_convert)) {
+for (i in seq_along(unique_metrics)) {
+  metric <- unique_metrics[i]
   
-  # Extract the metric for the current column
-  metric <- local_metrics_HI[, columns_to_convert[i]]
+  # Filter data for the current metric
+  metric_data <- local_met_HI[local_met_HI$Metric == metric,]
   
-  # Convert HI_type to factor with the desired order
-  local_metrics_HI$HI_type <- factor(local_metrics_HI$HI_type, levels = desired_order)
+  # Get the corresponding value for NA, Period.1 and the current metric
+  value_na_period1 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
+                                               local_metrics_HI$Period == "Period.1" & 
+                                               local_metrics_HI$Metric == metric]
   
-  # Group the metric by HI_type and order the names
-  grouped_metric <- split(metric, local_metrics_HI$HI_type)
+  # Get the corresponding value for NA, Period.2 and the current metric
+  value_na_period2 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
+                                               local_metrics_HI$Period == "Period.2" & 
+                                               local_metrics_HI$Metric == metric]
   
-  # Set up colors based on HI type
-  colors <- rainbow(length(names(grouped_metric)))
+  # Create the plot
+  current_plot <- ggplot(metric_data, aes(x = HI_type, y = value, fill = Period)) +
+    geom_boxplot(position = "identity", alpha = 0.5) +
+    labs(x = "HI Type", y = NULL, fill = "Period") +
+    ggtitle(paste(metric)) +
+    theme(panel.background = element_blank()) +
+    geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
+    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed")
   
-  # Create the boxplot
-  boxplot(
-    grouped_metric,
-    names = names(grouped_metric),
-    col = colors,
-    notch = FALSE,
-    main = metric_value[i],
-    border = "black"
-  )
-  # Draw a horizontal line at y = 0
-  abline(h = 0, col = "red")
+  # Store the legend on the last plot
+  if (i == length(unique_metrics)) {
+    plot_list[[i]] <- current_plot + theme(legend.position = "bottom")
+  } else {
+    plot_list[[i]] <- current_plot + theme(legend.position = "none")
+  }
 }
+
+# Arrange plots side by side
+grid.arrange(grobs = plot_list, ncol = 5)
 
 
 ###########################################################################
@@ -447,9 +468,10 @@ for (i in seq_along(dolp_ig)) {
 }
 
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow=c(1, 2))
+par(mfrow=c(1, 2), mar = c(0.5, 0.5, 2, 0.5))
+
 # Main labels for the plots
-main_labels <- c("1993-2004 Network", "2005-2014 Network")  # Replace with appropriate main labels
+main_labels <- c("1993-2004 Network", "2005-2014 Network")
 
 # Plot the graph with individual IDs as labels
 for (i in seq_along(dolp_ig)) {
