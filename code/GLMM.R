@@ -186,18 +186,19 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
 
 # Including zeros
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
-IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
+IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
+
 saveRDS(IDbehav_BG, "IDbehav_BG.RData")
-saveRDS(IDbehav_SD, "IDbehav_SD.RData")
 saveRDS(IDbehav_FG, "IDbehav_FG.RData")
+saveRDS(IDbehav_SD, "IDbehav_SD.RData")
 
 # Not including zeros
 IDbehav_BG_nonzero <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)
 IDbehav_SD_nonzero <- get_IDHI("SD", IDbehav_HI, rawHI_diff_HI)
 IDbehav_FG_nonzero <- get_IDHI("FG", IDbehav_HI, rawHI_diff_HI)
 
-# Clump all the HI behaviors together------------------------------------------
+# Clump all the HI behaviors together
 clump_behav <- function(aux_data) {
 for (i in seq_along(aux_data)) {
   aux_data[[i]]$ConfHI <- ifelse(aux_data[[i]]$ConfHI != "0", 1, 0)}
@@ -269,7 +270,11 @@ dist_FG <- dis_matr(prob_FG)
 
 
 ###########################################################################
-# PART 2: Create MRQAP Models  ------------------------------------------------
+# PART 2: Run Diagnostics
+
+
+###########################################################################
+# PART 3: Create MRQAP Models  ------------------------------------------------
 
 # Check for collinearity 
 # Check if it is based off zeros
@@ -326,7 +331,7 @@ mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
 
 
 ###########################################################################
-# PART 3: Create MCMC GLMMs  ------------------------------------------------
+# PART 4: Create MCMC GLMMs  ------------------------------------------------
 
 # Write a Nimble model: SRI ~ HRO + SEX + AGE + GR
 model1 <- nimbleCode({
@@ -432,7 +437,7 @@ summary(fit_mcmc)
 
 
 ###########################################################################
-# PART 4: Assortivity Index Based on HI Over Time  ------------------------------------------------
+# PART 5: Assortivity Index Based on HI Over Time  ------------------------------------------------
 
 # Match Code with matrix and vector
 get_HI_vector <- function(prop_HI) {
