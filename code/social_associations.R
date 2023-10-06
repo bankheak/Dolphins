@@ -9,11 +9,9 @@ setwd("../data")
 
 # Load all necessary packages
 require(asnipe) # get_group_by_individual--Damien Farine
-# Could do permutatioNP
-require(assocInd)
+require(assocInd) # Could do permutatioNP
 require(vegan)
-# Run multiple cores for faster computing
-require(doParallel)
+require(doParallel) # Run multiple cores for faster computing
 require(foreach)
 
 ###########################################################################
@@ -62,7 +60,7 @@ sample_data$SplitYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_
 list_splityears <- split(sample_data, sample_data$SplitYearIncrement)
 
 # Subset only individuals that engage in HI
-list_HI_threeyears <- lapply(list_threeyears, function(df) {subset(df, subset=c(df$ConfHI != "0"))})
+list_HI_splityears <- lapply(list_splityears, function(df) {subset(df, subset=c(df$ConfHI != "0"))})
 
 # Eliminate IDs with less than 5 locations
 sub_locations <- function(list_years) {
@@ -84,10 +82,13 @@ sub_locations <- function(list_years) {
   return(updated_list_years)
 }
 list_splityears <- sub_locations(list_splityears)
+list_HI_splityears <- sub_locations(list_HI_splityears)
 
 # Save list
 saveRDS(list_splityears, file="list_years.RData")
 list_years <- readRDS("list_years.RData")
+
+saveRDS(list_HI_splityears, file = "list_years_HI.RData")
 
 # Calculate Gambit of the group
 create_gbi <- function(list_years) {
@@ -238,7 +239,6 @@ FG_nxn <- lapply(seq_along(nxn), function(i) {
   replace_ID_with_HI(nxn[[i]], Dep[[i]])
 })
 
-# Get an average SRI for each category of pairing
 ## Step 1: Create a matrix for each category of stat
 
 is_NB <- is_B <- list()
@@ -260,7 +260,6 @@ for (i in seq_along(Dep_nxn)) {
 }
 
 ## Step 2: Extract the combinations
-
 ### Function to extract combinations
 extract_combs <- function(HI_nxn, is_row, is_col) {
   combs <- lapply(seq_along(HI_nxn), function(i) {

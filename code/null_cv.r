@@ -23,7 +23,7 @@ null <- function (mat, iter, ...){
 }
 
 # Load SRI function
-SRI.func<-  function (matr) {
+SRI.func <-  function (matr) {
   if (any(is.na(matr))) {
     matr <- na.omit(matr)
     cat("The data matrix contains NA, and have been removed.\n")

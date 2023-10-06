@@ -112,22 +112,20 @@ cluster <- lapply(el, function (df) {clustering_local_w(df, measure=c("am", "gm"
 saveRDS(cluster, "cluster.RData")
 cluster <- readRDS("cluster.RData")
 cluster_diffs <- get_names(nxn, cluster)
+cluster_diffs <- lapply(cluster_diffs, function (df) {as.data.frame(df[, c(1, 2)])})
 cluster_diffs_HI <- lapply(seq_along(cluster_diffs), function(i) {
   df <- cluster_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  df_new <- df[df$node %in% row_names_HI[[i]], , drop = FALSE]
   return(df_new)
 })
 compare_cluster <- merge(
-  cluster_diffs_HI[[1]][, c(1, 2)], 
-  cluster_diffs_HI[[2]][, c(1, 2)], 
+  cluster_diffs_HI[[1]], 
+  cluster_diffs_HI[[2]], 
   by.x = "node", 
   by.y = "node"
 )
 colnames(compare_cluster) <- c("ID", "Period.1", "Period.2")
 compare_cluster[, c(2, 3)] <- sapply(compare_cluster[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_cluster$Difference <- compare_cluster$Period.2 - compare_cluster$Period.1
-
 
 # Betweenness centrality
 between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
@@ -145,9 +143,6 @@ compare_between <- merge(
 )
 colnames(compare_between) <- c("ID", "Period.1", "Period.2")
 compare_between[, c(2, 3)] <- sapply(compare_between[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_between$Difference <- compare_between$Period.2 - compare_between$Period.1
-
 
 # Closeness centrality
 close <- lapply(el, function (df) {closeness_w(df, alpha=1)})
@@ -165,9 +160,6 @@ compare_close <- merge(
 )
 colnames(compare_close) <- c("ID", "Period.1", "Period.2")
 compare_close[, c(2, 3)] <- sapply(compare_close[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_close$Difference <- compare_close$Period.2 - compare_close$Period.1
-
 
 # Degree and strength centrality
 strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
@@ -185,9 +177,6 @@ compare_strength <- merge(
 )
 colnames(compare_strength) <- c("ID", "Period.1_degree", "Period.1_strength", "Period.2_degree", "Period.2_strength")
 compare_strength[, c(2:5)] <- sapply(compare_strength[, c(2:5)], as.numeric)
-# Calculate differences
-compare_strength$Difference_degree <- compare_strength$Period.2_degree - compare_strength$Period.1_degree
-compare_strength$Difference_strength <- compare_strength$Period.2_strength - compare_strength$Period.1_strength
 
 # Look at all of the local metrics together
 ## Add a column containing HI type
@@ -198,12 +187,8 @@ names_SD <- unlist(lapply(HI_data, function (df) {
 names_FG <- unlist(lapply(HI_data, function (df) {
   as.vector(df$Code[df$DiffHI == "FG" & df$Freq > 0])}))
 
-HI_type <- ifelse(compare_cluster$ID %in% names_BG, "BG", 
-                  ifelse(compare_cluster$ID %in% names_SD, "SD", 
-                         ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
-
 # Combine the data
-local_metrics_HI <- data.frame(ID = compare_cluster$ID, HI_type = HI_type,
+local_metrics_HI <- data.frame(ID = compare_cluster$ID,
   Period = c("Period.1", "Period.2"),
   Cluster = c(compare_cluster$Period.1, compare_cluster$Period.2),
   Between = c(compare_between$Period.1, compare_between$Period.2),
@@ -212,7 +197,7 @@ local_metrics_HI <- data.frame(ID = compare_cluster$ID, HI_type = HI_type,
   Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
 
 ## Add a rown to compare the averages of each metric with HI IDs
-avg_metrics <- data.frame(ID = "Average", HI_type = "NA",
+avg_metrics <- data.frame(ID = "Average",
                           Period = c("Period.1", "Period.2"),
                           Cluster = c(mean(cluster[[2]][, 2]), mean(cluster[[1]][, 2])),
                           Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
@@ -221,6 +206,11 @@ avg_metrics <- data.frame(ID = "Average", HI_type = "NA",
                           Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
 
 local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
+
+# Add HI_type column
+HI_type <- ifelse(compare_cluster$ID %in% names_BG, "BG", 
+                  ifelse(compare_cluster$ID %in% names_SD, "SD", 
+                         ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
 
 # Reshape the data from wide to long format
 local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
@@ -417,35 +407,36 @@ newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, w
                                 start = NULL, options = arpack_defaults, callback = NULL, 
                                 extra = NULL, env = parent.frame())})
 
-
-# Set the node names based on row names
-BG <- SD <- FG <- vector("list", length = length(dolp_ig))
+# Set the node names and label colors based on HI behavior
+BG <- SD <- FG <- BGSD <- BGFG <- SDFG <- BGSDFG <- vector("list", length = length(dolp_ig))
 
 for (i in seq_along(dolp_ig)) {
   # Set the node names
   V(dolp_ig[[i]])$name <- rownames(nxn[[i]])
   
-  ## Parse out what HI behavior they engage in
+  # Parse out what HI behavior they engage in
   BG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "BG" & HI_data[[i]]$Freq > 0])
   SD[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "SD" & HI_data[[i]]$Freq > 0])
   FG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "FG" & HI_data[[i]]$Freq > 0])
+  BGSD[[i]] <- intersect(BG[[i]], SD[[i]])
+  BGFG[[i]] <- intersect(BG[[i]], FG[[i]])
+  SDFG[[i]] <- intersect(SD[[i]], FG[[i]])
+  BGSDFG[[i]] <- intersect(BGSD[[i]], FG[[i]])
   
-  ## Initialize label_color attribute for each node
+  # Initialize label_color attribute for each node
   V(dolp_ig[[i]])$label_color <- "black"
   
-  ## Make a different text color for each category
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% BG[[i]]] <- "red"  
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% SD[[i]]] <- "yellow" 
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% FG[[i]]] <- "blue"
+  # Set label colors based on categories
+  node_names <- V(dolp_ig[[i]])$name
+  V(dolp_ig[[i]])$label_color <- ifelse(node_names %in% BGSDFG[[i]], "brown",
+                                        ifelse(node_names %in% BGFG[[i]], "purple",
+                                               ifelse(node_names %in% SDFG[[i]], "green",
+                                                      ifelse(node_names %in% BGSD[[i]], "orange",
+                                                             ifelse(node_names %in% FG[[i]], "blue",
+                                                                    ifelse(node_names %in% SD[[i]], "yellow",
+                                                                           ifelse(node_names %in% BG[[i]], "red", "black")))))))
+  
 }
-# BGSD <- intersect(BG, SD)
-# BGFG <- intersect(BG, FG)
-# SDFG <- intersect(SD, FG)
-# BGSDFG <- intersect(BGSD, FG)
-# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGSD] <- "orange"  
-# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGFG] <- "purple" 
-# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% SDFG] <- "green"  
-# V(dolp_ig[[year]])$label_color[V(dolp_ig[[year]])$name %in% BGSDFG] <- "brown" 
 
 # Generate a vector of colors based on the number of unique memberships
 for (i in seq_along(dolp_ig)) {

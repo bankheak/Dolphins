@@ -29,12 +29,8 @@ kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
 list_years <- readRDS("list_years.RData") # Data listed into periods
 
-# Read file in to retain ILV
-kov_sexage <- readRDS("kov_sexage.RDS")  
-nxn_sexage <- readRDS("nxn_sexage.RData")
-list_sexage_years <- readRDS("list_sexage_years.RData")
-
 # Read file in to retain only HI IDs
+list_HI_years <- readRDS("list_years_HI.RData")
 kov_HI <- readRDS("kov_HI.RDS") 
 nxn_HI <- readRDS("nxn_HI.RData") 
 
@@ -84,7 +80,6 @@ age_list <- lapply(list_sexage_years, function(df) {
 })
 
 # Boat similarity matrices
-Hactivity_data <- list_years[[7]]
 Hactivity_list <- function(df, Hactivity) {
   
   ## Empty matrix to store boat similarity
@@ -132,7 +127,6 @@ return(aux)
 }
 
 aux <- aux_data(list_years)
-aux_sexage <- aux_data(list_sexage_years)
 aux_HI <- aux_data(list_HI_years)
 
 # Categorize ID to Foraging
@@ -149,13 +143,12 @@ return(IDbehav)
 }
 
 IDbehav <- ID_forg(aux)
-IDbehav_sexage <- ID_forg(aux_sexage)
 IDbehav_HI <- ID_forg(aux_HI)
 
 # HI behaviors should be partitioned into 3 different types---------------------
-#' B = Beg: F, G
-#' P = Scavenge and Depredation: B, C, D, E
-#' D = Fixed Gear Interaction: P
+#' BG = Beg: F, G
+#' SD = Scavenge and Depredation: B, C, D, E
+#' FG = Fixed Gear Interaction: P
 # Change the code using ifelse statements
 subset_HI <- function(aux_data) {
   for (i in seq_along(aux_data)) {
@@ -200,9 +193,9 @@ saveRDS(IDbehav_SD, "IDbehav_SD.RData")
 saveRDS(IDbehav_FG, "IDbehav_FG.RData")
 
 # Not including zeros
-IDbehav_BG <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)
-IDbehav_SD <- get_IDHI("SD", IDbehav_HI, rawHI_diff_HI)
-IDbehav_FG <- get_IDHI("FG", IDbehav_HI, rawHI_diff_HI)
+IDbehav_BG_nonzero <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)
+IDbehav_SD_nonzero <- get_IDHI("SD", IDbehav_HI, rawHI_diff_HI)
+IDbehav_FG_nonzero <- get_IDHI("FG", IDbehav_HI, rawHI_diff_HI)
 
 # Clump all the HI behaviors together------------------------------------------
 clump_behav <- function(aux_data) {
@@ -224,7 +217,6 @@ return(rawHI)
 }
 
 rawHI <- clump_behav(aux)
-rawHI_sexage <- clump_behav(aux_sexage)
 rawHI_HI <- clump_behav(aux_HI)
 
 # Get HI Freq
@@ -239,7 +231,6 @@ return(IDbehav_HI)
 }
 
 IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
-IDbehav_HI_sexage <- create_IDbehav_HI(IDbehav_sexage, rawHI_sexage)
 IDbehav_HI_HI <- create_IDbehav_HI(IDbehav_HI, rawHI_HI)
 
 # Proportion of time Foraging spent in HI
@@ -255,11 +246,10 @@ Prop_HI <- function(IDbehav) {
 }
 
 prob_HI <- Prop_HI(IDbehav_HI)
-prop_HI_sexage <- Prop_HI(IDbehav_HI_sexage)
 prop_HI_HI <- Prop_HI(IDbehav_HI_HI)
-prob_Beg <- Prop_HI(IDbehav_Beg)
-prob_Pat <- Prop_HI(IDbehav_Pat)
-prob_Dep <- Prop_HI(IDbehav_Dep)
+prob_BG <- Prop_HI(IDbehav_BG)
+prob_SD <- Prop_HI(IDbehav_SD)
+prob_FG <- Prop_HI(IDbehav_FG)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(Prop_HI) {
@@ -272,11 +262,10 @@ dis_matr <- function(Prop_HI) {
 }
 
 dist_HI <- dis_matr(prob_HI)
-dist_HI_sexage <- dis_matr(prop_HI_sexage)
 dist_HI_HI <- dis_matr(prop_HI_HI)
-dist_Beg <- dis_matr(prob_Beg)
-dist_Pat <- dis_matr(prob_Pat)
-dist_Dep <- dis_matr(prob_Dep)
+dist_BG <- dis_matr(prob_BG)
+dist_SD <- dis_matr(prob_SD)
+dist_FG <- dis_matr(prob_FG)
 
 
 ###########################################################################
@@ -339,21 +328,26 @@ mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
 ###########################################################################
 # PART 3: Create MCMC GLMMs  ------------------------------------------------
 
-# Write a Nimble model:
+# Write a Nimble model: SRI ~ HRO + SEX + AGE + GR
 model1 <- nimbleCode({
   
   #Priors
   Intercept ~ dunif(-10, 10)
-  Slope ~ dunif(-10, 10)
+  x <- seq(0, 1, length.out = 21)
+  Slope_HRO ~ dbeta(x, 1, 1)
+  Slope_SEX ~ dbeta(x, 1, 1)
+  Slope_AGE ~ dbeta(x, 1, 1)
+  Slope_GR ~ dbeta(x, 1, 1)
   Sigma ~ dunif(0, 10)
   
   for(i in 1:n.obs){
     
     #Process Model: 
-    Exp.Bill_Length[i] <- Intercept + Slope * Mass[i]
+    Exp.SRI[i] <- Intercept + Slope_HRO * HRO[i] + 
+      Slope_SEX * SEX[i] + Slope_AGE * AGE[i] + Slope_GR * GR[i] 
     
     #Observation Model (Likelihood)
-    Bill_Length[i] ~ dnorm(mean = Exp.Bill_Length[i], sd = Sigma)
+    SRI[i] ~ dbeta(mean = Exp.SRI[i], sd = Sigma)
     
   }#i
   
@@ -409,12 +403,6 @@ mcmcplot(mcmc.output$samples)
 # Summarize the posterior distributions:
 hist(Slope)
 
-Slope>0
-mean(Slope>0)
-
-mean(Slope>0.55 & Slope<0.6)
-
-
 # Prepare dataframe for MCMC
 num_nodes <- lapply(nxn_sexage, function(df) {dim(df)[1]})
 
@@ -458,9 +446,9 @@ get_HI_vector <- function(prop_HI) {
 
 # Get each combined and seperate HI
 HI_vector <- get_HI_vector(prob_HI)
-Beg_vector <- get_HI_vector(prob_Beg)
-Pat_vector <- get_HI_vector(prob_Pat)
-Dep_vector <- get_HI_vector(prob_Dep)
+BG_vector <- get_HI_vector(prob_BG)
+SD_vector <- get_HI_vector(prob_SD)
+FG_vector <- get_HI_vector(prob_FG)
 
 # Look at HI assortivity coefficient over periods
 calculate_assortment <- function(HI_vector) {
@@ -478,29 +466,45 @@ calculate_assortment <- function(HI_vector) {
   # End parallel processing
   stopImplicitCluster()
   
-  assort_HI_df <- data.frame(HI_assort = unlist(assort_HI), Year = c(1:7))
+  assort_HI_df <- data.frame(HI_assort = unlist(assort_HI), Year = c(1:2))
   return(assort_HI_df)
 }
 
 # Look at HI combined and separate
 assort_HI <- calculate_assortment(HI_vector)
-assort_Beg <- calculate_assortment(Beg_vector)
-assort_Pat <- calculate_assortment(Pat_vector)
-assort_Dep <- calculate_assortment(Dep_vector)
+assort_BG <- calculate_assortment(BG_vector)
+assort_SD <- calculate_assortment(SD_vector)
+assort_FG <- calculate_assortment(FG_vector)
 
 # Combine the assort dataframes and add a behavior column
-assort_Beg$Behavior <- "Beg"
-assort_Pat$Behavior <- "Pat"
-assort_Dep$Behavior <- "Dep"
+assort_BG$Behavior <- "BG"
+assort_SD$Behavior <- "SD"
+assort_FG$Behavior <- "FG"
 
-combined_assort <- rbind(assort_Beg, assort_Pat, assort_Dep)
-combined_assort$HI_assort <- ifelse(is.na(combined_assort$HI_assort), 0.75, combined_assort$HI_assort)
+combined_assort <- rbind(assort_BG, assort_SD, assort_FG)
+combined_assort$HI_assort <- ifelse(is.na(combined_assort$HI_assort), 0.75, 
+                                    combined_assort$HI_assort)
+
+# Calculate sample size
+BG_1 <- length(unique(BG_vector[[1]]$Code[BG_vector[[1]]$HIprop > 0]))
+BG_2 <- length(unique(BG_vector[[2]]$Code[BG_vector[[2]]$HIprop > 0]))
+FG_1 <- length(unique(FG_vector[[1]]$Code[FG_vector[[1]]$HIprop > 0]))
+FG_2 <- length(unique(FG_vector[[2]]$Code[FG_vector[[2]]$HIprop > 0]))
+SD_1 <- length(unique(SD_vector[[1]]$Code[SD_vector[[1]]$HIprop > 0]))
+SD_2 <- length(unique(SD_vector[[2]]$Code[SD_vector[[2]]$HIprop > 0]))
+
+sample_sizes <- c(BG_1, BG_2, FG_1, FG_2, SD_1, SD_2)
 
 # Create the combined plot with facets
-ggplot(combined_assort, aes(x = Year, y = HI_assort)) +
+ggplot(combined_assort, aes(x = Year, y = HI_assort, label = paste("n =", sample_sizes))) +
   geom_point() +
   geom_line() +
   labs(x = "Period", y = "HI assortment") +
   ggtitle("Whisker Plot of HI assortment") +
   theme_minimal() +
-  facet_grid(Behavior ~ ., scales = "free_y", space = "free_y")
+  facet_grid(Behavior ~ ., scales = "free_y", space = "free_y") +
+  geom_text(size = 2, vjust = 0.5)
+
+#' The assortivity of each behavior decreased. Begging and foraging around
+#' fixed gear only slightly decreased while scavenging and depredation assortivity
+#' greatly decreased.

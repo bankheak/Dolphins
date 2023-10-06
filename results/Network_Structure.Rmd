@@ -277,7 +277,8 @@ for (i in seq_along(unique_metrics)) {
     ggtitle(paste(metric)) +
     theme(panel.background = element_blank()) +
     geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
-    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed")
+    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed") +
+    theme(legend.position = "none")
   
   plot_list[[i]] <- current_plot
 }
@@ -485,25 +486,35 @@ newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, w
                                 extra = NULL, env = parent.frame())})
 
 
-# Set the node names based on row names
-BG <- SD <- FG <- vector("list", length = length(dolp_ig))
+# Set the node names and label colors based on HI behavior
+BG <- SD <- FG <- BGSD <- BGFG <- SDFG <- BGSDFG <- vector("list", length = length(dolp_ig))
 
 for (i in seq_along(dolp_ig)) {
   # Set the node names
   V(dolp_ig[[i]])$name <- rownames(nxn[[i]])
   
-  ## Parse out what HI behavior they engage in
+  # Parse out what HI behavior they engage in
   BG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "BG" & HI_data[[i]]$Freq > 0])
   SD[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "SD" & HI_data[[i]]$Freq > 0])
   FG[[i]] <- as.vector(HI_data[[i]]$Code[HI_data[[i]]$DiffHI == "FG" & HI_data[[i]]$Freq > 0])
+  BGSD[[i]] <- intersect(BG[[i]], SD[[i]])
+  BGFG[[i]] <- intersect(BG[[i]], FG[[i]])
+  SDFG[[i]] <- intersect(SD[[i]], FG[[i]])
+  BGSDFG[[i]] <- intersect(BGSD[[i]], FG[[i]])
   
-  ## Initialize label_color attribute for each node
+  # Initialize label_color attribute for each node
   V(dolp_ig[[i]])$label_color <- "black"
   
-  ## Make a different text color for each category
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% BG[[i]]] <- "red"  
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% SD[[i]]] <- "yellow" 
-  V(dolp_ig[[i]])$label_color[V(dolp_ig[[i]])$name %in% FG[[i]]] <- "blue"
+  # Set label colors based on categories
+  node_names <- V(dolp_ig[[i]])$name
+  V(dolp_ig[[i]])$label_color <- ifelse(node_names %in% BGSDFG[[i]], "brown",
+                                        ifelse(node_names %in% BGFG[[i]], "purple",
+                                               ifelse(node_names %in% SDFG[[i]], "green",
+                                                      ifelse(node_names %in% BGSD[[i]], "orange",
+                                                             ifelse(node_names %in% FG[[i]], "blue",
+                                                                    ifelse(node_names %in% SD[[i]], "yellow",
+                                                                           ifelse(node_names %in% BG[[i]], "red", "black")))))))
+  
 }
 
 # Generate a vector of colors based on the number of unique memberships
@@ -522,9 +533,10 @@ for (i in seq_along(dolp_ig)) {
 }
 
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow=c(1, 2))
+par(mfrow=c(1, 2), mar = c(0.5, 0.5, 2, 0.5))
+
 # Main labels for the plots
-main_labels <- c("1993-2004 Network", "2005-2014 Network")  # Replace with appropriate main labels
+main_labels <- c("1993-2004 Network", "2005-2014 Network")
 
 # Plot the graph with individual IDs as labels
 for (i in seq_along(dolp_ig)) {
