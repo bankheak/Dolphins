@@ -19,7 +19,7 @@ In this markdown I will:
 
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
 # Set working directory here
-setwd("C:/Users/bankh/My_Repos/Dolphins/data")
+setwd("../data")
 
 ## load all necessary packages
 library(vegan)  

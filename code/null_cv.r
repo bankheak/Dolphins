@@ -1,9 +1,13 @@
+
+rm(list=ls()) 
+gc()
+
 # Load the parallel package
 library(doParallel)
 library(foreach)
 
 # Read file in
-gbi <-  readRDS("../data/gbi.RData")
+gbi <- readRDS("../data/gbi.RData")
 
 # Specify the number of nodes/workers in the cluster
 num_nodes <- 4
@@ -50,23 +54,17 @@ SRI.func <-  function (matr) {
 
 # Parallel processing
 reps <- 1000
-nF <- list()
-for (i in seq_along(gbi)) {
-nF[[i]] <- null(gbi[[i]], iter=reps)
-}
+nF <- lapply(gbi, function (df) {null(df, iter=reps)})
 
 #' Calculate the association and CV for each of the 1000 permuted matrices to
 #' create null distribution
-cv_years <- list()
-
-for (j in seq_along(gbi)) {
-  cv_null <- rep(NA,reps)
-  cv_null <- foreach(i = 1:reps, 
-        .combine = c) %dopar% { 
-          sri_null = as.matrix(SRI.func(nF[[j]][[i]]))
-          cv_null[i] <- ( sd(sri_null) / mean(sri_null) ) * 100}
-  cv_years[[j]] <- cv_null
-}
+cv_years <- lapply(nF, function(df) {
+  cv_null <- foreach(i = 1:reps, .combine = c, .export = c('SRI.func')) %dopar% {
+    sri_null <- as.matrix(SRI.func(df[[i]]))
+    (sd(sri_null) / mean(sri_null)) * 100
+  }
+  cv_null
+})
 
 # Stop the cluster
 stopCluster(cl)

@@ -13,6 +13,7 @@ require(assocInd) # Could do permutatioNP
 require(vegan)
 require(doParallel) # Run multiple cores for faster computing
 require(foreach)
+library(reshape2) # For graphing
 
 ###########################################################################
 # PART 1: Social Association Matrix ---------------------------------------------
@@ -90,6 +91,22 @@ list_years <- readRDS("list_years.RData")
 
 saveRDS(list_HI_splityears, file = "list_years_HI.RData")
 
+# Make an overlapping dataset
+# Get unique codes from both lists
+codes_list1 <- unique(list_years[[1]]$Code)
+codes_list2 <- unique(list_years[[2]]$Code)
+
+# Find the common codes
+common_codes <- intersect(codes_list1, codes_list2)
+
+# Subset the data frames based on the common codes
+list_years_ovrlap <- lapply(list_years, function(df) {
+  df[df$Code %in% common_codes, ]
+})
+
+
+saveRDS(list_years_ovrlap, file = "list_years_ovrlap.RData")
+
 # Calculate Gambit of the group
 create_gbi <- function(list_years) {
 gbi <- list()
@@ -108,9 +125,11 @@ for (i in seq_along(list_years)) {
                                       }
 
 gbi <- create_gbi(list_years)
+gbi_ovrlap <- create_gbi(list_years_ovrlap)
 
 # Save gbi list
-saveRDS(gbi, file="gbi.RData")
+saveRDS(gbi, file = "gbi.RData")
+saveRDS(gbi_ovrlap, file = "gbi_ovrlap.RData")
 
 # Create association matrix
 create_nxn <- function(list_years, gbi) {
@@ -127,10 +146,13 @@ stopImplicitCluster()
 })
 return(nxn)
 }
+
 nxn <- create_nxn(list_years, gbi)
+nxn_ovrlap <- create_nxn(list_years_ovrlap, gbi_ovrlap)
 
 # Save nxn lists
-saveRDS(nxn, file="nxn.RData")
+saveRDS(nxn, file = "nxn.RData")
+saveRDS(nxn_ovrlap, file = "nxn_ovrlap.RData")
 nxn <- readRDS("nxn.RData")
 
 ###########################################################################
@@ -164,26 +186,30 @@ cv_null <- readRDS("../data/cv_years.RData")
 
 # Calculate the CV of the observation association data
 # CV = (SD/mean)*100
-year = 1
-cv_obs=(sd(nxn[[year]]) / mean(nxn[[year]])) * 100  # Very high CV = unexpectedly 
+cv_obs <- lapply(nxn, function (df) {(sd(df) / mean(df)) * 100})  # Very high CV = unexpectedly 
 # high or low association indices in the empirical distribution
 
 # Calculate 95% confidence interval, in a two-tailed test
-cv_ci = quantile(cv_null[[year]], probs=c(0.025, 0.975), type=2)
+cv_ci = lapply(cv_null, function (df) {quantile(df, probs=c(0.025, 0.975), type=2)})
 
 # Check whether patterNP of connection are non-random
+par(mfrow=c(2, 1))
+
 # histogram of null CVs
-hist(cv_null[[year]], 
-     breaks=50, 
-     col='grey70',
-     main = 'Restrictive null model',
-     xlab="Null CV SRI")
-# empirical CV
-abline(v= cv_obs, col="red")
-# 2.5% CI
-abline(v= cv_ci[1], col="blue")
-# 97.5% CI
-abline(v= cv_ci[2], col="blue")
+for (i in seq_along(cv_null)) {
+  hist_cvs[[i]] <- hist(cv_null[[i]], 
+                        breaks=50, 
+                        col='grey70',
+                        main = 'Restrictive null model',
+                        xlab="Null CV SRI")
+  # empirical CV
+  abline(v= cv_obs[[i]], col="red")
+  # 2.5% CI
+  abline(v= cv_ci[[i]], col="blue")
+  # 97.5% CI
+  abline(v= cv_ci[[i]], col="blue")
+}
+
 #' This shows whether there are more preferred/avoided 
 #' relatioNPhips than we would expect at random
 
@@ -228,35 +254,35 @@ replace_ID_with_HI <- function(sri_matrix, ID_HI_df) {
 
 # Make a replaced nxn for each behavior
 BG_nxn <- lapply(seq_along(nxn), function(i) {
-  replace_ID_with_HI(nxn[[i]], Beg[[i]])
+  replace_ID_with_HI(nxn[[i]], BG[[i]])
 })
                   
 SD_nxn <- lapply(seq_along(nxn), function(i) {
-  replace_ID_with_HI(nxn[[i]], Pat[[i]])
+  replace_ID_with_HI(nxn[[i]], SD[[i]])
 })
 
 FG_nxn <- lapply(seq_along(nxn), function(i) {
-  replace_ID_with_HI(nxn[[i]], Dep[[i]])
+  replace_ID_with_HI(nxn[[i]], FG[[i]])
 })
 
 ## Step 1: Create a matrix for each category of stat
 
-is_NB <- is_B <- list()
-for (i in seq_along(Beg_nxn)) {
-  is_NB[[i]] <- rownames(Beg_nxn[[i]]) == "NB"
-  is_B[[i]] <- rownames(Beg_nxn[[i]]) == "B" 
+is_NBG <- is_BG <- list()
+for (i in seq_along(BG_nxn)) {
+  is_NBG[[i]] <- rownames(BG_nxn[[i]]) == "NBG"
+  is_BG[[i]] <- rownames(BG_nxn[[i]]) == "BG" 
 }
 
-is_NP <- is_P <- list()
-for (i in seq_along(Pat_nxn)) {
-  is_NP[[i]] <- rownames(Pat_nxn[[i]]) == "NP"
-  is_P[[i]] <- rownames(Pat_nxn[[i]]) == "P" 
+is_NFG <- is_FG <- list()
+for (i in seq_along(FG_nxn)) {
+  is_NFG[[i]] <- rownames(FG_nxn[[i]]) == "NFG"
+  is_FG[[i]] <- rownames(FG_nxn[[i]]) == "FG" 
 }
 
-is_ND <- is_D <- list()
-for (i in seq_along(Dep_nxn)) {
-  is_ND[[i]] <- rownames(Dep_nxn[[i]]) == "ND"
-  is_D[[i]] <- rownames(Dep_nxn[[i]]) == "D" 
+is_NSD <- is_SD <- list()
+for (i in seq_along(SD_nxn)) {
+  is_NSD[[i]] <- rownames(SD_nxn[[i]]) == "NSD"
+  is_SD[[i]] <- rownames(SD_nxn[[i]]) == "SD" 
 }
 
 ## Step 2: Extract the combinations
@@ -269,20 +295,20 @@ extract_combs <- function(HI_nxn, is_row, is_col) {
 }
 
 #### Apply for each stat comb
-NB_NB <- extract_combs(Beg_nxn, is_NB, is_NB)
-NB_B <- extract_combs(Beg_nxn, is_NB, is_B)
-B_NB <- extract_combs(Beg_nxn, is_B, is_NB)
-B_B <- extract_combs(Beg_nxn, is_B, is_B)
+NBG_NBG <- extract_combs(BG_nxn, is_NBG, is_NBG)
+NBG_BG <- extract_combs(BG_nxn, is_NBG, is_BG)
+BG_NBG <- extract_combs(BG_nxn, is_BG, is_NBG)
+BG_BG <- extract_combs(BG_nxn, is_BG, is_BG)
 
-NP_NP <- extract_combs(Pat_nxn, is_NP, is_NP)
-NP_P <- extract_combs(Pat_nxn, is_NP, is_P)
-P_NP <- extract_combs(Pat_nxn, is_P, is_NP)
-P_P <- extract_combs(Pat_nxn, is_P, is_P)
+NFG_NFG <- extract_combs(FG_nxn, is_NFG, is_NFG)
+NFG_FG <- extract_combs(FG_nxn, is_NFG, is_FG)
+FG_NFG <- extract_combs(FG_nxn, is_FG, is_NFG)
+FG_FG <- extract_combs(FG_nxn, is_FG, is_FG)
 
-ND_ND <- extract_combs(Dep_nxn, is_ND, is_ND)
-ND_D <- extract_combs(Dep_nxn, is_ND, is_D)
-D_ND <- extract_combs(Dep_nxn, is_D, is_ND)
-D_D <- extract_combs(Dep_nxn, is_D, is_D)
+NSD_NSD <- extract_combs(SD_nxn, is_NSD, is_NSD)
+NSD_SD <- extract_combs(SD_nxn, is_NSD, is_SD)
+SD_NSD <- extract_combs(SD_nxn, is_SD, is_NSD)
+SD_SD <- extract_combs(SD_nxn, is_SD, is_SD)
 
 ## Step 3: Calculate the average of non-diagonal elements in the pairing sub-matrices
 
@@ -291,38 +317,115 @@ avg_comb <- function(a, b, c, d) {
   avg_a <- lapply(seq_along(a), function(i) {
     mean(a[[i]][lower.tri(a[[i]])])
   })
+  var_a <- lapply(seq_along(a), function(i) {
+    var(a[[i]][lower.tri(a[[i]])])
+  })
+  name_a <- lapply(a, function(df) {
+    paste(unique(rownames(df)), unique(colnames(df)), sep = "_")
+  })
   avg_b <- lapply(seq_along(b), function(i) {
     mean(b[[i]][lower.tri(b[[i]])])
+  })
+  var_b <- lapply(seq_along(b), function(i) {
+    var(b[[i]][lower.tri(b[[i]])])
+  })
+  name_b <- lapply(b, function(df) {
+    paste(unique(rownames(df)), unique(colnames(df)), sep = "_")
   })
   avg_c <- lapply(seq_along(c), function(i) {
     mean(c[[i]][lower.tri(c[[i]])])
   })
+  var_c <- lapply(seq_along(c), function(i) {
+    var(c[[i]][lower.tri(c[[i]])])
+  })
+  name_c <- lapply(c, function(df) {
+    paste(unique(rownames(df)), unique(colnames(df)), sep = "_")
+  })
   avg_d <- lapply(seq_along(d), function(i) {
     mean(d[[i]][lower.tri(d[[i]])])
   })
-  avg_df <- data.frame(
-    Avg_A = unlist(avg_a),
-    Avg_B = unlist(avg_b),
-    Avg_C = unlist(avg_c),
-    Avg_D = unlist(avg_d)
-  )
-  return(avg_df)
+  var_d <- lapply(seq_along(d), function(i) {
+    var(d[[i]][lower.tri(d[[i]])])
+  })
+  name_d <- lapply(d, function(df) {
+    paste(unique(rownames(df)), unique(colnames(df)), sep = "_")
+  })
+  avgvar_df <- data.frame(
+    Period = rep(c(1, 2), 4),
+    Category = c(name_a[[1]], name_a[[2]], 
+                 name_b[[1]], name_b[[2]], 
+                 name_c[[1]], name_c[[2]], 
+                 name_d[[1]], name_d[[2]]),
+    Average = c(unlist(avg_a)[[1]], unlist(avg_a)[[2]], 
+                unlist(avg_b)[[1]], unlist(avg_b)[[2]],
+                unlist(avg_c)[[1]], unlist(avg_c)[[2]],
+                unlist(avg_d)[[1]], unlist(avg_d)[[2]]),
+    Variation = c(unlist(var_a)[[1]], unlist(var_a)[[2]], 
+                  unlist(var_b)[[1]], unlist(var_b)[[2]], 
+                  unlist(var_c)[[1]], unlist(var_c)[[2]], 
+                  unlist(var_d)[[1]], unlist(var_d)[[2]]))
+  return(avgvar_df)
 }
 
+# Begging
+avg_BG <- avg_comb(NBG_NBG, NBG_BG, BG_NBG, BG_BG)
 
-avg_Beg <- avg_comb(NB_NB, NB_B, B_NB, B_B)
-colnames(avg_Beg) <- c("NB_NB", "NB_B", "B_NB", "B_B") # Only one beggar in period 4 (2002-2004)
-avg_Beg$NB_B <- (avg_Beg$NB_B + avg_Beg$B_NB) / 2
-boxplot(avg_Beg[,c(1,2,4)])
-plot(avg_Beg[,'B_B'], type="l", col="green", lwd=5, 
-     xlab="3-Year Period", ylab="Avg SRI", main = "Beggar-Beggar Pairs")
+# Plot the differences
+# Convert Period to a factor for distinct colors
+avg_BG$Period <- factor(avg_BG$Period)
 
-avg_Pat <- avg_comb(NP_NP, NP_P, P_NP, P_P)
-colnames(avg_Pat) <- c("NP_NP", "NP_P", "P_NP", "P_P")
-avg_Pat$NP_P <- (avg_Pat$NP_P + avg_Pat$P_NP) / 2
-boxplot(avg_Pat[,c(1,2,4)])
+# Define your own colors for each period
+period_colors <- c("red", "blue")  # Add more colors if needed
 
-avg_Dep <- avg_comb(ND_ND, ND_D, D_ND, D_D)
-colnames(avg_Dep) <- c("ND_ND", "ND_D", "D_ND", "D_D") # Only one depredation in period 4 (2002-2004)
-avg_Dep$ND_D <- (avg_Dep$ND_D + avg_Dep$D_ND) / 2
-boxplot(avg_Dep[,c(1,2,4)])
+ggplot(avg_BG, aes(x = Category, y = Average, fill = Period, color = Period)) +
+  geom_point(position = position_dodge(width = 0.9), size = 3, stat = "identity") +
+  geom_errorbar(aes(ymin = Average - Variation, ymax = Average + Variation),
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(x = "Pairs", y = "Average") +
+  ggtitle("Average Differences for Each Pair") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = period_colors) +
+  scale_color_manual(values = period_colors)
+
+# Foraging around fixed gear
+avg_FG <- avg_comb(NFG_NFG, NFG_FG, FG_NFG, FG_FG)
+
+# Plot the differences
+# Convert Period to a factor for distinct colors
+avg_FG$Period <- factor(avg_FG$Period)
+
+# Define your own colors for each period
+period_colors <- c("red", "blue")  # Add more colors if needed
+
+ggplot(avg_FG, aes(x = Category, y = Average, fill = Period, color = Period)) +
+  geom_point(position = position_dodge(width = 0.9), size = 3, stat = "identity") +
+  geom_errorbar(aes(ymin = Average - Variation, ymax = Average + Variation),
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(x = "Pairs", y = "Average") +
+  ggtitle("Average Differences for Each Pair") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = period_colors) +
+  scale_color_manual(values = period_colors)
+
+# Scavenging/Depredation
+avg_SD <- avg_comb(NSD_NSD, NSD_SD, SD_NSD, SD_SD)
+
+# Plot the differences
+# Convert Period to a factor for distinct colors
+avg_SD$Period <- factor(avg_SD$Period)
+
+# Define your own colors for each period
+period_colors <- c("red", "blue")  # Add more colors if needed
+
+ggplot(avg_SD, aes(x = Category, y = Average, fill = Period, color = Period)) +
+  geom_point(position = position_dodge(width = 0.9), size = 3, stat = "identity") +
+  geom_errorbar(aes(ymin = Average - Variation, ymax = Average + Variation),
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(x = "Pairs", y = "Average") +
+  ggtitle("Average Differences for Each Pair") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = period_colors) +
+  scale_color_manual(values = period_colors)

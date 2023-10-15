@@ -43,34 +43,56 @@ source("../code/functions.R") # edgelist function
 nxn <- readRDS("../data/nxn.RData")
 list_years <- readRDS("../data/list_years.RData")
 
+# Read in overlapped social association matrix
+nxn_ovrlap <- readRDS("nxn_ovrlap.RData")
+list_years_ovrlap <- readRDS("list_years_ovrlap.RData")
+
 ```
 
 
 ```{r network, echo=TRUE, message=FALSE, warning=FALSE}
 
 ## Create social network
-ig <- lapply(nxn, function (df) {
-  graph_from_adjacency_matrix(
-  df,
-  mode = "undirected",
-  weighted = TRUE,
-  diag = FALSE)})
+ig_func <- function(nxn) {
+  ig <- lapply(nxn, function (df) {
+    graph_from_adjacency_matrix(
+      df,
+      mode = "undirected",
+      weighted = TRUE,
+      diag = FALSE)})
+  return(ig)}
+
+ig <- ig_func(nxn)
+ig_ovrlap <- ig_func(nxn_ovrlap)
 
 # Set the node names based on row names
-row_names <- lapply(nxn, function (df) {rownames(df)})
-
-for (i in seq_along(ig)) {
-  V(ig[[i]])$name <- row_names[[i]]
+row_name_assign <- function(nxn, ig) {
+  row_names <- lapply(nxn, function (df) {rownames(df)})
+  for (i in seq_along(ig)) {
+    V(ig[[i]])$name <- row_names[[i]]
+  }
 }
 
+row_name_assign(nxn, ig)
+row_name_assign(nxn_ovrlap, ig_ovrlap)
+
 ## Only show IDs of HI dolphins
-### subset_HI in "GLMM.R"
-HI_data <-  diff_raw(subset_HI(list_years))
-row_names_HI <- lapply(HI_data, function (df) {
-  as.vector(df$Code[(df$DiffHI == "BG" | df$DiffHI == "SD" | 
-                                    df$DiffHI == "FG") & df$Freq > 0])})
+row_name_HI_func <- function(list_years) {
+  source("../code/functions.R") # diff_raw(subset_HI())
+  HI_data <-  diff_raw(subset_HI(list_years))
+  row_names_HI <- lapply(HI_data, function (df) {
+    as.vector(df$Code[(df$DiffHI == "BG" | df$DiffHI == "SD" | 
+                         df$DiffHI == "FG") & df$Freq > 0])})
+  return(row_names_HI)
+}
+
+row_names_HI <- row_name_HI_func(list_years)
+row_names_HI_ovrlap <- row_name_HI_func(list_years_ovrlap)
 
 # Plot network
+# Change ig
+ig <- ig_ovrlap
+
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 par(mfrow=c(1, 2), mar = c(0.5, 0.5, 0.5, 0.5))
 
@@ -108,6 +130,13 @@ par(mfrow=c(1, 1))
 
 # Edgelist: Nodes (i & j) and edge (or link) weight
 el <- readRDS("../data/el_years.RData")
+el_ovrlap <- readRDS("../data/el_years_ovrlap.RData")
+
+# Change el, row_name, nxn and list_years
+nxn <- nxn_ovrlap
+list_years <- list_years_ovrlap
+el <- el_ovrlap
+row_names_HI <- row_names_HI_ovrlap
 
 # Set the node names based on row names
 get_names <- function (matrix, metric) {
@@ -117,26 +146,6 @@ for (i in seq_along(metric)) {
 }
   return(metric)
   }
-
-# Weighted clustering coefficients
-cluster <- readRDS("../data/cluster.RData")
-cluster_diffs <- get_names(nxn, cluster)
-cluster_diffs_HI <- lapply(seq_along(cluster_diffs), function(i) {
-  df <- cluster_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
-  return(df_new)
-})
-compare_cluster <- merge(
-  cluster_diffs_HI[[1]][, c(1, 2)], 
-  cluster_diffs_HI[[2]][, c(1, 2)], 
-  by.x = "node", 
-  by.y = "node"
-)
-colnames(compare_cluster) <- c("ID", "Period.1", "Period.2")
-compare_cluster[, c(2, 3)] <- sapply(compare_cluster[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_cluster$Difference <- compare_cluster$Period.2 - compare_cluster$Period.1
-
 
 # Betweenness centrality
 between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
@@ -154,29 +163,6 @@ compare_between <- merge(
 )
 colnames(compare_between) <- c("ID", "Period.1", "Period.2")
 compare_between[, c(2, 3)] <- sapply(compare_between[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_between$Difference <- compare_between$Period.2 - compare_between$Period.1
-
-
-# Closeness centrality
-close <- lapply(el, function (df) {closeness_w(df, alpha=1)})
-close_diffs <- get_names(nxn, close)
-close_diffs_HI <- lapply(seq_along(close_diffs), function(i) {
-  df <- close_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
-  return(df_new)
-})
-compare_close <- merge(
-  close_diffs_HI[[1]][, c(1, 2)], 
-  close_diffs_HI[[2]][, c(1, 2)], 
-  by.x = "node", 
-  by.y = "node"
-)
-colnames(compare_close) <- c("ID", "Period.1", "Period.2")
-compare_close[, c(2, 3)] <- sapply(compare_close[, c(2, 3)], as.numeric)
-# Calculate differences
-compare_close$Difference <- compare_close$Period.2 - compare_close$Period.1
-
 
 # Degree and strength centrality
 strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
@@ -194,11 +180,9 @@ compare_strength <- merge(
 )
 colnames(compare_strength) <- c("ID", "Period.1_degree", "Period.1_strength", "Period.2_degree", "Period.2_strength")
 compare_strength[, c(2:5)] <- sapply(compare_strength[, c(2:5)], as.numeric)
-# Calculate differences
-compare_strength$Difference_degree <- compare_strength$Period.2_degree - compare_strength$Period.1_degree
-compare_strength$Difference_strength <- compare_strength$Period.2_strength - compare_strength$Period.1_strength
 
 # Look at all of the local metrics together
+HI_data <-  diff_raw(subset_HI(list_years))
 ## Add a column containing HI type
 names_BG <- unlist(lapply(HI_data, function (df) {
   as.vector(df$Code[df$DiffHI == "BG" & df$Freq > 0])}))
@@ -207,29 +191,24 @@ names_SD <- unlist(lapply(HI_data, function (df) {
 names_FG <- unlist(lapply(HI_data, function (df) {
   as.vector(df$Code[df$DiffHI == "FG" & df$Freq > 0])}))
 
-HI_type <- ifelse(compare_cluster$ID %in% names_BG, "BG", 
-                  ifelse(compare_cluster$ID %in% names_SD, "SD", 
-                         ifelse(compare_cluster$ID %in% names_FG, "FG", "NA")))
-
 # Combine the data
-local_metrics_HI <- data.frame(ID = compare_cluster$ID, HI_type = HI_type,
+local_metrics_HI <- data.frame(ID = compare_between$ID,
   Period = c("Period.1", "Period.2"),
-  Cluster = c(compare_cluster$Period.1, compare_cluster$Period.2),
   Between = c(compare_between$Period.1, compare_between$Period.2),
-  Close = c(compare_close$Period.1, compare_close$Period.2),
-  Degree = c(compare_strength$Period.1_degree, compare_strength$Period.2_degree),
   Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
 
 ## Add a rown to compare the averages of each metric with HI IDs
-avg_metrics <- data.frame(ID = "Average", HI_type = "NA",
+avg_metrics <- data.frame(ID = "Average",
                           Period = c("Period.1", "Period.2"),
-                          Cluster = c(mean(cluster[[2]][, 2]), mean(cluster[[1]][, 2])),
                           Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
-                          Close = c(mean(close[[2]][, 2]), mean(close[[1]][, 2])),
-                          Degree = c(mean(strength[[2]][, 2]), mean(strength[[1]][, 2])),
                           Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
 
 local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
+
+# Add HI_type column
+local_metrics_HI$HI_type <- ifelse(local_metrics_HI$ID %in% names_BG, "BG", 
+                            ifelse(local_metrics_HI$ID %in% names_SD, "SD", 
+                            ifelse(local_metrics_HI$ID %in% names_FG, "FG", "NA")))
 
 # Reshape the data from wide to long format
 local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
@@ -284,7 +263,7 @@ for (i in seq_along(unique_metrics)) {
 }
 
 # Arrange plots side by side
-grid.arrange(grobs = plot_list, ncol = 5)
+grid.arrange(grobs = plot_list, ncol = 2)
 
 
 ```
@@ -292,33 +271,12 @@ grid.arrange(grobs = plot_list, ncol = 5)
 
 ## Results of local metrics after HAB event
 
-Local clustering coefficient: Measure of the prevalence of node clusters in a network (i.e. if dolphin associates all know each other, the clustering coefficient will be high).
-
-- Average: The clustering coefficient has stayed roughly the same before and after HAB.
-- Beggars: Large difference in clustering before and after the HAB event. Before the HAB beggars had a much lower than average coefficient and after it was much higher.
-- Fixed Gear Foragers: Same clustering as average before and after HAB, but it increased after event. 
-- Scavengers/Depredators: Same result as the beggars but much closer to average clustering. 
-
 Betweeness: A high betweeness means that the individual is in the communication path of other individuals, therefore, the individuals it interacts with, depend on its presence.
 
 - Average: Node betweeness has decreased after HAB, therefore there is less connections between different clusters.
 - Beggars: Equally in the communication path of others as average before HAB. Then much lower betweeness after HAB.
 - Fixed Gear Foragers: Same results as beggars with less of a difference after HAB.
 - Scavengers/Depredators: These individuals are in the communication path of other individuals before HAB, then less so after HAB.
-
-Closeness: The larger the closeness centrality is for an individual, the more rapidly and easily it can influence the behavior of others.
-
-- Average: Individuals are much more rapidly and easily influencing the behavior of others.
-- Beggars: Before the HAB, these individuals are within the average range of closeness. After HAB the individuals have less of an influence on others.
-- Fixed Gear Foragers: These individuals have a high influence on others before HAB. Then they range in closeness more and are roughly equal to the average.
-- Scavengers/Depredators: Same result as the FG.
-
-Degree: # Individual’s associates
-
-- Average: Individuals' number of associates remain the same while slightly decreasing after HAB.
-- Beggars: These individuals have the same number of associates as the average population for before and after HAB.
-- Fixed Gear Foragers: These individuals have many more associated than the average population before and after HAB, with a larger gap after HAB.
-- Scavengers/Depredators: Same result as FG, but the # of associates decreases after HAB.
 
 Strength: Total strength of an individuals’ associations
 
