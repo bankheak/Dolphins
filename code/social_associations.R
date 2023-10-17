@@ -53,12 +53,19 @@ sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 # Get rid of data with no sex or age data
 sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
 
+# Now split up data 7 years before and after HAB
+sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
+
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
-# Make a list of 10 years per dataframe
-sample_data$SplitYearIncrement <- cut(sample_data$Year, breaks = seq(min(sample_data$Year), max(sample_data$Year) + 11, by = 11), labels = FALSE)
-list_splityears <- split(sample_data, sample_data$SplitYearIncrement)
+# Make a list of 7 years per dataframe
+## Sort the data by Year
+sample_data <- sample_data[order(sample_data$Year), ]
+## Create a column indicating the group (1 or 2) based on the midpoint
+sample_data$Group <- ifelse(sample_data$Year < median(sample_data$Year), 1, 2)
+## Split the data into two groups based on the 'Group' column
+list_splityears <- split(sample_data, sample_data$Group)
 
 # Subset only individuals that engage in HI
 list_HI_splityears <- lapply(list_splityears, function(df) {subset(df, subset=c(df$ConfHI != "0"))})

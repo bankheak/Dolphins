@@ -8,7 +8,7 @@
 setwd("../data")
 
 # Add helpful functions
-source("../code/functions.R") # edgelist function
+source("../code/functions.R") # edgelist function and diff_raw(subset_HI())
 
 ###########################################################################
 # PART 1: Structure Network ------------------------------------------------
@@ -58,7 +58,6 @@ row_name_assign(nxn_ovrlap, ig_ovrlap)
 
 ## Only show IDs of HI dolphins
 row_name_HI_func <- function(list_years) {
-  source("../code/functions.R") # diff_raw(subset_HI())
   HI_data <-  diff_raw(subset_HI(list_years))
   row_names_HI <- lapply(HI_data, function (df) {
     as.vector(df$Code[(df$DiffHI == "BG" | df$DiffHI == "SD" | 
@@ -133,12 +132,16 @@ for (i in seq_along(metric)) {
   return(metric)
   }
 
+# Insert the transitioned IDs to the first period
+transitioned_IDs <- setdiff(row_names_HI[[2]], row_names_HI[[1]])
+all_HI_IDs <- c(transitioned_IDs, row_names_HI[[1]])
+
 # Betweenness centrality
 between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
 between_diffs <- get_names(nxn, between)
 between_diffs_HI <- lapply(seq_along(between_diffs), function(i) {
   df <- between_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
   return(df_new)
 })
 compare_between <- merge(
@@ -155,7 +158,7 @@ strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"),
 strength_diffs <- get_names(nxn, strength)
 strength_diffs_HI <- lapply(seq_along(strength_diffs), function(i) {
   df <- strength_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% row_names_HI[[i]], , drop = FALSE])
+  df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
   return(df_new)
 })
 compare_strength <- merge(
@@ -169,6 +172,7 @@ compare_strength[, c(2:5)] <- sapply(compare_strength[, c(2:5)], as.numeric)
 
 # Look at all of the local metrics together
 HI_data <-  diff_raw(subset_HI(list_years))
+
 ## Add a column containing HI type
 names_BG <- unlist(lapply(HI_data, function (df) {
   as.vector(df$Code[df$DiffHI == "BG" & df$Freq > 0])}))
@@ -179,9 +183,9 @@ names_FG <- unlist(lapply(HI_data, function (df) {
 
 # Combine the data
 local_metrics_HI <- data.frame(ID = compare_between$ID,
-  Period = c("Period.1", "Period.2"),
-  Between = c(compare_between$Period.1, compare_between$Period.2),
-  Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
+                               Period = c(rep("Period.1", nrow(compare_between)), rep("Period.2", nrow(compare_between))),
+                               Between = c(compare_between$Period.1, compare_between$Period.2),
+                               Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
 
 ## Add a rown to compare the averages of each metric with HI IDs
 avg_metrics <- data.frame(ID = "Average",
@@ -206,7 +210,7 @@ local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
 # Get rid of the average values
 local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
 
-# Plot for each Metric
+# Plot individual metrics
 plot_list <- list()
 unique_metrics <- unique(local_met_HI$Metric)
 
@@ -236,6 +240,9 @@ for (i in seq_along(unique_metrics)) {
     geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed") +
     theme(legend.position = "none") +
     geom_text(position = position_dodge(width = 0.5), vjust = -0.5)  # Adjust vjust as needed
+  
+  # Manually set colors for points
+  current_plot <- current_plot + scale_color_manual(values = ifelse(metric_data$ID %in% transitioned_IDs, "black", ifelse(metric_data$Period == "Period.2", "blue", "red")))
   
   plot_list[[i]] <- current_plot
 }
