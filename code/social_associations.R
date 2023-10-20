@@ -29,8 +29,8 @@ orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
 orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
 # Match ID to sex, age and human data
-ILV <- read.csv("Individuals_Residency_Analysis.csv")
-human_data <- read.csv("human_dolphin_data.csv")
+ILV <- read.csv("Individual_Level_Variables.csv")
+# human_data <- read.csv("human_dolphin_data.csv")
 
 ## Sex
 ID_sex <- setNames(ILV$Sex, ILV$Alias)
@@ -38,20 +38,17 @@ orig_data$Sex <- ID_sex[orig_data$Code]
 ## Age
 ID_birth <- setNames(ILV$BirthYear, ILV$Alias)
 orig_data$Birth <- ID_birth[orig_data$Code]
-orig_data$Age <- as.numeric(orig_data$Year) - as.numeric(orig_data$Birth)
+orig_data$Age <- as.numeric(as.character(orig_data$Year)) - as.numeric(as.character(orig_data$Birth))
 ## Human
-human_data_subset <- human_data[, c("SightingFID", "X.Boats", "X.Lines", "X.CrabPots")]
-orig_data <- merge(orig_data, human_data_subset, by = "SightingFID", all = TRUE)
-columns_to_replace <- c("X.Boats", "X.Lines", "X.CrabPots")
-orig_data[, columns_to_replace][is.na(orig_data[, columns_to_replace])] <- 0
-orig_data[, columns_to_replace][orig_data[, columns_to_replace] == -999] <- 0
+# human_data_subset <- human_data[, c("SightingFID", "X.Boats", "X.Lines", "X.CrabPots")]
+# orig_data <- merge(orig_data, human_data_subset, by = "SightingFID", all = TRUE)
+# columns_to_replace <- c("X.Boats", "X.Lines", "X.CrabPots")
+# orig_data[, columns_to_replace][is.na(orig_data[, columns_to_replace])] <- 0
+# orig_data[, columns_to_replace][orig_data[, columns_to_replace] == -999] <- 0
 
 # Get rid of any data with no location data
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
-
-# Get rid of data with no sex or age data
-sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
 
 # Now split up data 7 years before and after HAB
 sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
@@ -59,7 +56,7 @@ sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
 write.csv(sample_data, "sample_data.csv")
 sample_data <- read.csv("sample_data.csv")
 
-# Make a list of 7 years per dataframe
+# Make a list of split years per dataframe
 ## Sort the data by Year
 sample_data <- sample_data[order(sample_data$Year), ]
 ## Create a column indicating the group (1 or 2) based on the midpoint
@@ -99,14 +96,12 @@ list_years <- readRDS("list_years.RData")
 saveRDS(list_HI_splityears, file = "list_years_HI.RData")
 
 # Make an overlapping dataset
-# Get unique codes from both lists
+## Get unique codes from both lists
 codes_list1 <- unique(list_years[[1]]$Code)
 codes_list2 <- unique(list_years[[2]]$Code)
-
-# Find the common codes
+## Find the common codes
 common_codes <- intersect(codes_list1, codes_list2)
-
-# Subset the data frames based on the common codes
+## Subset the data frames based on the common codes
 list_years_ovrlap <- lapply(list_years, function(df) {
   df[df$Code %in% common_codes, ]
 })

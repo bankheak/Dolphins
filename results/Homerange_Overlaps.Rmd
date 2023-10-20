@@ -81,7 +81,7 @@ proj4string(dolph.sp) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs
 ```{r SP, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 # Create kernel estimates for each id
-kernel.lscv <- kernelUD(dolph.sp, h = "LSCV")  # LSCV = least squares cross validation
+kernel.lscv <- kernelUD(df, h = "LSCV")  # LSCV = least squares cross validation
 
 # Get the names or IDs of the individuals that are of concern
 selected_individuals <- c("BEGR", "1091", "1316", "BRN1")
@@ -110,7 +110,7 @@ plotLSCV(kernel.con) # it looks like a bandwidth of 1000 will be good enough
 
 ```{r adj, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
-kernel <- kernelUD(dolph.sp, h = 1000)
+kernel <- kernelUD(df, h = 1000)
 
 # 95% of estimated distribution
 dolph.kernel.poly <- getverticeshr(kernel, percent = 95)  

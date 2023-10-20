@@ -69,10 +69,11 @@ row_names_HI <- row_name_HI_func(list_years)
 row_names_HI_ovrlap <- row_name_HI_func(list_years_ovrlap)
 
 # Plot network
+ig <- ig
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 par(mfrow=c(1, 2), mar = c(0.5, 0.5, 0.5, 0.5))
 
-main_labels <- c("1993-2004 Network", "2005-2014 Network")
+main_labels <- c("1998-2004 Network", "2005-2011 Network")
 
 # Loop through the list of graphs and plot them side by side
 for (i in 1:length(ig)) {
@@ -210,6 +211,9 @@ local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
 # Get rid of the average values
 local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
 
+# Only look at individuals that transitioned
+local_met_trans <- local_met_HI[local_met_HI$ID %in% transitioned_IDs, ]
+
 # Plot individual metrics
 plot_list <- list()
 unique_metrics <- unique(local_met_HI$Metric)
@@ -230,25 +234,28 @@ for (i in seq_along(unique_metrics)) {
                                                local_metrics_HI$Period == "Period.2" & 
                                                local_metrics_HI$Metric == metric]
   
-  # Create the plot with points
+  # Create the plot with violin plot, boxplot, and points
   current_plot <- ggplot(metric_data, aes(x = HI_type, y = value, color = Period, label = ID)) +
-    geom_point(position = position_dodge(width = 0.5)) +  # Adjust width as needed
+    geom_violin(position = position_dodge(width = 0.9), trim = FALSE, alpha = 0.5) +
+    geom_boxplot(position = position_dodge(width = 0.9), width = 0.2, alpha = 0.5) +
+    geom_point(aes(shape = ifelse(ID %in% transitioned_IDs, "Transitioned", "Not Transitioned")), 
+               position = position_dodge(width = 0.9), size = 3) +
+    scale_shape_manual(name = "Transitioned", values = c("Transitioned" = 1, "Not Transitioned" = 2)) +
+    scale_color_manual(values = c("Period.1" = "red", "Period.2" = "blue")) +
     labs(x = "HI Type", y = NULL, color = "Period") +
     ggtitle(paste(metric)) +
     theme(panel.background = element_blank()) +
     geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
     geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed") +
     theme(legend.position = "none") +
-    geom_text(position = position_dodge(width = 0.5), vjust = -0.5)  # Adjust vjust as needed
-  
-  # Manually set colors for points
-  current_plot <- current_plot + scale_color_manual(values = ifelse(metric_data$ID %in% transitioned_IDs, "black", ifelse(metric_data$Period == "Period.2", "blue", "red")))
+    geom_text(position = position_dodge(width = 0.9), vjust = -0.5)
   
   plot_list[[i]] <- current_plot
 }
 
 # Arrange plots side by side
 grid.arrange(grobs = plot_list, ncol = 2)
+
 
 ###########################################################################
 # PART 3: Network & Global Properties ------------------------------------------------

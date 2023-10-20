@@ -20,64 +20,67 @@ library(viridis) # Color pallette
 library(gridExtra) # grid.arrange function
 library(ggplot2)
 library(rgdal) # Overlap
-library(tidyr)
-library(dplyr)
+library(patchwork) # align different plots
 
 # Read in file
-sample_data <- read.csv("sample_data.csv")
 list_years <- readRDS("list_years.RData")
 
-# Make a function that calculates all of the following code with and without sex and age
+# Transform coordinate data into a Spatial Points Dataframe in km
 create_coord_data <- function(list_years) {
-
-# Make a list of years
-coord_data_list <- list_years
-
-# Process the coord_data_list
-dolph.sp <- lapply(coord_data_list, function(df) {
-  # Extract IDs and coordinates
-  ids <- df$Code
-  coordinates <- df[, c("StartLon", "StartLat")]
-  
-  # Convert to data frame
-  ids_df <- data.frame(id = ids)
-  
-  # Create a SpatialPointsDataFrame with coordinates
-  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
-  
-  # Set CRS and transform to UTM
-  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
-  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-})
-return(dolph.sp)
+  dolph.sp <- lapply(list_years, function(df) {
+    
+    # Extract IDs and coordinates
+    ids <- df$Code
+    coordinates <- df[, c("StartLon", "StartLat")]
+    
+    # Create a SpatialPointsDataFrame with coordinates
+    coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = data.frame(id = ids))
+    
+    # Set CRS to WGS84
+    proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
+    
+    # Transform to a UTM CRS that uses km as the unit
+    coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=km +no_defs"))
+    
+    return(coords_sp_utm)
+  })
+  return(dolph.sp)
 }
 dolph.sp <- create_coord_data(list_years)
 
 # Visualize data extent
 vis.sf <- function(dolph.sp) {
-dolph.sf <- lapply(dolph.sp, function (df) {st_as_sf(df)})
-ggplot(dolph.sf[[3]]) +
-  geom_sf(aes(color = "Data Points"), size = 2, alpha = 0.5) +
-  theme_bw() +
-  labs(title = "Distribution of Data Points") +
-  scale_color_manual(values = c("Data Points" = "blue"))
-return(dolph.sf)
+dolp.sf <- lapply(dolph.sp, function (df) {st_as_sf(df)})
+  return(dolp.sf)
 }
 dolph.sf <- vis.sf(dolph.sp)
 
-# Calculate kernel values
-create_kernel <- function(dolph.sp) {
-kernel <- lapply(dolph.sp, function(sp_obj) {
-  kernelUD(sp_obj, h = 10000)
-})
-return(kernel)
-}
-kernel <- create_kernel(dolph.sp)
+vis_coord <- lapply(seq_along(dolph.sf), function (i) {ggplot(dolph.sf[[i]]) +
+                      geom_sf(aes(color = "Dolphins"), size = 2, alpha = 0.5) +
+                      theme_bw() +
+                      labs(title = "Distribution") +
+                      scale_color_manual(values = c("Dolphins" = "blue"))})
+wrap_plots(vis_coord, nrow = 1)
 
-# Create area of each polygon
-year <- 1
-dolph.kernel.poly <- getverticeshr(kernel[[year]], percent = 95)
-print(dolph.kernel.poly)
+# Look into what bandwidth 
+value <- 1
+period <- 1
+n <- length(dolph.sp[[period]]@coords[, value]) 
+bw_scott <- (4 / (3 * n))^(1/5) * sd(dolph.sp[[period]]@coords[, value])  # Scott's rule
+## Use the calculated bandwidth in density estimation
+density_estimate <- density(dolph.sp[[period]]@coords[, value], bw = bw_scott)
+## Plot the density estimate
+plot(density_estimate)
+
+# Calculate the maximum distance between points
+max(sqrt((dolph.sp[[period]]@coords[,1] - min(dolph.sp[[period]]@coords[,1]))^2 + 
+           (dolph.sp[[period]]@coords[,2] - min(dolph.sp[[period]]@coords[,2]))^2))
+
+
+# Use the calculated extent in kernelUD
+kernel <- lapply(dolph.sp, function(sp_obj) {
+  kernelUD(sp_obj, h = 1000)
+})
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
@@ -98,8 +101,8 @@ saveRDS(kov, "kov.RDS")
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------
 
 # Find HI events among individuals
-ID_HI <- lapply(coord_data_list, function(df) {
-  subset_df <- subset(df, subset = df$ConfHI != 0)
+ID_HI <- lapply(list_years, function(df) {
+  subset_df <- subset(df, subset = c(df$ConfHI != 0))
   subset_df <- subset_df[, c('StartLat', 'StartLon', 'Code')]
   
   # Make sure there are at least 5 relocations
@@ -117,55 +120,14 @@ ID_HI <- lapply(coord_data_list, function(df) {
   
   return(subset_df)
 })
-
-# Recalculate Coordinate data
-HI.sp <- lapply(ID_HI, function(df) {
-  # Extract IDs and coordinates
-  ids <- df$Code
-  coordinates <- df[, c("StartLon", "StartLat")]
-  
-  # Convert to data frame
-  ids_df <- data.frame(id = ids)
-  
-  # Create a SpatialPointsDataFrame with coordinates
-  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
-  
-  # Set CRS and transform to UTM
-  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
-  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-  
-  # Calculate kernel density estimates
-  kernel_obj <- kernelUD(coords_sp_utm, h = 1000)
-  
-  # Add the kernel density estimates to the SpatialPointsDataFrame
-  coords_sp_utm$estUD <- kernel_obj$estUD
-  
-  coords_sp_utm
-})
-
-# Kernel estimate
-HI.kern <- lapply(HI.sp, function(sp_obj) {
-  kernelUD(sp_obj, h = 500)
-})
-
-HI.kernel.poly <- getverticeshr(HI.kern[[year]], percent = 95)
-
-# Plot kernel density
-colors <- rainbow(length(unique(ID_HI$id)))
-individuals <- unique(HI.kernel.poly@data$id)
-## Match each individual to a color
-individual_color <- colors[match(individuals, unique(HI.kernel.poly@data$id))]
-## Match the color for each home range polygon
-color <- individual_color[match(HI.kernel.poly@data$id, individuals)]
-## Plot the home range polygons with colors
-plot(HI.kernel.poly, col = color)
+dolph.sp_HI <- create_coord_data(ID_HI)
 
 # Calculate MCPs for each HI dolphin
-HI.mcp <- mcp(ID_HI, percent = 95)
+HI.mcp <- lapply(dolph.sp_HI, function (df) mcp(df, percent = 95))
 
 # Transform the point and MCP objects. 
-HI.spgeo <- spTransform(ID_HI, CRS("+proj=longlat"))
-HI.mcpgeo <- spTransform(HI.mcp, CRS("+proj=longlat"))
+HI.spgeo <- lapply(ID_HI, function (df) spTransform(df, CRS("+proj=longlat")))
+HI.mcpgeo <- lapply(HI.mcp, function (df) spTransform(df, CRS("+proj=longlat")))
 
 # Turn the spatial data frame of points into just a dataframe for plotting in ggmap
 HI.geo <- data.frame(HI.spgeo@coords, 
@@ -201,148 +163,3 @@ colnames(HI_type) <- c("Code", "ConfHI", "Freq")
 HI <- subset(HI_type, subset=c(HI_type$Freq != 0))
 HI <- subset(HI, HI$Code %in% individuals)
 
-
-#################################################################################
-# PART 4: calculate home range overlaps of individuals with human activity-------
-
-# Subset the data that contains human activity
-human_data <- subset(sample_data, subset=c(sample_data$Year > 2012))
-
-# Eliminate IDs with less than 5 locations
-relocate_lim <- function(df) {
-  ID <- unique(df$Code)
-  obs_vect <- numeric(length(ID))
-  
-  for (j in seq_along(ID)) {
-    obs_vect[j] <- sum(df$Code == ID[j])}
-  
-  sub <- data.frame(ID = ID, obs_vect = obs_vect)
-  sub <- subset(sub, subset = obs_vect > 5)
-  
-  df <- subset(df, Code %in% sub$ID)
-}
-dolphin_data <- relocate_lim(human_data)
-
-# Calculate kernel values
-create_kd <- function(df) {
-  ## Extract IDs and coordinates
-  ids <- df$Code
-  coordinates <- df[, c("StartLon", "StartLat")]
-  # Convert to data frame
-  ids_df <- data.frame(id = ids)
-  
-  # Create a SpatialPointsDataFrame with coordinates
-  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
-  
-  # Set CRS and transform to UTM
-  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
-  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-  
-  # Calculate kernel values
-  kernel <- kernelUD(coords_sp_utm, h = 10000)
-  
-  # Explicitly set the class to estUDm
-  class(kernel) <- "estUDm"
-  
-  return(kernel)
-}
-homerange_kernel <- create_kd(dolphin_data)
-
-# Subset data
-boat_data <- subset(human_data, subset=c(human_data$X.Boats > 0))
-line_data <- subset(human_data, subset=c(human_data$X.Lines > 0))
-pot_data <- subset(human_data, subset=c(human_data$X.CrabPots > 0))
-
-# Seperate each number of boats into their own row
-boat_data_split <- human_data %>%
-  slice(rep(1:n(), times = human_data$X.Boats))
-
-line_data_split <- human_data %>%
-  slice(rep(1:n(), times = human_data$X.Lines))
-
-pot_data_split <- human_data %>%
-  slice(rep(1:n(), times = human_data$X.CrabPots))
-
-# Eliminate IDs with less than 5 locations
-relocate_limh <- function(df) {
-  ID <- unique(df$SurveyNum)
-  obs_vect <- numeric(length(ID))
-  
-  for (j in seq_along(ID)) {
-    obs_vect[j] <- sum(df$SurveyNum == ID[j])}
-  
-  sub <- data.frame(ID = ID, obs_vect = obs_vect)
-  sub <- subset(sub, subset = obs_vect > 5)
-  
-  df <- subset(df, SurveyNum %in% sub$ID)
-}
-
-boat_data_split <- relocate_limh(boat_data)
-line_data_split <- relocate_limh(line_data)
-pot_data_split <- relocate_limh(pot_data)
-
-# Make a kernel density of each human activity
-df<- boat_data
-create_kdh <- function(df) {
-  ## Extract IDs and coordinates
-  ids <- df$SurveyNum
-  coordinates <- df[, c("StartLon", "StartLat")]
-  # Convert to data frame
-  ids_df <- data.frame(id = ids)
-  
-  # Create a SpatialPointsDataFrame with coordinates
-  coords_sp <- SpatialPointsDataFrame(coords = coordinates, data = ids_df)
-  
-  # Set CRS and transform to UTM
-  proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
-  coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
-  
-  # Turn this into coordinates
-  coordinates_matrix <- coordinates(coords_sp_utm)
-  coordinates_df <- as.data.frame(coordinates(coords_sp_utm))
-  
-  coordinates_df_sp <- SpatialPointsDataFrame(
-    coords = coordinates_df, 
-    data = data.frame(Number_of_boats = df$X.Boats)
-  )
-  
-  # Calculate kernel values
-  kernel <- kernelUD(coordinates_df, h = 10000)
-  
-  # Explicitly set the class to estUDm
-  class(kernel) <- "estUDm"
-  
-  return(kernel)
-}
-
-kernel_boat <- create_kdh(boat_data_split)
-kernel_line <- create_kdh(boat_data_split)
-kernel_pot <- create_kdh(boat_data_split)
-
-# Calculate kernel overlap values
-kernel_Hactivity<-kernel_boat
-create_kov_Hactivity <- function(kernel_Hactivity) {
-  
-  # Initialize an empty list to store the overlap results
-  overlap_results <- list()
-  
-  # Iterate over each dolphin and calculate the overlap with boat density
-  for (i in seq_along(homerange_kernel)) {
-    dolphin_kernel <- homerange_kernel[[i]]
-    
-    # Calculate the overlap using kerneloverlaphr for Formal class estUDm
-    overlap <- kerneloverlaphr(dolphin_kernel, kernel_Hactivity, method = "HR", lev = 95)
-    
-    # Store the overlap result in the list
-    overlap_results[[i]] <- overlap
-  }
-}
-
-kov_boat <- create_kov_Hactivity(kernel_boat)
-kov_line <- create_kov_Hactivity(kernel_line)
-kov_pot <- create_kov_Hactivity(kernel_pot)
-
-# Save HRO with human activity
-saveRDS(kov_boat, "kov_boat.RDS")
-saveRDS(kov_line, "kov_line.RDS")
-saveRDS(kov_pot, "kov_pot.RDS")
