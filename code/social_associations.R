@@ -14,9 +14,15 @@ require(vegan)
 require(doParallel) # Run multiple cores for faster computing
 require(foreach)
 library(reshape2) # For graphing
+library(gridExtra) # To combine plots
 
 ###########################################################################
 # PART 1: Social Association Matrix ---------------------------------------------
+
+# Read in full datasheet and list (after wrangling steps)
+sample_data <- read.csv("sample_data.csv")
+list_years <- readRDS("list_years.RData")
+nxn <- readRDS("nxn.RData")
 
 # Read in & combine files
 firstgen_data <- read.csv("firstgen_data.csv")
@@ -54,46 +60,48 @@ sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
 
 write.csv(sample_data, "sample_data.csv")
-sample_data <- read.csv("sample_data.csv")
+
+# Get rid of data with no sex or age data
+sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
+
+write.csv(sample_sexage_data, "sample_sexage_data.csv")
 
 # Make a list of split years per dataframe
-## Sort the data by Year
-sample_data <- sample_data[order(sample_data$Year), ]
-## Create a column indicating the group (1 or 2) based on the midpoint
-sample_data$Group <- ifelse(sample_data$Year < median(sample_data$Year), 1, 2)
-## Split the data into two groups based on the 'Group' column
-list_splityears <- split(sample_data, sample_data$Group)
-
-# Subset only individuals that engage in HI
-list_HI_splityears <- lapply(list_splityears, function(df) {subset(df, subset=c(df$ConfHI != "0"))})
-
-# Eliminate IDs with less than 5 locations
-sub_locations <- function(list_years) {
-  updated_list_years <- list()  # Initialize an empty list to store the updated datasets
+split_years <- function (sample_data) {
   
-  for (i in seq_along(list_years)) {
-    ID <- unique(list_years[[i]]$Code)
-    obs_vect <- numeric(length(ID))
+  ## Sort the data by Year
+  sample_data <- sample_data[order(sample_data$Year), ]
+  ## Create a column indicating the group (1 or 2) based on the midpoint
+  sample_data$Group <- ifelse(sample_data$Year < median(sample_data$Year), 1, 2)
+  ## Split the data into two groups based on the 'Group' column
+  list_splityears <- split(sample_data, sample_data$Group)
+  
+  # Eliminate IDs with less than 5 locations
+   updated_list_years <- list()  # Initialize an empty list to store the updated datasets
     
-    for (j in seq_along(ID)) {
-      obs_vect[j] <- sum(list_years[[i]]$Code == ID[j])
+    for (i in seq_along(list_splityears)) {
+      ID <- unique(list_splityears[[i]]$Code)
+      obs_vect <- numeric(length(ID))
+      
+      for (j in seq_along(ID)) {
+        obs_vect[j] <- sum(list_splityears[[i]]$Code == ID[j])
+      }
+      
+      sub <- data.frame(ID = ID, obs_vect = obs_vect)
+      sub <- subset(sub, subset = obs_vect > 10)
+      
+      updated_list_years[[i]] <- subset(list_splityears[[i]], Code %in% sub$ID)
+    
     }
-    
-    sub <- data.frame(ID = ID, obs_vect = obs_vect)
-    sub <- subset(sub, subset = obs_vect > 10)
-    
-    updated_list_years[[i]] <- subset(list_years[[i]], Code %in% sub$ID)
-  }
-  return(updated_list_years)
+   return(updated_list_years)
 }
-list_splityears <- sub_locations(list_splityears)
-list_HI_splityears <- sub_locations(list_HI_splityears)
+
+list_years <- split_years(sample_data)
+list_years_sexage <- split_years(sample_sexage_data)
 
 # Save list
-saveRDS(list_splityears, file="list_years.RData")
-list_years <- readRDS("list_years.RData")
-
-saveRDS(list_HI_splityears, file = "list_years_HI.RData")
+saveRDS(list_years, file="list_years.RData")
+saveRDS(list_years_sexage, file = "list_years_sexage.RData")
 
 # Make an overlapping dataset
 ## Get unique codes from both lists
@@ -127,10 +135,12 @@ for (i in seq_along(list_years)) {
                                       }
 
 gbi <- create_gbi(list_years)
+gbi_sexage <- create_gbi(list_years_sexage)
 gbi_ovrlap <- create_gbi(list_years_ovrlap)
 
-# Save gbi list
+# Save gbi lists
 saveRDS(gbi, file = "gbi.RData")
+saveRDS(gbi_sexage, file = "gbi_sexage.RData")
 saveRDS(gbi_ovrlap, file = "gbi_ovrlap.RData")
 
 # Create association matrix
@@ -150,12 +160,13 @@ return(nxn)
 }
 
 nxn <- create_nxn(list_years, gbi)
+nxn_sexage <- create_nxn(list_years_sexage, gbi_sexage)
 nxn_ovrlap <- create_nxn(list_years_ovrlap, gbi_ovrlap)
 
 # Save nxn lists
 saveRDS(nxn, file = "nxn.RData")
+saveRDS(nxn_sexage, file = "nxn_sexage.RData")
 saveRDS(nxn_ovrlap, file = "nxn_ovrlap.RData")
-nxn <- readRDS("nxn.RData")
 
 ###########################################################################
 # PART 2: PermutatioNP ---------------------------------------------------------
@@ -194,21 +205,24 @@ cv_obs <- lapply(nxn, function (df) {(sd(df) / mean(df)) * 100})  # Very high CV
 # Calculate 95% confidence interval, in a two-tailed test
 cv_ci = lapply(cv_null, function (df) {quantile(df, probs=c(0.025, 0.975), type=2)})
 
-# Check whether patterNP of connection are non-random
+# Check whether pattern of connections is non-random
 par(mfrow=c(2, 1))
 
-# histogram of null CVs
+# Create a list to store the histograms
+hist_cvs <- list()
+
+# Create histograms for each element in cv_null
 for (i in seq_along(cv_null)) {
   hist_cvs[[i]] <- hist(cv_null[[i]], 
-                        breaks=50, 
+                        breaks=50,
+                        xlim = c(min(cv_null[[i]]), max(cv_obs[[i]] + 10)),
                         col='grey70',
-                        main = 'Restrictive null model',
+                        main = NULL,
                         xlab="Null CV SRI")
-  # empirical CV
+  
+  # Add lines for empirical CV, 2.5% CI, and 97.5% CI
   abline(v= cv_obs[[i]], col="red")
-  # 2.5% CI
   abline(v= cv_ci[[i]], col="blue")
-  # 97.5% CI
   abline(v= cv_ci[[i]], col="blue")
 }
 

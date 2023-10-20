@@ -29,11 +29,6 @@ kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
 list_years <- readRDS("list_years.RData") # Data listed into periods
 
-# Read file in to retain only HI IDs
-list_HI_years <- readRDS("list_years_HI.RData")
-kov_HI <- readRDS("kov_HI.RDS") 
-nxn_HI <- readRDS("nxn_HI.RData") 
-
 # Transforming SRI similarity into distance
 dolp_dist <- lapply(nxn, function(df) {
   df + 0.00001
@@ -80,33 +75,33 @@ age_list <- lapply(list_sexage_years, function(df) {
 })
 
 # Boat similarity matrices
-Hactivity_list <- function(df, Hactivity) {
-  
-  ## Empty matrix to store boat similarity
-  num_ID <- length(unique(df$Code))
-  Hactivity_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
-  
-  # Fill in similarity of boat activity
-  for (i in 1:num_ID) {
-    for (j in 1:num_ID) {
-      Hactivity_matrix[i, j] <- abs(Hactivity[i] - Hactivity[j])
-    }
-  }
-  return(Hactivity_matrix)
-}
-boat_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Boats)
-line_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Lines)
-pot_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.CrabPots)
-## pred & density 
-### Boat
-boat_density <- sum(Hactivity_data$X.Boats)/length(Hactivity_data$X.Boats)
-boat_pred <- sd(Hactivity_data$X.Boats)/mean(Hactivity_data$X.Boats)
-### Line
-line_density <- sum(Hactivity_data$X.Lines)/length(Hactivity_data$X.Lines)
-line_pred <- sd(Hactivity_data$X.Lines)/mean(Hactivity_data$X.Lines)
-### CrabPot
-pot_density <- sum(Hactivity_data$X.CrabPots)/length(Hactivity_data$X.CrabPots)
-pot_pred <- sd(Hactivity_data$X.CrabPots)/mean(Hactivity_data$X.CrabPots)
+# Hactivity_list <- function(df, Hactivity) {
+#   
+#   ## Empty matrix to store boat similarity
+#   num_ID <- length(unique(df$Code))
+#   Hactivity_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
+#   
+#   # Fill in similarity of boat activity
+#   for (i in 1:num_ID) {
+#     for (j in 1:num_ID) {
+#       Hactivity_matrix[i, j] <- abs(Hactivity[i] - Hactivity[j])
+#     }
+#   }
+#   return(Hactivity_matrix)
+# }
+# boat_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Boats)
+# line_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Lines)
+# pot_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.CrabPots)
+# ## pred & density 
+# ### Boat
+# boat_density <- sum(Hactivity_data$X.Boats)/length(Hactivity_data$X.Boats)
+# boat_pred <- sd(Hactivity_data$X.Boats)/mean(Hactivity_data$X.Boats)
+# ### Line
+# line_density <- sum(Hactivity_data$X.Lines)/length(Hactivity_data$X.Lines)
+# line_pred <- sd(Hactivity_data$X.Lines)/mean(Hactivity_data$X.Lines)
+# ### CrabPot
+# pot_density <- sum(Hactivity_data$X.CrabPots)/length(Hactivity_data$X.CrabPots)
+# pot_pred <- sd(Hactivity_data$X.CrabPots)/mean(Hactivity_data$X.CrabPots)
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -127,7 +122,6 @@ return(aux)
 }
 
 aux <- aux_data(list_years)
-aux_HI <- aux_data(list_HI_years)
 
 # Categorize ID to Foraging
 ID_forg <- function(aux_data) {
@@ -143,7 +137,6 @@ return(IDbehav)
 }
 
 IDbehav <- ID_forg(aux)
-IDbehav_HI <- ID_forg(aux_HI)
 
 # HI behaviors should be partitioned into 3 different types---------------------
 #' BG = Beg: F, G
@@ -160,7 +153,6 @@ subset_HI <- function(aux_data) {
 }
 
 aux <- subset_HI(aux)
-aux_HI <- subset_HI(aux_HI)
 
 # Categorize DiffHI to IDs
 diff_raw <- function(aux_data) {
@@ -171,7 +163,6 @@ rawHI_diff <- lapply(aux_data, function(df) {
 })}
 
 rawHI_diff <- diff_raw(aux)
-rawHI_diff_HI <- diff_raw(aux_HI)
 
 # Create a frequency count for each HI behavior
 get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
