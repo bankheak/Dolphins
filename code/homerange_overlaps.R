@@ -24,6 +24,7 @@ library(patchwork) # align different plots
 
 # Read in file
 list_years <- readRDS("list_years.RData")
+list_years_sexage <- readRDS("list_years_sexage.RData")
 
 # Transform coordinate data into a Spatial Points Dataframe in km
 create_coord_data <- function(list_years) {
@@ -47,6 +48,7 @@ create_coord_data <- function(list_years) {
   return(dolph.sp)
 }
 dolph.sp <- create_coord_data(list_years)
+dolph.sp <- create_coord_data(list_years_sexage)
 
 # Visualize data extent
 vis.sf <- function(dolph.sp) {
@@ -96,6 +98,7 @@ kov <- create_kov(kernel)
 
 # Save HRO
 saveRDS(kov, "kov.RDS")
+saveRDS(kov, "kov_sexage.RDS")
 
 ###########################################################################
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------

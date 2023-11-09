@@ -41,10 +41,19 @@ ILV <- read.csv("Individual_Level_Variables.csv")
 ## Sex
 ID_sex <- setNames(ILV$Sex, ILV$Alias)
 orig_data$Sex <- ID_sex[orig_data$Code]
+
 ## Age
 ID_birth <- setNames(ILV$BirthYear, ILV$Alias)
 orig_data$Birth <- ID_birth[orig_data$Code]
-orig_data$Age <- as.numeric(as.character(orig_data$Year)) - as.numeric(as.character(orig_data$Birth))
+orig_data$Age <- as.numeric(as.character(orig_data$Year)) - 
+  as.numeric(as.character(orig_data$Birth))
+
+## Genetic relatedness
+ID_mom <- setNames(ILV$Mom, ILV$Alias)
+ID_dad <- setNames(ILV$Dad, ILV$Alias)
+orig_data$Mom <- ID_mom[orig_data$Code]
+orig_data$Dad <- ID_dad[orig_data$Code]
+
 ## Human
 # human_data_subset <- human_data[, c("SightingFID", "X.Boats", "X.Lines", "X.CrabPots")]
 # orig_data <- merge(orig_data, human_data_subset, by = "SightingFID", all = TRUE)
@@ -55,6 +64,9 @@ orig_data$Age <- as.numeric(as.character(orig_data$Year)) - as.numeric(as.charac
 # Get rid of any data with no location data
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
+
+# Fix coding individuals
+sample_data$Code <- ifelse(sample_data$Code == "1312", "F222", sample_data$Code)
 
 # Now split up data 7 years before and after HAB
 sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]

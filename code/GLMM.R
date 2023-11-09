@@ -1,7 +1,7 @@
 # 'Multi-network Network-Based Diffusion Analysis
 
 ###########################################################################
-# MRQAP TESTS
+# MCMC GLMM TESTS
 ###########################################################################
 
 # Set working directory here
@@ -12,8 +12,9 @@ setwd("../data")
 
 ## load all necessary packages
 library(ade4) # Look at Dai Shizuka/Jordi Bascompte
-require(asnipe) # mrqap.dsp
+library(asnipe) # mrqap.dsp
 library(assortnet) # associative indices
+library(kinship2) # genetic relatedness
 library(ggplot2) # Visualization
 library(doParallel) # For faster coding
 library(MCMCglmm) # MCMC models
@@ -21,7 +22,7 @@ library(brms) # Baysian
 library(nimble) # For MCMC
 library(mcmcplots) # For MCMC plots
 library(MCMCvis)
-source("attach.nimble_v2.R")
+source("../code/attach.nimble_v2.R")
 
 
 # Read in social association matrix and listed data
@@ -29,7 +30,13 @@ kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
 list_years <- readRDS("list_years.RData") # Data listed into periods
 
+# Read in data with sex and age data
+kov_sexage <- readRDS("kov_sexage.RDS")  # Home range overlap
+nxn_sexage <- readRDS("nxn_sexage.RData") # Association Matrix
+list_years_sexage <- readRDS("list_years_sexage.RData") # Data listed into periods
+
 # Transforming SRI similarity into distance
+nxn <- nxn_sexage
 dolp_dist <- lapply(nxn, function(df) {
   df + 0.00001
   1 - df
@@ -38,7 +45,7 @@ dolp_dist <- lapply(nxn, function(df) {
 })
 
 # Sex similarity matrix
-sex_list <- lapply(list_sexage_years, function(df) {
+sex_list <- lapply(list_years_sexage, function(df) {
   
   ## Empty matrix to store sex similarity
   num_ID <- length(unique(df$Code))
@@ -59,13 +66,13 @@ sex_list <- lapply(list_sexage_years, function(df) {
 })
 
 # Age similarity matrix
-age_list <- lapply(list_sexage_years, function(df) {
+age_list <- lapply(list_years, function(df) {
   
   ## Empty matrix to store sex similarity
   num_ID <- length(unique(df$Code))
   age_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
   
-  # Fill in similarity of sex
+  # Fill in dissimilarity of sex
   for (i in 1:num_ID) {
     for (j in 1:num_ID) {
       age_matrix[i, j] <- abs(df$Age[i] - df$Age[j])
@@ -74,7 +81,17 @@ age_list <- lapply(list_sexage_years, function(df) {
   return(age_matrix)
 })
 
-# Boat similarity matrices
+# Genetic relatedness matrix
+GR <- lapply(list_years_sexage, function(df) {
+  
+  pedigree_matrix <- list_years_sexage[, c("Code", "Mom", "Dad")]
+  kin_matrix <- kinship(pedigree_matrix)
+  
+  return(kin_matrix)
+  
+})
+
+## Boat similarity matrices
 # Hactivity_list <- function(df, Hactivity) {
 #   
 #   ## Empty matrix to store boat similarity
@@ -106,8 +123,7 @@ age_list <- lapply(list_sexage_years, function(df) {
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
 aux <- lapply(list_years, function(df) {
-  data.frame(
-    Code = df$Code,
+  data.frame(Code = df$Code,
     Behaviors = df$Behaviors,
     HumanInteraction = df$HumanInteraction,
     ConfHI = df$ConfHI)})
@@ -122,6 +138,7 @@ return(aux)
 }
 
 aux <- aux_data(list_years)
+aux <- aux_data(list_years_sexage)
 
 # Categorize ID to Foraging
 ID_forg <- function(aux_data) {
@@ -209,7 +226,6 @@ return(rawHI)
 }
 
 rawHI <- clump_behav(aux)
-rawHI_HI <- clump_behav(aux_HI)
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
@@ -223,7 +239,6 @@ return(IDbehav_HI)
 }
 
 IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
-IDbehav_HI_HI <- create_IDbehav_HI(IDbehav_HI, rawHI_HI)
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -238,7 +253,6 @@ Prop_HI <- function(IDbehav) {
 }
 
 prob_HI <- Prop_HI(IDbehav_HI)
-prop_HI_HI <- Prop_HI(IDbehav_HI_HI)
 prob_BG <- Prop_HI(IDbehav_BG)
 prob_SD <- Prop_HI(IDbehav_SD)
 prob_FG <- Prop_HI(IDbehav_FG)
@@ -253,19 +267,12 @@ dis_matr <- function(Prop_HI) {
   return(dissimilarity_HI)
 }
 
-dist_HI <- dis_matr(prob_HI)
-dist_HI_HI <- dis_matr(prop_HI_HI)
 dist_BG <- dis_matr(prob_BG)
 dist_SD <- dis_matr(prob_SD)
 dist_FG <- dis_matr(prob_FG)
 
-
 ###########################################################################
-# PART 2: Run Diagnostics
-
-
-###########################################################################
-# PART 3: Create MRQAP Models  ------------------------------------------------
+# PART 2: Create MRQAP Models  ------------------------------------------------
 
 # Check for collinearity 
 # Check if it is based off zeros
@@ -322,49 +329,71 @@ mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
 
 
 ###########################################################################
-# PART 4: Create MCMC GLMMs  ------------------------------------------------
+# PART 3: Create MCMC GLMMs  ------------------------------------------------
 
 # Write a Nimble model: SRI ~ HRO + SEX + AGE + GR
 model1 <- nimbleCode({
   
   #Priors
-  Intercept ~ dunif(-10, 10)
-  x <- seq(0, 1, length.out = 21)
-  Slope_HRO ~ dbeta(x, 1, 1)
-  Slope_SEX ~ dbeta(x, 1, 1)
-  Slope_AGE ~ dbeta(x, 1, 1)
-  Slope_GR ~ dbeta(x, 1, 1)
-  Sigma ~ dunif(0, 10)
   
-  for(i in 1:n.obs){
+    ## Random Effects
+    IJ_ovrall ~ dt(mu=0, sigma=1, df=1)
+    Var_IJ ~ T(dt(mu=0, sigma=1, df=1), 0, )
+  
+    ## ILV Effects
+    HRO_Effect ~ dt(mu=0, sigma=1, df=1)
+    SEX_Effect ~ dt(mu=0, sigma=1, df=1)
+    AGE_Effect ~ dt(mu=0, sigma=1, df=1)
+    GR_Effect ~ dt(mu=0, sigma=1, df=1)
+    Obs.Err ~ T(dt(mu=0, sigma=1, df=1), 0, ) 
     
-    #Process Model: 
-    Exp.SRI[i] <- Intercept + Slope_HRO * HRO[i] + 
-      Slope_SEX * SEX[i] + Slope_AGE * AGE[i] + Slope_GR * GR[i] 
-    
-    #Observation Model (Likelihood)
-    SRI[i] ~ dbeta(mean = Exp.SRI[i], sd = Sigma)
+  for(i in 1:n.rows){
+    for (j in 1:n.cols) {
+      
+      # Intercept Prior
+      IJ_Random[i, j] ~ dnorm(mean = IJ_ovrall, sd = Var_IJ)
+      
+      #Impute missing sexes & ages:
+      SEX[i, j] ~ dbern(prob = mean(na.omit(SEX))) # Change this based on the age and association?
+      AGE[i, j] ~ dnorm(mean = mean(na.omit(AGE)), sd = sd(na.omit(AGE)))
+      
+      # Process Model
+      SRI.Exp[i, j] <- IJ_Random[i, j] + HRO[i, j]*HRO_Effect + 
+        SEX[i, j]*SEX_Effect + AGE[i, j]*AGE_Effect + GR[i, j]*GR_Effect
+      
+      # Observation Model (Likelihood)
+      SRI[i, j] ~ dbeta(a = SRI.Exp[i, j]*(SRI.Exp[i, j]*(1-SRI.Exp[i, j])/(Obs.Err[i, j]**2)-1), 
+                     b = (1-SRI.Exp[i, j])*(SRI.Exp[i, j]*(1-SRI.Exp[i, j])/(Obs.Err[i, j]**2)-1))
+      
+    }#j
     
   }#i
   
-})#model
+})#model4
 
 
-# Parameters monitored
-parameters <- c("Intercept", "Slope", "Sigma")
+# Parameters monitored (are there any new parameters to include?)
+parameters <- c("IJ_ovrall","Var_IJ","IJ_Random",
+                "HRO_Effect", "SEX_Effect", "AGE_Effect", 
+                "GR_Effect", "Obs.Err")
 
 # MCMC Settings
-ni <- 40000 # Iterations
-nt <- 40 # Thinning
-nb <- 20000 # Burn-in
-nc <- 3 # Number of chains
+ni <- 40000
+nt <- 40
+nb <- 20000
+nc <- 3
 
 # Data
+Period <- 1
 
-nimble.data = list(Mass = c(scale(penguins_complete$body_mass_g)),
-                   Bill_Length = c(scale(penguins_complete$bill_length_mm)))
+nimble.data = list(SRI = nxn[[Period]],
+                   HRO = kov[[Period]],
+                   SEX = sex_list[[Period]],
+                   AGE = age_list[[Period]],
+                   GR = gr_list[[Period]])
 
-nimble.constants = list(n.obs = length(penguins_complete$bill_length_mm))
+nimble.constants = list(n.rows = nrow(nxn[[Period]]),
+                        n.cols = ncol(nxn[[Period]]))
 
 mcmc.output <- nimbleMCMC(code = model1,
                           data = nimble.data,
@@ -380,35 +409,35 @@ mcmc.output <- nimbleMCMC(code = model1,
 
 attach.nimble(mcmc.output$samples)
 
-# Look for if convergence happened (if different chains are sitting on top of one another)
 MCMCtrace(object = mcmc.output$samples,
           pdf = FALSE, # no export to PDF
           ind = TRUE, # separate density lines per chain
-          params = "Intercept")
+          params = "AGE_Effect")
 
 # Gelman-Rubin diagnostic (AKA RHat or PSRF)
-gelman.diag(mcmc.output$samples) 
-#' How much the precision of the posterior distributions would change with 
-#' infinite interations (1.05 or lower is good)
-autocorr.plot(mcmc.output$samples)
-#' Want to see a drop to zero before 1
+gelman.diag(mcmc.output$samples)
 
 # Visualize all of the relevant plots at the same time:
 mcmcplot(mcmc.output$samples)
 
 # Summarize the posterior distributions:
-hist(Slope)
+hist(AGE_Effect)
+
+
+
+
 
 # Prepare dataframe for MCMC
-num_nodes <- lapply(nxn_sexage, function(df) {dim(df)[1]})
+num_nodes <- lapply(nxn, function(df) {dim(df)[1]})
 
 ## Seperate IDs into i and j
 node_ids_i <- lapply(num_nodes, function(df) {matrix(rep(1:df, df), df, df)})
 node_ids_j <- lapply(node_ids_i, function(df) {t(df)})
 
 df_list <- list()  
-for (i in seq_along(nxn_sexage)) {
-  df_dolp <- data.frame(edge_weight = nxn_sexage[[i]][upper.tri(nxn_sexage[[i]])], 
+i<-1
+for (i in seq_along(nxn)) {
+  df_dolp <- data.frame(edge_weight = nxn[[i]][upper.tri(nxn[[i]])], 
                         age_difference = age_list[[i]][upper.tri(age_list[[i]])],
                         sex_difference = sex_list[[i]][upper.tri(sex_list[[i]])],
                         HI_differences = dist_HI_sexage[[i]][upper.tri(dist_HI_sexage[[i]])],

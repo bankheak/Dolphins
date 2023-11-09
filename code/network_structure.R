@@ -10,9 +10,6 @@ setwd("../data")
 # Add helpful functions
 source("../code/functions.R") # edgelist function and diff_raw(subset_HI())
 
-###########################################################################
-# PART 1: Structure Network ------------------------------------------------
-
 ## load all necessary packages
 library(igraph) # Measure centrality here
 library(tnet) # For weights
@@ -23,6 +20,7 @@ library(ggplot2)
 library(gridExtra) # To combine plots
 library(reshape) # To rearrange a data frame
 library(cowplot) # To add a legend
+library(tidyverse) 
 
 # Read in social association matrix
 nxn <- readRDS("nxn.RData")
@@ -31,6 +29,9 @@ list_years <- readRDS("list_years.RData")
 # Read in overlapped social association matrix
 nxn_ovrlap <- readRDS("nxn_ovrlap.RData")
 list_years_ovrlap <- readRDS("list_years_ovrlap.RData")
+
+###########################################################################
+# PART 1: Structure Network ------------------------------------------------
 
 ## Create social network
 ig_func <- function(nxn) {
@@ -133,122 +134,135 @@ for (i in seq_along(metric)) {
   return(metric)
   }
 
-# Insert the transitioned IDs to the first period
-transitioned_IDs <- setdiff(row_names_HI[[2]], row_names_HI[[1]])
-all_HI_IDs <- c(transitioned_IDs, row_names_HI[[1]])
-
 # Betweenness centrality
-between <- lapply(el, function (df) {betweenness_w(df, alpha=1)})
+between <- lapply(el, function (df) {betweenness_w(df, alpha = 1)})
 between_diffs <- get_names(nxn, between)
-between_diffs_HI <- lapply(seq_along(between_diffs), function(i) {
-  df <- between_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
-  return(df_new)
-})
+# between_diffs_HI <- lapply(seq_along(between_diffs), function(i) {
+#   df <- between_diffs[[i]]
+#   df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
+#   return(df_new)
+# })
 compare_between <- merge(
-  between_diffs_HI[[1]], 
-  between_diffs_HI[[2]], 
+  between_diffs[[1]], 
+  between_diffs[[2]], 
   by.x = "node", 
   by.y = "node"
 )
-colnames(compare_between) <- c("ID", "Period.1", "Period.2")
+colnames(compare_between) <- c("ID", "Before.HAB", "After.HAB")
 compare_between[, c(2, 3)] <- sapply(compare_between[, c(2, 3)], as.numeric)
 
 # Degree and strength centrality
 strength <- lapply(el, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
 strength_diffs <- get_names(nxn, strength)
-strength_diffs_HI <- lapply(seq_along(strength_diffs), function(i) {
-  df <- strength_diffs[[i]]
-  df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
-  return(df_new)
-})
+# strength_diffs_HI <- lapply(seq_along(strength_diffs), function(i) {
+#   df <- strength_diffs[[i]]
+#   df_new <- as.data.frame(df[df[, 1] %in% all_HI_IDs, , drop = FALSE])
+#   return(df_new)
+# })
 compare_strength <- merge(
-  strength_diffs_HI[[1]], 
-  strength_diffs_HI[[2]], 
+  strength_diffs[[1]], 
+  strength_diffs[[2]], 
   by.x = "node", 
   by.y = "node"
 )
-colnames(compare_strength) <- c("ID", "Period.1_degree", "Period.1_strength", "Period.2_degree", "Period.2_strength")
+colnames(compare_strength) <- c("ID", "Before.HAB_degree", "Before.HAB_strength", "After.HAB_degree", "After.HAB_strength")
 compare_strength[, c(2:5)] <- sapply(compare_strength[, c(2:5)], as.numeric)
 
 # Look at all of the local metrics together
-HI_data <-  diff_raw(subset_HI(list_years))
+HI_data <-  subset_HI(list_years)
 
 ## Add a column containing HI type
-names_BG <- unlist(lapply(HI_data, function (df) {
-  as.vector(df$Code[df$DiffHI == "BG" & df$Freq > 0])}))
-names_SD <- unlist(lapply(HI_data, function (df) {
-  as.vector(df$Code[df$DiffHI == "SD" & df$Freq > 0])}))
-names_FG <- unlist(lapply(HI_data, function (df) {
-  as.vector(df$Code[df$DiffHI == "FG" & df$Freq > 0])}))
+names_BG <- lapply(HI_data, function (df) {
+  as.vector(unique(df$Code[df$DiffHI == "BG"]))})
+names_SD <- lapply(HI_data, function (df) {
+  as.vector(unique(df$Code[df$DiffHI == "SD"]))})
+names_FG <- lapply(HI_data, function (df) {
+  as.vector(unique(df$Code[df$DiffHI == "FG"]))})
 
 # Combine the data
 local_metrics_HI <- data.frame(ID = compare_between$ID,
-                               Period = c(rep("Period.1", nrow(compare_between)), rep("Period.2", nrow(compare_between))),
-                               Between = c(compare_between$Period.1, compare_between$Period.2),
-                               Strength = c(compare_strength$Period.1_strength, compare_strength$Period.2_strength))
+                               Period = c(rep("1-Before.HAB", nrow(compare_between)), rep("2-After.HAB", nrow(compare_between))),
+                               Between = c(compare_between$Before.HAB, compare_between$After.HAB),
+                               Strength = c(compare_strength$Before.HAB_strength, compare_strength$After.HAB_strength))
+
+# Sort the dataframe by ID and Period
+local_metrics_HI <- local_metrics_HI[order(local_metrics_HI$ID, local_metrics_HI$Period), ]
+
+# Create a new variable that represents the order of the periods
+local_metrics_HI$Period_order <- as.numeric(local_metrics_HI$Period == "2-After.HAB")
+
 
 ## Add a rown to compare the averages of each metric with HI IDs
-avg_metrics <- data.frame(ID = "Average",
-                          Period = c("Period.1", "Period.2"),
-                          Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
-                          Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
+# avg_metrics <- data.frame(ID = "Average",
+#                           Period = c("Before.HAB", "After.HAB"),
+#                           Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
+#                           Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
 
-local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
+# local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
 
 # Add HI_type column
-local_metrics_HI$HI_type <- ifelse(local_metrics_HI$ID %in% names_BG, "BG", 
-                            ifelse(local_metrics_HI$ID %in% names_SD, "SD", 
-                            ifelse(local_metrics_HI$ID %in% names_FG, "FG", "NA")))
+# Assuming names_BG and names_SD are your lists of IDs for BG and SD for each Period
+
+local_metrics_HI$HI_type <- ifelse(local_metrics_HI$ID %in% names_BG[[1]] & local_metrics_HI$Period == "1-Before.HAB", "BG",
+                                   ifelse(local_metrics_HI$ID %in% names_SD[[1]] & local_metrics_HI$Period == "1-Before.HAB", "SD",
+                                          ifelse(local_metrics_HI$ID %in% names_FG[[1]] & local_metrics_HI$Period == "1-Before.HAB", "FG",
+                                                 ifelse(local_metrics_HI$ID %in% names_BG[[2]] & local_metrics_HI$Period == "2-After.HAB", "BG",
+                                                        ifelse(local_metrics_HI$ID %in% names_SD[[2]] & local_metrics_HI$Period == "2-After.HAB", "SD",
+                                                               ifelse(local_metrics_HI$ID %in% names_FG[[2]] & local_metrics_HI$Period == "2-After.HAB", "FG", "NA"))))))
+
 
 # Reshape the data from wide to long format
-local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
-colnames(local_metrics_HI) <- c("ID", "HI_type", "Period", "Metric", "value")
+# local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
+# colnames(local_metrics_HI) <- c("ID", "HI_type", "Period", "Metric", "value")
 
 # Make sure metric is in character
-local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
+# local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
 
 # Get rid of the average values
-local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
+# local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
 
 # Only look at individuals that transitioned
-local_met_trans <- local_met_HI[local_met_HI$ID %in% transitioned_IDs, ]
+local_metrics_HI$trans0 <- ifelse(local_metrics_HI$Period == "1-Before.HAB" & local_metrics_HI$HI_type == "NA", 1, 0)
+local_metrics_HI$trans1 <- ifelse(local_metrics_HI$Period == "2-After.HAB" & local_metrics_HI$HI_type != "NA", 1, 0)
+# Calculate the sum of trans0 and trans1 for each ID
+sum_data <- aggregate(cbind(trans0, trans1) ~ ID, data = local_metrics_HI, sum)
+local_metrics_HI$trans <- rep((sum_data$trans0 + sum_data$trans1), each = 2)
+local_mets_HI <- local_metrics_HI[local_metrics_HI$trans == 2, ]
 
+# Make paired data for each ID
+local_mets_HI$Pairs <- rep(1:length(unique(local_mets_HI$ID)), each = 2)
+
+i <- 1
 # Plot individual metrics
 plot_list <- list()
-unique_metrics <- unique(local_met_HI$Metric)
+unique_metrics <- colnames(local_metrics_HI[, c(3,4)])
 
 for (i in seq_along(unique_metrics)) {
-  metric <- unique_metrics[i]
+  metric <- local_metrics_HI[, unique_metrics[i]]
   
-  # Filter data for the current metric
-  metric_data <- local_met_HI[local_met_HI$Metric == metric,]
+  # # Get the corresponding value for NA, Period.1 and the current metric
+  # value_na_period1 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
+  #                                              local_metrics_HI$Period == "Before.HAB" & 
+  #                                              local_metrics_HI$Metric == metric]
+  # 
+  # # Get the corresponding value for NA, Period.2 and the current metric
+  # value_na_period2 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
+  #                                              local_metrics_HI$Period == "After.HAB" & 
+  #                                              local_metrics_HI$Metric == metric]
   
-  # Get the corresponding value for NA, Period.1 and the current metric
-  value_na_period1 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
-                                               local_metrics_HI$Period == "Period.1" & 
-                                               local_metrics_HI$Metric == metric]
-  
-  # Get the corresponding value for NA, Period.2 and the current metric
-  value_na_period2 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
-                                               local_metrics_HI$Period == "Period.2" & 
-                                               local_metrics_HI$Metric == metric]
   
   # Create the plot with violin plot, boxplot, and points
-  current_plot <- ggplot(metric_data, aes(x = HI_type, y = value, color = Period, label = ID)) +
+  current_plot <- ggplot(local_mets_HI, aes(Period, metric, fill = Period)) + 
     geom_violin(position = position_dodge(width = 0.9), trim = FALSE, alpha = 0.5) +
     geom_boxplot(position = position_dodge(width = 0.9), width = 0.2, alpha = 0.5) +
-    geom_point(aes(shape = ifelse(ID %in% transitioned_IDs, "Transitioned", "Not Transitioned")), 
-               position = position_dodge(width = 0.9), size = 3) +
-    scale_shape_manual(name = "Transitioned", values = c("Transitioned" = 1, "Not Transitioned" = 2)) +
-    scale_color_manual(values = c("Period.1" = "red", "Period.2" = "blue")) +
-    labs(x = "HI Type", y = NULL, color = "Period") +
-    ggtitle(paste(metric)) +
-    theme(panel.background = element_blank()) +
-    geom_hline(yintercept = value_na_period1, col = "red", linetype = "dashed") +
-    geom_hline(yintercept = value_na_period2, col = "blue", linetype = "dashed") +
-    theme(legend.position = "none") +
-    geom_text(position = position_dodge(width = 0.9), vjust = -0.5)
+    geom_line(aes(group = Pairs), linetype = 2, linewidth = 1.3) + 
+    geom_point(aes(fill = Period, group = Pairs, shape = HI_type), size = 5) +
+    scale_shape_manual(values = c("BG" = 1, "SD" = 2, "FG" = 5, "NA" = 4)) +
+    scale_x_discrete(labels = c("1-Before.HAB" = "Before HAB", "2-After.HAB" = "After HAB")) +
+    scale_y_discrete(labels = unique_metrics[i]) +
+    labs(y = unique_metrics[i]) +
+    theme(panel.background = element_blank())
+  
   
   plot_list[[i]] <- current_plot
 }
@@ -403,8 +417,8 @@ for (i in seq_along(dolp_ig)) {
 }
 
 # Generate a vector of colors based on the number of unique memberships
+V(dolp_ig[[i]])$color <- NA
 for (i in seq_along(dolp_ig)) {
-  V(dolp_ig[[i]])$color <- NA
   col <- rainbow(max(newman[[i]]$membership))
   
   for (j in 1:max(newman[[i]]$membership)){
