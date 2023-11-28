@@ -7,9 +7,6 @@
 # Set working directory here
 setwd("../data")
 
-###########################################################################
-# PART 1: Create HI Disimilarity Matrix  ------------------------------------------------
-
 ## load all necessary packages
 library(ade4) # Look at Dai Shizuka/Jordi Bascompte
 library(asnipe) # mrqap.dsp
@@ -17,6 +14,8 @@ library(assortnet) # associative indices
 library(kinship2) # genetic relatedness
 library(ggplot2) # Visualization
 library(doParallel) # For faster coding
+library(abind) # array
+library(statip) # dbern
 library(MCMCglmm) # MCMC models
 library(brms) # Baysian
 library(nimble) # For MCMC
@@ -26,63 +25,64 @@ source("../code/attach.nimble_v2.R")
 
 
 # Read in social association matrix and listed data
+dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
+dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
+dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
 kov <- readRDS("kov.RDS")  # Home range overlap
-nxn <- readRDS("nxn.RData") # Association Matrix
-list_years <- readRDS("list_years.RData") # Data listed into periods
+nxn <- readRDS("nxn_ovrlap.RData") # Association Matrix
+list_years <- readRDS("list_years_ovrlap.RData") # Data listed into periods
 
-# Read in data with sex and age data
-kov_sexage <- readRDS("kov_sexage.RDS")  # Home range overlap
-nxn_sexage <- readRDS("nxn_sexage.RData") # Association Matrix
-list_years_sexage <- readRDS("list_years_sexage.RData") # Data listed into periods
-
-# Transforming SRI similarity into distance
-nxn <- nxn_sexage
-dolp_dist <- lapply(nxn, function(df) {
-  df + 0.00001
-  1 - df
-  ## Remove the redundant cells and the diagonal 
-  as.dist(df)
+# Fix sex so that probable is assigned
+list_years <- lapply(list_years, function(df) {
+  df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
+                   ifelse(df$Sex == "Probable Male", "Male", df$Sex))
+  return(df)
 })
+# Now make a sex and age data frame
+ILV_df <- list_years[[2]][!duplicated(list_years[[2]][, "Code"]), c("Code", "Sex", "Age")]
+ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
+       ifelse(ILV_df$Sex == "Male", 1, NA))
 
-# Sex similarity matrix
-sex_list <- lapply(list_years_sexage, function(df) {
-  
-  ## Empty matrix to store sex similarity
-  num_ID <- length(unique(df$Code))
-  sex_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
-  
-  # Fill in similarity of sex
-  for (i in 1:num_ID) {
-    for (j in 1:num_ID) {
-      if (df$Sex[i] == df$Sex[j]) {
-        sex_matrix[i, j] <- 1  # Same sex
-      } else {
-        sex_matrix[i, j] <- 0  # Different sex
-      }
-    }
-  }
-  
-  return(sex_matrix)
-})
+# Smaller sample data
+dist_BG <- lapply(dist_BG, function(ls) ls[c(1:20),c(1:20)])
+dist_FG <- lapply(dist_FG, function(ls) ls[c(1:20),c(1:20)])
+dist_SD <- lapply(dist_SD, function(ls) ls[c(1:20),c(1:20)])
+kov <- kov[c(1:20),c(1:20)]
+nxn <- lapply(nxn, function(ls) ls[c(1:20),c(1:20)])
+ILV_df <- ILV_df[c(1:20),]
 
-# Age similarity matrix
-age_list <- lapply(list_years, function(df) {
+# Prepare random effect for MCMC
+num_nodes <- lapply(nxn, function(df) dim(df)[1])
+
+# Separate IDs into i and j
+node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
+node_ids_j <- lapply(node_ids_i, function(df) t(df))
+
+df_list <- vector("list", length = length(nxn))
+for (i in seq_along(nxn)) {
+  upper_tri <- upper.tri(nxn[[i]], diag = TRUE)
   
-  ## Empty matrix to store sex similarity
-  num_ID <- length(unique(df$Code))
-  age_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
+  df_dolp <- data.frame(
+    edge_weight = as.vector(nxn[[i]][upper_tri]),
+    node_id_1 = factor(as.vector(node_ids_i[[i]][upper_tri]), levels = 1:num_nodes[[i]]),
+    node_id_2 = factor(as.vector(node_ids_j[[i]][upper_tri]), levels = 1:num_nodes[[i]])
+  )
   
-  # Fill in dissimilarity of sex
-  for (i in 1:num_ID) {
-    for (j in 1:num_ID) {
-      age_matrix[i, j] <- abs(df$Age[i] - df$Age[j])
-    }
-  }
-  return(age_matrix)
-})
+  df_list[[i]] <- df_dolp
+}
+
+
+# Combine all data frames into a single data frame
+combined_df <- do.call(rbind, df_list)
+
+# Calculate the mean value for each individual
+mean_data <- aggregate(edge_weight ~ node_id_1, data = combined_df, FUN = mean)
+
+################################################################################
+# PART 1: Create HI Disimilarity Matrix  ------------------------------------------------
 
 # Genetic relatedness matrix
-GR <- lapply(list_years_sexage, function(df) {
+GR <- lapply(list_years, function(df) {
   
   pedigree_matrix <- list_years_sexage[, c("Code", "Mom", "Dad")]
   kin_matrix <- kinship(pedigree_matrix)
@@ -90,35 +90,6 @@ GR <- lapply(list_years_sexage, function(df) {
   return(kin_matrix)
   
 })
-
-## Boat similarity matrices
-# Hactivity_list <- function(df, Hactivity) {
-#   
-#   ## Empty matrix to store boat similarity
-#   num_ID <- length(unique(df$Code))
-#   Hactivity_matrix <- matrix(NA, nrow = num_ID, ncol = num_ID, dimnames = list(unique(df$Code), unique(df$Code)))
-#   
-#   # Fill in similarity of boat activity
-#   for (i in 1:num_ID) {
-#     for (j in 1:num_ID) {
-#       Hactivity_matrix[i, j] <- abs(Hactivity[i] - Hactivity[j])
-#     }
-#   }
-#   return(Hactivity_matrix)
-# }
-# boat_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Boats)
-# line_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.Lines)
-# pot_list <- Hactivity_list(df = Hactivity_data, Hactivity = Hactivity_data$X.CrabPots)
-# ## pred & density 
-# ### Boat
-# boat_density <- sum(Hactivity_data$X.Boats)/length(Hactivity_data$X.Boats)
-# boat_pred <- sd(Hactivity_data$X.Boats)/mean(Hactivity_data$X.Boats)
-# ### Line
-# line_density <- sum(Hactivity_data$X.Lines)/length(Hactivity_data$X.Lines)
-# line_pred <- sd(Hactivity_data$X.Lines)/mean(Hactivity_data$X.Lines)
-# ### CrabPot
-# pot_density <- sum(Hactivity_data$X.CrabPots)/length(Hactivity_data$X.CrabPots)
-# pot_pred <- sd(Hactivity_data$X.CrabPots)/mean(Hactivity_data$X.CrabPots)
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -138,7 +109,6 @@ return(aux)
 }
 
 aux <- aux_data(list_years)
-aux <- aux_data(list_years_sexage)
 
 # Categorize ID to Foraging
 ID_forg <- function(aux_data) {
@@ -196,15 +166,6 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
-
-saveRDS(IDbehav_BG, "IDbehav_BG.RData")
-saveRDS(IDbehav_FG, "IDbehav_FG.RData")
-saveRDS(IDbehav_SD, "IDbehav_SD.RData")
-
-# Not including zeros
-IDbehav_BG_nonzero <- get_IDHI("BG", IDbehav_HI, rawHI_diff_HI)
-IDbehav_SD_nonzero <- get_IDHI("SD", IDbehav_HI, rawHI_diff_HI)
-IDbehav_FG_nonzero <- get_IDHI("FG", IDbehav_HI, rawHI_diff_HI)
 
 # Clump all the HI behaviors together
 clump_behav <- function(aux_data) {
@@ -271,21 +232,25 @@ dist_BG <- dis_matr(prob_BG)
 dist_SD <- dis_matr(prob_SD)
 dist_FG <- dis_matr(prob_FG)
 
-###########################################################################
-# PART 2: Create MRQAP Models  ------------------------------------------------
+saveRDS(dist_BG, "dist_BG.RData")
+saveRDS(dist_SD, "dist_SD.RData")
+saveRDS(dist_FG, "dist_FG.RData")
+
+################################################################################
+# PART 2: Diagnostics ----------------------------------------------------------
 
 # Check for collinearity 
 # Check if it is based off zeros
 ## Create a list of predictor matrices
-predictor_matrices <- list(dist_HI[[year]], dist_Beg[[year]], 
-                           dist_Pat[[year]], dist_Dep[[year]])
+year <- 1
+predictor_matrices <- list(dist_BG[[year]], dist_FG[[year]], dist_SD[[year]])
 
 ## Calculate correlation matrix
 num_predictors <- length(predictor_matrices)
 correlation_matrix <- matrix(NA, nrow = num_predictors, ncol = num_predictors)
 
 for (i in 1:num_predictors) {
-  for (j in 1:num_predictors) {
+  for (j in (1+i):num_predictors) {
     mtest <- mantel.rtest(as.dist(predictor_matrices[[i]]), as.dist(predictor_matrices[[j]]), nrepet=999)
     correlation_matrix[i, j] <- mtest$obs
   }
@@ -294,88 +259,77 @@ for (i in 1:num_predictors) {
 ## Print the correlation matrix
 print(correlation_matrix) # It seems that BEG and HI are highly correlated
 
-# Set a number of permutations and year
-year <- 5
-Nperm <- 1000
-
-# Calculate QAP correlations for the association response matrix
-
-## Without sex and age included
-mrqap_full <- mrqap.dsp(nxn[[year]] ~ kov[[year]] + dist_HI[[year]],
-                   randomisations = Nperm,
-                   intercept = FALSE,
-                   test.statistic = "beta")
-
-## Without sex and age included and with behaviors divided
-mrqap_sepHI <- mrqap.dsp(nxn[[year]] ~ kov[[year]] +
-                     dist_Beg[[year]] + dist_Dep[[year]] + dist_Pat[[year]],
-                   randomisations = Nperm,
-                   intercept = FALSE,
-                   test.statistic = "beta")
-
-## With sex and age included
-mrqap_sexage <- mrqap.dsp(nxn_sexage[[year]] ~ kov_sexage[[year]] + 
-                            sex_list[[year]] + age_list[[year]] + 
-                            dist_HI_sexage[[year]],
-                   randomisations = Nperm,
-                   intercept = FALSE,
-                   test.statistic = "beta")
-
-## With only HI individuals included
-mrqap_HIonly <- mrqap.dsp(nxn_HI[[year]] ~ kov_HI + dist_HI_HI[[year]],
-                        randomisations = Nperm,
-                        intercept = FALSE,
-                        test.statistic = "beta")
-
 
 ###########################################################################
 # PART 3: Create MCMC GLMMs  ------------------------------------------------
 
-# Write a Nimble model: SRI ~ HRO + SEX + AGE + GR
+# Write a Nimble model: SRI ~ HRO + SEX + AGE + GR + HAB(BP + FG + SD)
 model1 <- nimbleCode({
   
   #Priors
-  
-    ## Random Effects
-    IJ_ovrall ~ dt(mu=0, sigma=1, df=1)
-    Var_IJ ~ T(dt(mu=0, sigma=1, df=1), 0, )
   
     ## ILV Effects
     HRO_Effect ~ dt(mu=0, sigma=1, df=1)
     SEX_Effect ~ dt(mu=0, sigma=1, df=1)
     AGE_Effect ~ dt(mu=0, sigma=1, df=1)
-    GR_Effect ~ dt(mu=0, sigma=1, df=1)
-    Obs.Err ~ T(dt(mu=0, sigma=1, df=1), 0, ) 
+    #GR_Effect ~ dt(mu=0, sigma=1, df=1)
+    Rand.Err ~ T(dt(mu=0, sigma=1, df=1), 0, )
     
-  for(i in 1:n.rows){
-    for (j in 1:n.cols) {
+    ## HI Effects
+    for (p in 1:n.per) {
+      BP_Effect[p] ~ dt(mu=0, sigma=1, df=1)
+      FG_Effect[p] ~ dt(mu=0, sigma=1, df=1)
+      SD_Effect[p] ~ dt(mu=0, sigma=1, df=1)
+      Obs.Err[p] ~ T(dt(mu=0, sigma=1, df=1), 0, ) 
+    } #p
+    
+    # Run through matrix
+    for(i in 1:n.ind){
       
-      # Intercept Prior
-      IJ_Random[i, j] ~ dnorm(mean = IJ_ovrall, sd = Var_IJ)
+    # Estimate unknowns
+    SEX[i] ~ dbern(prob = 0.5) # Same probability for female or male
+    AGE[i] ~ dunif(0, 56) # uniform probability for all ages
+    AGE.Est[i] <- floor(AGE[i]) # Get a whole number
+    
+    # Random effect term
+    u[i] ~ dnorm(mean = 0, sd = Rand.Err)
+    
+    for (j in (1+i):n.ind) {
+      
+      # Intercept Prior for each ID
+      IJ_Random[i, j] <- (u[i]+ u[j])
       
       #Impute missing sexes & ages:
-      SEX[i, j] ~ dbern(prob = mean(na.omit(SEX))) # Change this based on the age and association?
-      AGE[i, j] ~ dnorm(mean = mean(na.omit(AGE)), sd = sd(na.omit(AGE)))
+      SEX.SIM[i, j] <- (SEX[i] == SEX[j])
+      AGE_Diff[i, j] <- abs(AGE.Est[i] - AGE.Est[j])
+      #AGE_Diff_Scaled[i, j] <- (AGE_Diff[i, j] - mean(AGE_DIFF[1:n.ind,1:n.ind],na.rm=T)/ sd(AGE_DIFF[1:n.ind,1:n.ind],na.rm=T))
+      
+      ## HI Effects
+      for (p in 1:n.per) {
       
       # Process Model
-      SRI.Exp[i, j] <- IJ_Random[i, j] + HRO[i, j]*HRO_Effect + 
-        SEX[i, j]*SEX_Effect + AGE[i, j]*AGE_Effect + GR[i, j]*GR_Effect
+      logit(SRI.Exp[i, j, p]) <- IJ_Random[i, j] + 
+        HRO[i, j]*HRO_Effect + SEX.SIM[i, j]*SEX_Effect + AGE_Diff[i, j]*AGE_Effect + #GR[i, j]*GR_Effect +
+        BP[i, j, p]*BP_Effect[p] +  FG[i, j, p]*FG_Effect[p] +  SD[i, j, p]*SD_Effect[p]
       
-      # Observation Model (Likelihood)
-      SRI[i, j] ~ dbeta(a = SRI.Exp[i, j]*(SRI.Exp[i, j]*(1-SRI.Exp[i, j])/(Obs.Err[i, j]**2)-1), 
-                     b = (1-SRI.Exp[i, j])*(SRI.Exp[i, j]*(1-SRI.Exp[i, j])/(Obs.Err[i, j]**2)-1))
-      
+      # Observation Model (Likelihood) # a = mean^2*(1-mean)/sd^2-mean, b = mean*(1-mean)^2/sd^2+mean-1
+      SRI[i, j, p] ~ dbeta(shape1 = (SRI.Exp[i, j, p]*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[p]^2)-1)), 
+                           shape2 = ((1-SRI.Exp[i, j, p])*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[p]^2)-1)))
+      }#p
     }#j
     
   }#i
   
-})#model4
+  
+})#model1
+
+
 
 
 # Parameters monitored (are there any new parameters to include?)
-parameters <- c("IJ_ovrall","Var_IJ","IJ_Random",
-                "HRO_Effect", "SEX_Effect", "AGE_Effect", 
-                "GR_Effect", "Obs.Err")
+parameters <- c("IJ_Random", 
+                "HRO_Effect", "SEX_Effect", "AGE_Effect", #"GR_Effect", 
+                "BP_Effect", "FG_Effect", "SD_Effect")
 
 # MCMC Settings
 ni <- 40000
@@ -383,18 +337,27 @@ nt <- 40
 nb <- 20000
 nc <- 3
 
+# Array for the matrix
+
 # Data
-Period <- 1
+nimble.data = list(SRI = abind(nxn, along=3),
+                   u = mean_data[,2],
+                   HRO = kov,
+                   SEX = ILV_df$Sex,
+                   AGE = ILV_df$Age,
+                   #GR = gr_list,
+                   BP = abind(dist_BG, along=3),
+                   FG = abind(dist_FG, along=3),
+                   SD = abind(dist_SD, along=3))
 
-nimble.data = list(SRI = nxn[[Period]],
-                   HRO = kov[[Period]],
-                   SEX = sex_list[[Period]],
-                   AGE = age_list[[Period]],
-                   GR = gr_list[[Period]])
+nimble.constants = list(n.ind = length(unique(ILV_df$Code)),
+                        n.per = length(nxn))
 
-nimble.constants = list(n.rows = nrow(nxn[[Period]]),
-                        n.cols = ncol(nxn[[Period]]))
+saveRDS(nimble.constants, "../data/nimble.constants.RData")
+saveRDS(nimble.data, "../data/nimble.data.RData")
 
+n.cores <- detectCores() 
+registerDoParallel(n.cores)
 mcmc.output <- nimbleMCMC(code = model1,
                           data = nimble.data,
                           constants=nimble.constants,
@@ -405,6 +368,9 @@ mcmc.output <- nimbleMCMC(code = model1,
                           thin=nt,
                           summary=TRUE,
                           samplesAsCodaMCMC = TRUE)
+### End parallel processing
+stopImplicitCluster()
+
 
 
 attach.nimble(mcmc.output$samples)
@@ -422,38 +388,6 @@ mcmcplot(mcmc.output$samples)
 
 # Summarize the posterior distributions:
 hist(AGE_Effect)
-
-
-
-
-
-# Prepare dataframe for MCMC
-num_nodes <- lapply(nxn, function(df) {dim(df)[1]})
-
-## Seperate IDs into i and j
-node_ids_i <- lapply(num_nodes, function(df) {matrix(rep(1:df, df), df, df)})
-node_ids_j <- lapply(node_ids_i, function(df) {t(df)})
-
-df_list <- list()  
-i<-1
-for (i in seq_along(nxn)) {
-  df_dolp <- data.frame(edge_weight = nxn[[i]][upper.tri(nxn[[i]])], 
-                        age_difference = age_list[[i]][upper.tri(age_list[[i]])],
-                        sex_difference = sex_list[[i]][upper.tri(sex_list[[i]])],
-                        HI_differences = dist_HI_sexage[[i]][upper.tri(dist_HI_sexage[[i]])],
-                        HRO = kov_sexage[[i]][upper.tri(kov_sexage[[i]])],
-                        node_id_1 = factor(node_ids_i[[i]][upper.tri(node_ids_i[[i]])],
-                                           levels = 1:num_nodes[[i]]),
-                        node_id_2 = factor(node_ids_j[[i]][upper.tri(node_ids_j[[i]])], 
-                                           levels = 1:num_nodes[[i]]))
-  df_list[[i]] <- df_dolp
-}
-
-# Multimembership models in MCMCglmm
-year <- 5
-fit_mcmc <- MCMCglmm(edge_weight ~ HI_differences + HRO + age_difference + sex_difference, 
-                     random=~mm(node_id_1 + node_id_2), data=df_list[[year]])
-summary(fit_mcmc)
 
 
 ###########################################################################

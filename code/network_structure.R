@@ -23,12 +23,9 @@ library(cowplot) # To add a legend
 library(tidyverse) 
 
 # Read in social association matrix
-nxn <- readRDS("nxn.RData")
-list_years <- readRDS("list_years.RData")
-
-# Read in overlapped social association matrix
-nxn_ovrlap <- readRDS("nxn_ovrlap.RData")
-list_years_ovrlap <- readRDS("list_years_ovrlap.RData")
+nxn <- readRDS("nxn_ovrlap.RData")
+list_years <- readRDS("list_years_ovrlap.RData")
+el <- readRDS("el_years_ovrlap.RData")
 
 ###########################################################################
 # PART 1: Structure Network ------------------------------------------------
@@ -102,8 +99,6 @@ par(mfrow=c(1, 1))
 ###########################################################################
 # PART 2: Network & Local Properties ------------------------------------------------
 
-nxn <- nxn_ovrlap
-list_years <- list_years_ovrlap
 # Edgelist: Nodes (i & j) and edge (or link) weight
 n.cores <- detectCores()
 system.time({
@@ -115,15 +110,6 @@ system.time({
   ### End parallel processing
   stopImplicitCluster()
 })
-
-saveRDS(el_years, "el_years.RData")
-saveRDS(el_years, "el_years_ovrlap.RData")
-
-el <- readRDS("el_years.RData")
-el_ovrlap <- readRDS("el_years_ovrlap.RData")
-
-el <- el_ovrlap
-row_names_HI <- row_names_HI_ovrlap
 
 # Set the node names based on row names
 get_names <- function (matrix, metric) {
@@ -183,22 +169,11 @@ names_FG <- lapply(HI_data, function (df) {
 local_metrics_HI <- data.frame(ID = compare_between$ID,
                                Period = c(rep("1-Before.HAB", nrow(compare_between)), rep("2-After.HAB", nrow(compare_between))),
                                Between = c(compare_between$Before.HAB, compare_between$After.HAB),
+                               Degree = c(compare_strength$Before.HAB_degree, compare_strength$After.HAB_degree),
                                Strength = c(compare_strength$Before.HAB_strength, compare_strength$After.HAB_strength))
 
 # Sort the dataframe by ID and Period
 local_metrics_HI <- local_metrics_HI[order(local_metrics_HI$ID, local_metrics_HI$Period), ]
-
-# Create a new variable that represents the order of the periods
-local_metrics_HI$Period_order <- as.numeric(local_metrics_HI$Period == "2-After.HAB")
-
-
-## Add a rown to compare the averages of each metric with HI IDs
-# avg_metrics <- data.frame(ID = "Average",
-#                           Period = c("Before.HAB", "After.HAB"),
-#                           Between = c(mean(between[[2]][, 2]), mean(between[[1]][, 2])),
-#                           Strength = c(mean(strength[[2]][, 3]), mean(strength[[1]][, 3])))
-
-# local_metrics_HI <- rbind(local_metrics_HI, avg_metrics)
 
 # Add HI_type column
 # Assuming names_BG and names_SD are your lists of IDs for BG and SD for each Period
@@ -211,65 +186,41 @@ local_metrics_HI$HI_type <- ifelse(local_metrics_HI$ID %in% names_BG[[1]] & loca
                                                                ifelse(local_metrics_HI$ID %in% names_FG[[2]] & local_metrics_HI$Period == "2-After.HAB", "FG", "NA"))))))
 
 
-# Reshape the data from wide to long format
-# local_metrics_HI <- melt(local_metrics_HI, id.vars = c("ID", "HI_type", "Period"), variable.name = "Metric")
-# colnames(local_metrics_HI) <- c("ID", "HI_type", "Period", "Metric", "value")
-
-# Make sure metric is in character
-# local_metrics_HI$Metric <- as.character(local_metrics_HI$Metric)
-
-# Get rid of the average values
-# local_met_HI <- local_metrics_HI[local_metrics_HI$HI_type != "NA", ]
-
-# Only look at individuals that transitioned
-local_metrics_HI$trans0 <- ifelse(local_metrics_HI$Period == "1-Before.HAB" & local_metrics_HI$HI_type == "NA", 1, 0)
-local_metrics_HI$trans1 <- ifelse(local_metrics_HI$Period == "2-After.HAB" & local_metrics_HI$HI_type != "NA", 1, 0)
-# Calculate the sum of trans0 and trans1 for each ID
-sum_data <- aggregate(cbind(trans0, trans1) ~ ID, data = local_metrics_HI, sum)
-local_metrics_HI$trans <- rep((sum_data$trans0 + sum_data$trans1), each = 2)
-local_mets_HI <- local_metrics_HI[local_metrics_HI$trans == 2, ]
-
 # Make paired data for each ID
-local_mets_HI$Pairs <- rep(1:length(unique(local_mets_HI$ID)), each = 2)
+local_metrics_HI$Pairs <- rep(1:length(unique(local_metrics_HI$ID)), each = 2)
 
-i <- 1
+# Subset the individuals with HI or transitioned
+transitioned_HI_IDs <- unique(local_metrics_HI$ID[local_metrics_HI$HI_type != "NA"])
+local_mets_HI <- local_metrics_HI[local_metrics_HI$ID %in% transitioned_HI_IDs, ]
+
 # Plot individual metrics
 plot_list <- list()
-unique_metrics <- colnames(local_metrics_HI[, c(3,4)])
+unique_metrics <- colnames(local_mets_HI[, c(3:5)])
+colors <- rainbow(length(levels(factor(local_mets_HI$HI_type))))[as.integer(factor(local_mets_HI$HI_type))]
 
 for (i in seq_along(unique_metrics)) {
-  metric <- local_metrics_HI[, unique_metrics[i]]
-  
-  # # Get the corresponding value for NA, Period.1 and the current metric
-  # value_na_period1 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
-  #                                              local_metrics_HI$Period == "Before.HAB" & 
-  #                                              local_metrics_HI$Metric == metric]
-  # 
-  # # Get the corresponding value for NA, Period.2 and the current metric
-  # value_na_period2 <- local_metrics_HI$value[local_metrics_HI$HI_type == "NA" & 
-  #                                              local_metrics_HI$Period == "After.HAB" & 
-  #                                              local_metrics_HI$Metric == metric]
-  
+  metric <- local_mets_HI[, unique_metrics[i]]
   
   # Create the plot with violin plot, boxplot, and points
+  
+  # Create the boxplot and violin plot
   current_plot <- ggplot(local_mets_HI, aes(Period, metric, fill = Period)) + 
     geom_violin(position = position_dodge(width = 0.9), trim = FALSE, alpha = 0.5) +
     geom_boxplot(position = position_dodge(width = 0.9), width = 0.2, alpha = 0.5) +
-    geom_line(aes(group = Pairs), linetype = 2, linewidth = 1.3) + 
-    geom_point(aes(fill = Period, group = Pairs, shape = HI_type), size = 5) +
+    geom_jitter(aes(group = Pairs, shape = HI_type), size = 5) +
     scale_shape_manual(values = c("BG" = 1, "SD" = 2, "FG" = 5, "NA" = 4)) +
-    scale_x_discrete(labels = c("1-Before.HAB" = "Before HAB", "2-After.HAB" = "After HAB")) +
-    scale_y_discrete(labels = unique_metrics[i]) +
     labs(y = unique_metrics[i]) +
     theme(panel.background = element_blank())
   
   
-  plot_list[[i]] <- current_plot
+   plot_list[[i]] <- current_plot
 }
 
 # Arrange plots side by side
-grid.arrange(grobs = plot_list, ncol = 2)
-
+#grid.arrange(grobs = plot_list, ncol = 2)
+plot_list[[1]]
+plot_list[[2]]
+plot_list[[3]]
 
 ###########################################################################
 # PART 3: Network & Global Properties ------------------------------------------------
@@ -435,7 +386,7 @@ for (i in seq_along(dolp_ig)) {
 par(mfrow=c(1, 2), mar = c(0.5, 0.5, 2, 0.5))
 
 # Main labels for the plots
-main_labels <- c("1993-2004 Network", "2005-2014 Network")
+main_labels <- c("Pre-HAB", "Post-HAB")
 
 # Plot the graph with individual IDs as labels
 for (i in seq_along(dolp_ig)) {

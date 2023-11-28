@@ -21,8 +21,8 @@ library(gridExtra) # To combine plots
 
 # Read in full datasheet and list (after wrangling steps)
 sample_data <- read.csv("sample_data.csv")
-list_years <- readRDS("list_years.RData")
-nxn <- readRDS("nxn.RData")
+list_years <- readRDS("list_years_ovrlap.RData")
+nxn <- readRDS("nxn_ovrlap.RData")
 
 # Read in & combine files
 firstgen_data <- read.csv("firstgen_data.csv")
@@ -36,7 +36,6 @@ orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 
 # Match ID to sex, age and human data
 ILV <- read.csv("Individual_Level_Variables.csv")
-# human_data <- read.csv("human_dolphin_data.csv")
 
 ## Sex
 ID_sex <- setNames(ILV$Sex, ILV$Alias)
@@ -54,13 +53,6 @@ ID_dad <- setNames(ILV$Dad, ILV$Alias)
 orig_data$Mom <- ID_mom[orig_data$Code]
 orig_data$Dad <- ID_dad[orig_data$Code]
 
-## Human
-# human_data_subset <- human_data[, c("SightingFID", "X.Boats", "X.Lines", "X.CrabPots")]
-# orig_data <- merge(orig_data, human_data_subset, by = "SightingFID", all = TRUE)
-# columns_to_replace <- c("X.Boats", "X.Lines", "X.CrabPots")
-# orig_data[, columns_to_replace][is.na(orig_data[, columns_to_replace])] <- 0
-# orig_data[, columns_to_replace][orig_data[, columns_to_replace] == -999] <- 0
-
 # Get rid of any data with no location data
 orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
 sample_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
@@ -72,11 +64,6 @@ sample_data$Code <- ifelse(sample_data$Code == "1312", "F222", sample_data$Code)
 sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
 
 write.csv(sample_data, "sample_data.csv")
-
-# Get rid of data with no sex or age data
-sample_sexage_data <- sample_data[!is.na(sample_data$Sex) & !is.na(sample_data$Age),]
-
-write.csv(sample_sexage_data, "sample_sexage_data.csv")
 
 # Make a list of split years per dataframe
 split_years <- function (sample_data) {
@@ -109,11 +96,16 @@ split_years <- function (sample_data) {
 }
 
 list_years <- split_years(sample_data)
-list_years_sexage <- split_years(sample_sexage_data)
+
+# Fix sex so that probable is assigned
+list_years <- lapply(list_years, function(df) {
+  df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
+                   ifelse(df$Sex == "Probable Male", "Male", df$Sex))
+  return(df)
+})
 
 # Save list
 saveRDS(list_years, file="list_years.RData")
-saveRDS(list_years_sexage, file = "list_years_sexage.RData")
 
 # Make an overlapping dataset
 ## Get unique codes from both lists

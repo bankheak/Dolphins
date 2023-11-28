@@ -23,13 +23,14 @@ library(rgdal) # Overlap
 library(patchwork) # align different plots
 
 # Read in file
-list_years <- readRDS("list_years.RData")
-list_years_sexage <- readRDS("list_years_sexage.RData")
+list_years <- readRDS("list_years_ovrlap.RData")
+
+# Aggregate list into one homerange overlap matrix
+list_years_df <- merge(list_years[[1]], list_years[[2]], all = T)
 
 # Transform coordinate data into a Spatial Points Dataframe in km
-create_coord_data <- function(list_years) {
-  dolph.sp <- lapply(list_years, function(df) {
-    
+create_coord_data <- function(df) {
+  
     # Extract IDs and coordinates
     ids <- df$Code
     coordinates <- df[, c("StartLon", "StartLat")]
@@ -41,20 +42,19 @@ create_coord_data <- function(list_years) {
     proj4string(coords_sp) <- CRS("+proj=longlat +datum=WGS84")
     
     # Transform to a UTM CRS that uses km as the unit
-    coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=km +no_defs"))
+    coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
     
     return(coords_sp_utm)
-  })
-  return(dolph.sp)
 }
-dolph.sp <- create_coord_data(list_years)
-dolph.sp <- create_coord_data(list_years_sexage)
+
+dolph.sp <- create_coord_data(list_years_df)
 
 # Visualize data extent
 vis.sf <- function(dolph.sp) {
-dolp.sf <- lapply(dolph.sp, function (df) {st_as_sf(df)})
+dolp.sf <- st_as_sf(dolph.sp)
   return(dolp.sf)
 }
+
 dolph.sf <- vis.sf(dolph.sp)
 
 vis_coord <- lapply(seq_along(dolph.sf), function (i) {ggplot(dolph.sf[[i]]) +
@@ -78,27 +78,18 @@ plot(density_estimate)
 max(sqrt((dolph.sp[[period]]@coords[,1] - min(dolph.sp[[period]]@coords[,1]))^2 + 
            (dolph.sp[[period]]@coords[,2] - min(dolph.sp[[period]]@coords[,2]))^2))
 
-
 # Use the calculated extent in kernelUD
-kernel <- lapply(dolph.sp, function(sp_obj) {
-  kernelUD(sp_obj, h = 1000)
-})
+kernel <- kernelUD(dolph.sp, h = 1000)
+
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
 
 # Calculate kernel overlap values
-create_kov <- function(kernel) {
-kov <- lapply(kernel, function(kern) {
-  kerneloverlaphr(kern, method = "HR", lev = 95)
-})
-return(kov)
-}
-kov <- create_kov(kernel)
+kov <- kerneloverlaphr(kernel, method = "HR", lev = 95)
 
 # Save HRO
 saveRDS(kov, "kov.RDS")
-saveRDS(kov, "kov_sexage.RDS")
 
 ###########################################################################
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------
