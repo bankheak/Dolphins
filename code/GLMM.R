@@ -32,27 +32,8 @@ dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn_ovrlap.RData") # Association Matrix
 list_years <- readRDS("list_years_ovrlap.RData") # Data listed into periods
-gbi <- readRDS("gbi_ovrlap.RData")
-gbi_yr <- readRDS("gbi.RData")
+SE_array <- readRDS("SE_array.RData")
 
-# Transform gbi data
-trans.func <-  function (matr) {
-  matr1 = matr
-  N <- nrow(matr1)
-  n <- apply(matr1, 2, sum)
-  tmatr <- t(matr1)
-  df <- as.matrix(t(matr))
-  return(df)
-}
-
-gbi<- lapply(gbi, function(list) trans.func(matr = list))
-
-# Fix sex so that probable is assigned
-list_years <- lapply(list_years, function(df) {
-  df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
-                   ifelse(df$Sex == "Probable Male", "Male", df$Sex))
-  return(df)
-})
 # Now make a sex and age data frame
 ILV_df <- list_years[[2]][!duplicated(list_years[[2]][, "Code"]), c("Code", "Sex", "Age")]
 ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
@@ -65,21 +46,9 @@ dist_SD <- lapply(dist_SD, function(ls) ls[c(1:20),c(1:20)])
 kov <- kov[c(1:20),c(1:20)]
 nxn <- lapply(nxn, function(ls) ls[c(1:20),c(1:20)])
 ILV_df <- ILV_df[c(1:20),]
-gbi <- lapply(gbi, function(ls) ls[c(1:20),c(1:20)])
-nxn <- list()
-for (i in seq_along(gbi)) {
-  nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
-}     
 nxn <- abind(nxn, along=3)
-gbi1 <- abind(gbi[[1]], along=3)
-gbi2 <- abind(gbi[[2]], along=3)
+SE_array <- SE_array[1:20, 1:20, 1:2]
 
-# Array for the matrix
-pad_dims <- lapply(seq_along(dim(gbi1)), function(i) c(0, max(dim(gbi2))[i] - dim(gbi1)[i]))
-# Pad gbi1 with zeros
-padded_gbi1 <- abind(gbi1, pad_dims = pad_dims, along = 3, value = NA)
-# Now, padded_array1 and array2 have the same dimensions
-result <- abind::abind(padded_array1, array2, along = 1)
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
 
@@ -375,22 +344,19 @@ nc <- 3
 # Array for the matrix
 
 # Data
-nimble.data = list(a = abind(lapply(gbi, function (df) df %*% t(df)), along = 3), # Dyad in same group
-                   b = abind(lapply(gbi, function (df) df %*% (1 - t(df))), along = 3), # A present, B absent
-                   c = abind(lapply(gbi, function (df) (1 - df) %*% t(df)), along = 3), # A absent, B present
-                   SRI = abind(nxn, along=3),
+nimble.data = list(SRI = nxn,
                    HRO = kov,
                    SEX = ILV_df$Sex,
                    AGE = ILV_df$Age,
                    #GR = gr_list,
                    BP = abind(dist_BG, along=3),
                    FG = abind(dist_FG, along=3),
-                   #SD = abind(dist_SD, along=3)
+                   #SD = abind(dist_SD, along=3),
+                   Obs.Err = SE_array
                    )
 
 nimble.constants = list(n.ind = length(unique(ILV_df$Code)),
-                        n.per = length(nxn),
-                        n.yr = length(gbi))
+                        n.per = length(nxn))
 
 saveRDS(nimble.constants, "../data/nimble.constants.RData")
 saveRDS(nimble.data, "../data/nimble.data.RData")

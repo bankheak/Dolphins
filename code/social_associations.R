@@ -77,7 +77,7 @@ sample_data <- read.csv("sample_data.csv")
   data_by_year <- split(sample_data, sample_data$Year)
   
 # Fix data
-  fix_list <- function(list_splityears) {
+fix_list <- function(list_splityears) {
   # Eliminate IDs with less than 5 locations
    list_years <- list()  # Initialize an empty list to store the updated datasets
     
@@ -101,24 +101,35 @@ sample_data <- read.csv("sample_data.csv")
                       ifelse(df$Sex == "Probable Male", "Male", df$Sex))
      return(df)
    })
-   # Make an overlapping dataset
-   ## Get unique codes from both lists
-   codes_list1 <- unique(list_years[[1]]$Code)
-   codes_list2 <- unique(list_years[[2]]$Code)
-   ## Find the common codes
-   common_codes <- intersect(codes_list1, codes_list2)
-   ## Subset the data frames based on the common codes
-   list_years_ovrlap <- lapply(list_years, function(df) {
-     df[df$Code %in% common_codes, ]
-   })
-   return(list_years_ovrlap)
+   
+   return(list_years)
   }
   
 list_years <- fix_list(list_splityears)
 list_years_one <- fix_list(data_by_year)
 
+# Make an overlapping dataset
+## Get unique codes from both lists
+codes_list <- list()
+for (i in seq_along(list_years)) {
+  codes_list[[i]] <- unique(list_years[[i]]$Code)
+}
+
+## Find the common codes
+common_codes <- Reduce(intersect, codes_list)
+## Subset the data frames based on the common codes
+list_years_ovrlap <- lapply(list_years, function(df) {
+  df[df$Code %in% common_codes, ]
+})
+
+## Subset the data_by_year based on the common codes
+list_years_one_ovrlap <- lapply(list_years_one, function(df) {
+  df[df$Code %in% unique(list_years_ovrlap[[1]]$Code), ]
+})
+
 # Save list
 saveRDS(list_years_ovrlap, file = "list_years_ovrlap.RData")
+saveRDS(list_years_one_ovrlap, file = "list_years_one_ovrlap.RData")
 
 # Calculate Gambit of the group
 create_gbi <- function(list_years) {
@@ -137,22 +148,21 @@ for (i in seq_along(list_years)) {
           return(gbi)                                      
                                       }
 
-gbi <- create_gbi(list_years_one)
+gbi <- create_gbi(list_years_one_ovrlap)
 gbi_ovrlap <- create_gbi(list_years_ovrlap)
 
 # Save gbi lists
 saveRDS(gbi, file = "gbi.RData")
-saveRDS(gbi_sexage, file = "gbi_sexage.RData")
 saveRDS(gbi_ovrlap, file = "gbi_ovrlap.RData")
 
 # Create association matrix
-create_nxn <- function(list_years, gbi) {
+create_nxn <- function(gbi) {
 source("../code/functions.R") # SRI & null permutation
 n.cores <- detectCores()
 system.time({
   registerDoParallel(n.cores)
 nxn <- list()
-for (i in seq_along(list_years)) {
+for (i in seq_along(gbi)) {
   nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
 }                                 
 # End parallel processing
@@ -161,14 +171,44 @@ stopImplicitCluster()
 return(nxn)
 }
 
-nxn <- create_nxn(list_years, gbi)
-nxn_sexage <- create_nxn(list_years_sexage, gbi_sexage)
-nxn_ovrlap <- create_nxn(list_years_ovrlap, gbi_ovrlap)
+nxn <- create_nxn(gbi)
+nxn_ovrlap <- create_nxn(gbi_ovrlap)
 
 # Save nxn lists
 saveRDS(nxn, file = "nxn.RData")
-saveRDS(nxn_sexage, file = "nxn_sexage.RData")
 saveRDS(nxn_ovrlap, file = "nxn_ovrlap.RData")
+
+# Calculate nxn SE
+calc_cell_se <- function(matrices_list, se_data) {
+  
+  # Get the number of matrices in the list
+  num_matrices <- length(matrices_list)
+  
+  # Get number of years per matrix
+  num_year <- length(se_data)
+  
+  # Get the dimensions of the matrices
+  mat_dims <- dim(matrices_list[[1]])
+  
+  # Initialize a matrix to store standard errors
+  se_array <- array(0, dim = c(mat_dims[1], mat_dims[2], num_matrices))
+  
+  # Calculate standard error for each cell
+  for (p in 1:num_matrices) {
+  for (i in 1:mat_dims[1]) {
+    for (j in 1:mat_dims[2]) {
+      cell_data <- sapply(matrices_list, function(matrix) matrix[i, j])
+      se_array[i, j, p] <- sd(cell_data) / sqrt(num_year)
+    }
+  }
+  }
+  return(se_array)
+}
+
+# Calculate standard error for each cell in the matrices
+SE_array <- calc_cell_se(matrices_list = nxn_ovrlap, se_data = nxn)
+saveRDS(SE_array, file = "SE_array.RData")
+
 
 ###########################################################################
 # PART 2: PermutatioNP ---------------------------------------------------------
