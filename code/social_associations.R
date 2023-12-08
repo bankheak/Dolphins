@@ -64,19 +64,22 @@ sample_data$Code <- ifelse(sample_data$Code == "1312", "F222", sample_data$Code)
 sample_data <- sample_data[sample_data$Year >= 1998 & sample_data$Year <= 2011,]
 
 write.csv(sample_data, "sample_data.csv")
+sample_data <- read.csv("sample_data.csv")
 
 # Make a list of split years per dataframe
-split_years <- function (sample_data) {
-  
   ## Sort the data by Year
   sample_data <- sample_data[order(sample_data$Year), ]
   ## Create a column indicating the group (1 or 2) based on the midpoint
   sample_data$Group <- ifelse(sample_data$Year < median(sample_data$Year), 1, 2)
   ## Split the data into two groups based on the 'Group' column
   list_splityears <- split(sample_data, sample_data$Group)
+  ## Split data by year
+  data_by_year <- split(sample_data, sample_data$Year)
   
+# Fix data
+  fix_list <- function(list_splityears) {
   # Eliminate IDs with less than 5 locations
-   updated_list_years <- list()  # Initialize an empty list to store the updated datasets
+   list_years <- list()  # Initialize an empty list to store the updated datasets
     
     for (i in seq_along(list_splityears)) {
       ID <- unique(list_splityears[[i]]$Code)
@@ -89,36 +92,32 @@ split_years <- function (sample_data) {
       sub <- data.frame(ID = ID, obs_vect = obs_vect)
       sub <- subset(sub, subset = obs_vect > 10)
       
-      updated_list_years[[i]] <- subset(list_splityears[[i]], Code %in% sub$ID)
+      list_years[[i]] <- subset(list_splityears[[i]], Code %in% sub$ID)
     
     }
-   return(updated_list_years)
-}
-
-list_years <- split_years(sample_data)
-
-# Fix sex so that probable is assigned
-list_years <- lapply(list_years, function(df) {
-  df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
-                   ifelse(df$Sex == "Probable Male", "Male", df$Sex))
-  return(df)
-})
+   # Fix sex so that probable is assigned
+   list_years <- lapply(list_years, function(df) {
+     df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
+                      ifelse(df$Sex == "Probable Male", "Male", df$Sex))
+     return(df)
+   })
+   # Make an overlapping dataset
+   ## Get unique codes from both lists
+   codes_list1 <- unique(list_years[[1]]$Code)
+   codes_list2 <- unique(list_years[[2]]$Code)
+   ## Find the common codes
+   common_codes <- intersect(codes_list1, codes_list2)
+   ## Subset the data frames based on the common codes
+   list_years_ovrlap <- lapply(list_years, function(df) {
+     df[df$Code %in% common_codes, ]
+   })
+   return(list_years_ovrlap)
+  }
+  
+list_years <- fix_list(list_splityears)
+list_years_one <- fix_list(data_by_year)
 
 # Save list
-saveRDS(list_years, file="list_years.RData")
-
-# Make an overlapping dataset
-## Get unique codes from both lists
-codes_list1 <- unique(list_years[[1]]$Code)
-codes_list2 <- unique(list_years[[2]]$Code)
-## Find the common codes
-common_codes <- intersect(codes_list1, codes_list2)
-## Subset the data frames based on the common codes
-list_years_ovrlap <- lapply(list_years, function(df) {
-  df[df$Code %in% common_codes, ]
-})
-
-
 saveRDS(list_years_ovrlap, file = "list_years_ovrlap.RData")
 
 # Calculate Gambit of the group
@@ -138,8 +137,7 @@ for (i in seq_along(list_years)) {
           return(gbi)                                      
                                       }
 
-gbi <- create_gbi(list_years)
-gbi_sexage <- create_gbi(list_years_sexage)
+gbi <- create_gbi(list_years_one)
 gbi_ovrlap <- create_gbi(list_years_ovrlap)
 
 # Save gbi lists

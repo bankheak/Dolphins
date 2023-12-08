@@ -21,8 +21,9 @@ library(brms) # Baysian
 library(nimble) # For MCMC
 library(mcmcplots) # For MCMC plots
 library(MCMCvis)
+library(tidyverse)
 source("../code/attach.nimble_v2.R")
-
+source("../code/functions.R") # nxn
 
 # Read in social association matrix and listed data
 dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
@@ -31,6 +32,20 @@ dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn_ovrlap.RData") # Association Matrix
 list_years <- readRDS("list_years_ovrlap.RData") # Data listed into periods
+gbi <- readRDS("gbi_ovrlap.RData")
+gbi_yr <- readRDS("gbi.RData")
+
+# Transform gbi data
+trans.func <-  function (matr) {
+  matr1 = matr
+  N <- nrow(matr1)
+  n <- apply(matr1, 2, sum)
+  tmatr <- t(matr1)
+  df <- as.matrix(t(matr))
+  return(df)
+}
+
+gbi<- lapply(gbi, function(list) trans.func(matr = list))
 
 # Fix sex so that probable is assigned
 list_years <- lapply(list_years, function(df) {
@@ -50,7 +65,21 @@ dist_SD <- lapply(dist_SD, function(ls) ls[c(1:20),c(1:20)])
 kov <- kov[c(1:20),c(1:20)]
 nxn <- lapply(nxn, function(ls) ls[c(1:20),c(1:20)])
 ILV_df <- ILV_df[c(1:20),]
+gbi <- lapply(gbi, function(ls) ls[c(1:20),c(1:20)])
+nxn <- list()
+for (i in seq_along(gbi)) {
+  nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
+}     
+nxn <- abind(nxn, along=3)
+gbi1 <- abind(gbi[[1]], along=3)
+gbi2 <- abind(gbi[[2]], along=3)
 
+# Array for the matrix
+pad_dims <- lapply(seq_along(dim(gbi1)), function(i) c(0, max(dim(gbi2))[i] - dim(gbi1)[i]))
+# Pad gbi1 with zeros
+padded_gbi1 <- abind(gbi1, pad_dims = pad_dims, along = 3, value = NA)
+# Now, padded_array1 and array2 have the same dimensions
+result <- abind::abind(padded_array1, array2, along = 1)
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
 
@@ -280,7 +309,6 @@ model1 <- nimbleCode({
       BP_Effect[p] ~ dt(mu=0, sigma=1, df=1)
       FG_Effect[p] ~ dt(mu=0, sigma=1, df=1)
       SD_Effect[p] ~ dt(mu=0, sigma=1, df=1)
-      Obs.Err[p] ~ T(dt(mu=0, sigma=1, df=1), 0, ) 
     } #p
     
     # Run through matrix
@@ -306,6 +334,13 @@ model1 <- nimbleCode({
       
       ## HI Effects
       for (p in 1:n.per) {
+        for (y in 1:n.yr) {
+          # SRI Observation Error
+          NXN[i, j, y] <-  a[i, j, y] / (a[i, j, y] + b[i, j, y] + c[i, j, y])
+          squared_diff[i, j, y, p] <- (NXN[i, j, y] - SRI[i, j, p])^2
+        } #y
+      
+      Obs.Err[i, j, p] <- sqrt(sum(squared_diff[i, j, p]) / (n.yr - 1))/ sqrt(n.yr)
       
       # Process Model
       logit(SRI.Exp[i, j, p]) <- IJ_Random[i, j] + 
@@ -340,18 +375,22 @@ nc <- 3
 # Array for the matrix
 
 # Data
-nimble.data = list(SRI = abind(nxn, along=3),
-                   u = mean_data[,2],
+nimble.data = list(a = abind(lapply(gbi, function (df) df %*% t(df)), along = 3), # Dyad in same group
+                   b = abind(lapply(gbi, function (df) df %*% (1 - t(df))), along = 3), # A present, B absent
+                   c = abind(lapply(gbi, function (df) (1 - df) %*% t(df)), along = 3), # A absent, B present
+                   SRI = abind(nxn, along=3),
                    HRO = kov,
                    SEX = ILV_df$Sex,
                    AGE = ILV_df$Age,
                    #GR = gr_list,
                    BP = abind(dist_BG, along=3),
                    FG = abind(dist_FG, along=3),
-                   SD = abind(dist_SD, along=3))
+                   #SD = abind(dist_SD, along=3)
+                   )
 
 nimble.constants = list(n.ind = length(unique(ILV_df$Code)),
-                        n.per = length(nxn))
+                        n.per = length(nxn),
+                        n.yr = length(gbi))
 
 saveRDS(nimble.constants, "../data/nimble.constants.RData")
 saveRDS(nimble.data, "../data/nimble.data.RData")
