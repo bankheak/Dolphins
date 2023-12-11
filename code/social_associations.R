@@ -178,35 +178,40 @@ nxn_ovrlap <- create_nxn(gbi_ovrlap)
 saveRDS(nxn, file = "nxn.RData")
 saveRDS(nxn_ovrlap, file = "nxn_ovrlap.RData")
 
+nxn <- readRDS("nxn.RData")
+nxn_ovrlap <- readRDS("nxn_ovrlap.RData")
+
 # Calculate nxn SE
 calc_cell_se <- function(matrices_list, se_data) {
-  
-  # Get the number of matrices in the list
-  num_matrices <- length(matrices_list)
   
   # Get number of years per matrix
   num_year <- length(se_data)
   
   # Get the dimensions of the matrices
-  mat_dims <- dim(matrices_list[[1]])
+  mat_dims <- dim(matrices_list)
+  
+  # Codes
+  codes <- colnames(matrices_list)
   
   # Initialize a matrix to store standard errors
-  se_array <- array(0, dim = c(mat_dims[1], mat_dims[2], num_matrices))
+  se_matrix <- matrix(0, nrow = mat_dims[1], ncol = mat_dims[2])
   
   # Calculate standard error for each cell
-  for (p in 1:num_matrices) {
   for (i in 1:mat_dims[1]) {
     for (j in 1:mat_dims[2]) {
-      cell_data <- sapply(matrices_list, function(matrix) matrix[i, j])
-      se_array[i, j, p] <- sd(cell_data) / sqrt(num_year)
+      cell_data <- lapply(se_data, function(matrix) matrix[rownames(matrix)[i,] %in% codes, colnames(matrix[,j]) %in% codes])
+      se_matrix[i, j] <- sd(cell_data) / sqrt(num_year)
     }
   }
-  }
-  return(se_array)
+
+  return(se_matrix)
 }
 
 # Calculate standard error for each cell in the matrices
-SE_array <- calc_cell_se(matrices_list = nxn_ovrlap, se_data = nxn)
+se_matrix1 <- calc_cell_se(matrices_list = nxn_ovrlap[[1]], se_data = list(nxn[c(1:7)]))
+se_matrix2 <- calc_cell_se(matrices_list = nxn_ovrlap[[2]], se_data = list(nxn[c(8:14)]))
+SE_array <- list(SE_array1, SE_array2)
+
 saveRDS(SE_array, file = "SE_array.RData")
 
 

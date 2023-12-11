@@ -39,6 +39,25 @@ ILV_df <- list_years[[2]][!duplicated(list_years[[2]][, "Code"]), c("Code", "Sex
 ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
        ifelse(ILV_df$Sex == "Male", 1, NA))
 
+# Estimate unknowns
+ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
+ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1, max = 56)), ILV_df$Age) # uniform probability for all ages
+
+# Make sex sim and age diff matrix
+sex_sim <- matrix(0, nrow = nrow(nxn[[1]]), ncol = ncol(nxn[[1]]))
+age_diff <- matrix(0, nrow = nrow(nxn[[1]]), ncol = ncol(nxn[[1]]))
+
+for (i in 1:(nrow(sex_sim) - 1)) {
+  for (j in (i + 1):ncol(sex_sim)) {
+    sex_sim[i, j] <- as.numeric(ILV_df$Sex[i] == ILV_df$Sex[j])
+    age_diff[i, j] <- abs(ILV_df$Age[i] - ILV_df$Age[j])
+    
+    # Since sex_sim and age_diff are symmetric matrices, update the corresponding values
+    sex_sim[j, i] <- sex_sim[i, j]
+    age_diff[j, i] <- age_diff[i, j]
+  }
+}
+
 # Smaller sample data
 dist_BG <- lapply(dist_BG, function(ls) ls[c(1:20),c(1:20)])
 dist_FG <- lapply(dist_FG, function(ls) ls[c(1:20),c(1:20)])
@@ -48,33 +67,6 @@ nxn <- lapply(nxn, function(ls) ls[c(1:20),c(1:20)])
 ILV_df <- ILV_df[c(1:20),]
 nxn <- abind(nxn, along=3)
 SE_array <- SE_array[1:20, 1:20, 1:2]
-
-# Prepare random effect for MCMC
-num_nodes <- lapply(nxn, function(df) dim(df)[1])
-
-# Separate IDs into i and j
-node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
-node_ids_j <- lapply(node_ids_i, function(df) t(df))
-
-df_list <- vector("list", length = length(nxn))
-for (i in seq_along(nxn)) {
-  upper_tri <- upper.tri(nxn[[i]], diag = TRUE)
-  
-  df_dolp <- data.frame(
-    edge_weight = as.vector(nxn[[i]][upper_tri]),
-    node_id_1 = factor(as.vector(node_ids_i[[i]][upper_tri]), levels = 1:num_nodes[[i]]),
-    node_id_2 = factor(as.vector(node_ids_j[[i]][upper_tri]), levels = 1:num_nodes[[i]])
-  )
-  
-  df_list[[i]] <- df_dolp
-}
-
-
-# Combine all data frames into a single data frame
-combined_df <- do.call(rbind, df_list)
-
-# Calculate the mean value for each individual
-mean_data <- aggregate(edge_weight ~ node_id_1, data = combined_df, FUN = mean)
 
 ################################################################################
 # PART 1: Create HI Disimilarity Matrix  ------------------------------------------------
@@ -317,8 +309,8 @@ model1 <- nimbleCode({
         BP[i, j, p]*BP_Effect[p] +  FG[i, j, p]*FG_Effect[p] +  SD[i, j, p]*SD_Effect[p]
       
       # Observation Model (Likelihood) # a = mean^2*(1-mean)/sd^2-mean, b = mean*(1-mean)^2/sd^2+mean-1
-      SRI[i, j, p] ~ dbeta(shape1 = (SRI.Exp[i, j, p]*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[p]^2)-1)), 
-                           shape2 = ((1-SRI.Exp[i, j, p])*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[p]^2)-1)))
+      SRI[i, j, p] ~ dbeta(shape1 = (SRI.Exp[i, j, p]*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[i, j, p]^2)-1)), 
+                           shape2 = ((1-SRI.Exp[i, j, p])*(SRI.Exp[i, j, p]*(1-SRI.Exp[i, j, p])/(Obs.Err[i, j, p]^2)-1)))
       }#p
     }#j
     
@@ -393,6 +385,45 @@ mcmcplot(mcmc.output$samples)
 
 # Summarize the posterior distributions:
 hist(AGE_Effect)
+
+
+################################################################################
+
+## Package for Bayes
+# Prepare random effect for MCMC
+num_nodes <- lapply(nxn, function(df) dim(df)[1])
+node_names <- lapply(nxn, function(df) colnames(df))
+
+# Separate IDs into i and j
+node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
+node_ids_j <- lapply(node_ids_i, function(df) t(df))
+
+df_list <- vector("list", length = length(nxn))
+for (i in seq_along(nxn)) {
+  upper_tri <- upper.tri(nxn[[i]], diag = TRUE)
+  
+  df_dolp <- data.frame(edge_weight = nxn[[i]][upper.tri(nxn[[i]])], 
+                        age_difference = age_list[[i]][upper.tri(age_list[[i]])],
+                        sex_difference = sex_list[[i]][upper.tri(sex_list[[i]])],
+                        HI_differences = dist_HI_sexage[[i]][upper.tri(dist_HI_sexage[[i]])],
+                        HRO = kov_sexage[[i]][upper.tri(kov_sexage[[i]])],
+                        node_id_1 = factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri]]), levels = node_names[[i]]),
+                        node_id_2 = factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri]]), levels = node_names[[i]]))
+  
+  df_list[[i]] <- df_dolp
+}
+
+# Calculate the mean value for each individual
+combined_array <- lapply(seq_along(df_list), function(i) {
+  upper_tri <- upper.tri(SE_array[,,i], diag = TRUE)
+  df_list[[i]]$SE <- SE_array[,,i][upper_tri]
+  return(df_list[[i]])
+})
+
+# Multimembership models in MCMCglmm
+fit_mcmc <- MCMCglmm(edge_weight ~ HI_differences + HRO + age_difference + sex_difference, 
+                     random=~mm(node_id_1 + node_id_2), data=df_list[[year]])
+summary(fit_mcmc)
 
 
 ###########################################################################
