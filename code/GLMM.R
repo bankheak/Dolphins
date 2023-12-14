@@ -22,10 +22,14 @@ library(nimble) # For MCMC
 library(mcmcplots) # For MCMC plots
 library(MCMCvis)
 library(tidyverse)
+library(loo) #model selection
+library(coda)
+library(bayesplot)
 source("../code/attach.nimble_v2.R")
 source("../code/functions.R") # nxn
 
 # Read in social association matrix and listed data
+dist_HI <- readRDS("dist_HI.RData") # HI Sim Matrix
 dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
 dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
 dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
@@ -33,15 +37,27 @@ kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn_ovrlap.RData") # Association Matrix
 list_years <- readRDS("list_years_ovrlap.RData") # Data listed into periods
 SE_array <- readRDS("SE_array.RData")
+SE_list <- list(SE_array[,,1], SE_array[,,2])
 
 # Now make a sex and age data frame
 ILV_df <- list_years[[2]][!duplicated(list_years[[2]][, "Code"]), c("Code", "Sex", "Age")]
 ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
        ifelse(ILV_df$Sex == "Male", 1, NA))
 
+# Order data
+order_rows <- rownames(nxn[[1]])
+order_cols <- colnames(nxn[[1]])
+
+# Apply the order to each matrix in the list
+nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
+SE_list <- lapply(SE_list, function(mat) mat[order_rows, order_cols])
+
+# Now reorder the sex and age dataframe
+ILV_df$Code <- ILV_df$Code[match(order_rows, ILV_df$Code)]
+
 # Estimate unknowns
 ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
-ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1, max = 56)), ILV_df$Age) # uniform probability for all ages
+ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1, max = 40)), ILV_df$Age) # uniform probability for all ages
 
 # Make sex sim and age diff matrix
 sex_sim <- matrix(0, nrow = nrow(nxn[[1]]), ncol = ncol(nxn[[1]]))
@@ -57,6 +73,7 @@ for (i in 1:(nrow(sex_sim) - 1)) {
     age_diff[j, i] <- age_diff[i, j]
   }
 }
+diag(sex_sim) <- 1
 
 # Smaller sample data
 dist_BG <- lapply(dist_BG, function(ls) ls[c(1:20),c(1:20)])
@@ -218,10 +235,12 @@ dis_matr <- function(Prop_HI) {
   return(dissimilarity_HI)
 }
 
+dist_HI <- dis_matr(prob_HI)
 dist_BG <- dis_matr(prob_BG)
 dist_SD <- dis_matr(prob_SD)
 dist_FG <- dis_matr(prob_FG)
 
+saveRDS(dist_HI, "dist_HI.RData")
 saveRDS(dist_BG, "dist_BG.RData")
 saveRDS(dist_SD, "dist_SD.RData")
 saveRDS(dist_FG, "dist_FG.RData")
@@ -319,9 +338,6 @@ model1 <- nimbleCode({
   
 })#model1
 
-
-
-
 # Parameters monitored (are there any new parameters to include?)
 parameters <- c("IJ_Random", 
                 "HRO_Effect", "SEX_Effect", "AGE_Effect", #"GR_Effect", 
@@ -332,8 +348,6 @@ ni <- 40000
 nt <- 40
 nb <- 20000
 nc <- 3
-
-# Array for the matrix
 
 # Data
 nimble.data = list(SRI = nxn,
@@ -398,33 +412,51 @@ node_names <- lapply(nxn, function(df) colnames(df))
 node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
 node_ids_j <- lapply(node_ids_i, function(df) t(df))
 
-df_list <- vector("list", length = length(nxn))
-for (i in seq_along(nxn)) {
-  upper_tri <- upper.tri(nxn[[i]], diag = TRUE)
-  
-  df_dolp <- data.frame(edge_weight = nxn[[i]][upper.tri(nxn[[i]])], 
-                        age_difference = age_list[[i]][upper.tri(age_list[[i]])],
-                        sex_difference = sex_list[[i]][upper.tri(sex_list[[i]])],
-                        HI_differences = dist_HI_sexage[[i]][upper.tri(dist_HI_sexage[[i]])],
-                        HRO = kov_sexage[[i]][upper.tri(kov_sexage[[i]])],
-                        node_id_1 = factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri]]), levels = node_names[[i]]),
-                        node_id_2 = factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri]]), levels = node_names[[i]]))
-  
-  df_list[[i]] <- df_dolp
-}
+# Format data
+upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
+edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn))))
+HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+#SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
+two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 
-# Calculate the mean value for each individual
-combined_array <- lapply(seq_along(df_list), function(i) {
-  upper_tri <- upper.tri(SE_array[,,i], diag = TRUE)
-  df_list[[i]]$SE <- SE_array[,,i][upper_tri]
-  return(df_list[[i]])
-})
+# Put data into a dataframe
+df_list = data.frame(edge_weight = HAB_data[, 1],
+                     HAB = HAB_data[, 2],
+                     HRO = rep(kov[upper.tri(kov, diag = TRUE)], 2),
+                     sex_similarity = rep(sex_sim[upper.tri(sex_sim, diag = TRUE)], 2),
+                     age_difference = rep(scale(c(age_diff[upper.tri(age_diff, diag = TRUE)])), 2),
+                     #GR = gr_list,
+                     HI_differences = c(HI[,1], HI[,2]),
+                     #Obs.Err = c(SE[,1], SE[,2]),
+                     node_id_1 = c(one[[1]], one[[2]]),
+                     node_id_2 = c(two[[1]], two[[2]]))
 
 # Multimembership models in MCMCglmm
-fit_mcmc <- MCMCglmm(edge_weight ~ HI_differences + HRO + age_difference + sex_difference, 
-                     random=~mm(node_id_1 + node_id_2), data=df_list[[year]])
+fit_mcmc <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
+                     random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
 summary(fit_mcmc)
 
+# Check for model convergence
+plot(fit_mcmc$Sol)
+plot(fit_mcmc$VCV)
+
+# Extract Posteriors
+posterior <- fit_mcmc$Sol
+
+# Plot the posterior distribution
+mcmc_areas(
+  posterior, 
+  pars = c("HI_differences:HAB", "HAB", 
+           "age_difference", "sex_similarity"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+)
+
+# Check model prediction
+loo(fit_mcmc)
 
 ###########################################################################
 # PART 5: Assortivity Index Based on HI Over Time  ------------------------------------------------
