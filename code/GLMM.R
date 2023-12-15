@@ -446,9 +446,11 @@ plot(fit_mcmc$VCV)
 posterior <- fit_mcmc$Sol
 
 # Plot the posterior distribution
+mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB", "HAB", 
+                                   "age_difference", "sex_similarity"))
 mcmc_areas(
   posterior, 
-  pars = c("HI_differences:HAB", "HAB", 
+  pars = c("(Intercept)", "HI_differences:HAB", "HAB", 
            "age_difference", "sex_similarity"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
