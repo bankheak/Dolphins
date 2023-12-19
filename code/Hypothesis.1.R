@@ -4,18 +4,28 @@
 setwd("../data")
 
 # Load all necessary packages
-require(asnipe) # get_group_by_individual--Damien Farine
-require(assocInd) # Could do permutatioNP
-require(vegan)
-require(doParallel) # Run multiple cores for faster computing
-require(foreach)
-library(reshape2) # For graphing
-library(gridExtra) # To combine plots
+library(asnipe) # get_group_by_individual--Damien Farine
+library(assocInd) # Could do permutatioNP
+library(vegan)
+library(assortnet) # associative indices
+library(kinship2) # genetic relatedness
+library(ggplot2) # Visualization
+library(abind) # array
+library(MCMCglmm) # MCMC models
+library(coda)
+library(bayesplot) # plot parameters
+library(sf) # Convert degrees to meters
+library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
+library(adehabitatHR) # Caluculate MCPs and Kernel density 
+library(rgdal) # Overlap
+source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
-orig_data <- read.csv("orig_data.csv")
-list_years <- readRDS("list_years_ovrlap.RData")
-nxn <- readRDS("nxn_ovrlap.RData")
+orig_data <- read.csv("orig_data.csv") # original data
+list_years <- readRDS("list_years.RData") # (1998-2004)/(2005-2014)
+list_years_int <- readRDS("list_years_int.RData") # (1995-2000)/(2001-2006)/(2007-20012)
+nxn <- readRDS("nxn.RData") # association matrix of list_years
+nxn_int <- readRDS("nxn_int.RData") # association matrix of list_years_int
 
 ###########################################################################
 # PART 1: Wrangle Data ---------------------------------------------
@@ -39,8 +49,8 @@ orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
 # Fix coding individuals
 orig_data$Code <- ifelse(orig_data$Code == "1312", "F222", orig_data$Code)
 
-# Now split up data 7 years before and after HAB
-orig_data <- orig_data[orig_data$Year >= 1998 & orig_data$Year <= 2011,]
+# Now split up data 
+orig_data <- orig_data[orig_data$Year >= 1995 & orig_data$Year <= 2012,]
 write.csv(orig_data, "orig_data.csv") # Save data
 
 # Make a list of split years per dataframe for before and after HAB
@@ -52,6 +62,9 @@ orig_data$Group <- ifelse(orig_data$Year < median(orig_data$Year), 1, 2)
 list_splityears <- split(orig_data, orig_data$Group)
 ## Split data by year
 data_by_year <- split(orig_data, orig_data$Year)
+## Split data by HAB intensity
+orig_data$Group2 <- ifelse(orig_data$Year < 2001, 1, ifelse(orig_data$Year < 2007, 2, 3))
+data_by_intense <- split(orig_data, orig_data$Group2) # (1995-2000), (2001-2006), (2007-20012)
 
 # Eliminate IDs with less than 5 locations
 fix_list <- function(list_splityears) {
@@ -72,20 +85,17 @@ fix_list <- function(list_splityears) {
     list_years[[i]] <- subset(list_splityears[[i]], Code %in% sub$ID)
     
   }
-  # Fix sex so that probable is assigned
-  list_years <- lapply(list_years, function(df) {
-    df$Sex <- ifelse(df$Sex == "Probable Female", "Female",
-                     ifelse(df$Sex == "Probable Male", "Male", df$Sex))
-    return(df)
-  })
   
   return(list_years)
 }
 
 list_years <- fix_list(list_splityears)
 list_years_one <- fix_list(data_by_year)
+list_years_int <- fix_list(data_by_intense)
 
-# Make an overlapping dataset where individuals before and after HAB match
+# Make an overlapping dataset where individuals between period match
+
+overlap_func <- function(list_years) {
 ## Get unique codes from both lists
 codes_list <- list()
 for (i in seq_along(list_years)) {
@@ -98,15 +108,26 @@ common_codes <- Reduce(intersect, codes_list)
 list_years_ovrlap <- lapply(list_years, function(df) {
   df[df$Code %in% common_codes, ]
 })
+return(list_years_ovrlap)
+}
+
+list_years <- overlap_func(list_years)
+list_years_int <- overlap_func(list_years_int)
 
 ## Subset the data_by_year based on the common codes
-list_years_one_ovrlap <- lapply(list_years_one, function(df) {
-  df[df$Code %in% unique(list_years_ovrlap[[1]]$Code), ]
-})
+SE_split <- function(list_years) {
+list_years_one <- lapply(list_years_one, function(df) {
+  df[df$Code %in% unique(list_years[[1]]$Code), ]
+})}
+
+list_years_one <- SE_split(list_years)
+list_years_one_int <- SE_split(list_years_int)
 
 # Save lists
-saveRDS(list_years_ovrlap, file = "list_years_ovrlap.RData")
-saveRDS(list_years_one_ovrlap, file = "list_years_one_ovrlap.RData")
+saveRDS(list_years, file = "list_years.RData")
+saveRDS(list_years_int, file = "list_years_int.RData")
+saveRDS(list_years_one, file = "list_years_one.RData")
+saveRDS(list_years_one, file = "list_years_one_int.RData")
 
 
 ###########################################################################
@@ -129,12 +150,9 @@ create_gbi <- function(list_years) {
   return(gbi)                                      
 }
 
-gbi <- create_gbi(list_years_one_ovrlap)
-gbi_ovrlap <- create_gbi(list_years_ovrlap)
-
-# Save gbi lists
-saveRDS(gbi, file = "gbi.RData")
-saveRDS(gbi_ovrlap, file = "gbi_ovrlap.RData")
+gbi <- create_gbi(list_years)
+gbi_one <- create_gbi(list_years_one)
+gbi_int <- create_gbi(list_years_int)
 
 # Create association matrix
 create_nxn <- function(gbi) {
@@ -153,11 +171,8 @@ create_nxn <- function(gbi) {
 }
 
 nxn <- create_nxn(gbi)
-nxn_ovrlap <- create_nxn(gbi_ovrlap)
-
-# Save nxn lists
-saveRDS(nxn, file = "nxn.RData")
-saveRDS(nxn_ovrlap, file = "nxn_ovrlap.RData")
+nxn_one <- create_nxn(gbi_one)
+nxn_int <- create_nxn(gbi_int)
 
 # Calculate nxn SE over years
 calc_cell_se <- function(matrices_list, se_data) {
@@ -186,24 +201,14 @@ calc_cell_se <- function(matrices_list, se_data) {
 }
 
 # Calculate standard error for each cell in the matrices
-se_matrix1 <- calc_cell_se(matrices_list = nxn_ovrlap[[1]], se_data = list(nxn[c(1:7)]))
-se_matrix2 <- calc_cell_se(matrices_list = nxn_ovrlap[[2]], se_data = list(nxn[c(8:14)]))
-SE_array <- list(SE_array1, SE_array2)
-
-saveRDS(SE_array, file = "SE_array.RData")
-
-###########################################################################
-# PART 3: Create ILV and HI Predictors ---------------------------------------------
-
-# SEX and AGE Matrices ------------------------------------------------------
-
-# Read in sex and age data
-ILV <- read.csv("Individual_Level_Variables.csv") 
-
-# Now make a sex and age data frame
-ILV_df <- list_years[[2]][!duplicated(list_years[[2]][, "Code"]), c("Code", "Sex", "Age")]
-ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
-                     ifelse(ILV_df$Sex == "Male", 1, NA))
+## Two
+se_matrix1 <- calc_cell_se(matrices_list = nxn[[1]], se_data = list(nxn_one[c(1:7)]))
+se_matrix2 <- calc_cell_se(matrices_list = nxn[[2]], se_data = list(nxn_one[c(8:14)]))
+SE_list <- list(se_matrix1, se_matrix2)
+## Three
+se_matrix1 <- calc_cell_se(matrices_list = nxn[[1]], se_data = list(nxn_one[c(1:7)]))
+se_matrix2 <- calc_cell_se(matrices_list = nxn[[2]], se_data = list(nxn_one[c(8:14)]))
+SE_list <- list(se_matrix1, se_matrix2)
 
 # Order data
 order_rows <- rownames(nxn[[1]])
@@ -213,12 +218,46 @@ order_cols <- colnames(nxn[[1]])
 nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 SE_list <- lapply(SE_list, function(mat) mat[order_rows, order_cols])
 
+# Save nxn lists
+saveRDS(nxn, file = "nxn.RData")
+saveRDS(nxn_one, file = "nxn_one.RData")
+saveRDS(nxn_int, file = "nxn_int.RData")
+
+saveRDS(SE_list, file = "SE_list.RData")
+saveRDS(SE_list_int, file = "SE_list_int.RData")
+
+###########################################################################
+# PART 3: Create ILV and HI Predictors ---------------------------------------------
+
+# SEX and AGE Matrices ------------------------------------------------------
+
+# Read in sex and age data
+ILV <- read.csv("Individual_Level_Variables.csv") 
+
+# Fix sex so that probable is assigned
+ILV$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
+                   ifelse(ILV$Sex == "Probable Male", "Male", ILV$Sex))
+ 
+# Now make a sex and age data frame
+ILV_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Sex", "BirthYear")]
+ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
+                     ifelse(ILV_df$Sex == "Male", 1, NA))
+colnames(ILV_df) <- c("Code", "Sex", "Age")
+
+# Make sim and diff matrices
+sim_dif_mat <- function(nxn) {
+# Order data
+order_rows <- rownames(nxn[[1]])
+order_cols <- colnames(nxn[[1]])
+
 # Now reorder the sex and age dataframe
+ILV_df <- ILV_df[ILV_df$Code %in% order_rows, ]
 ILV_df$Code <- ILV_df$Code[match(order_rows, ILV_df$Code)]
 
 # Estimate unknowns
 ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
-ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1, max = 40)), ILV_df$Age) # uniform probability for all ages
+ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1970, max = 2002)), as.numeric(ILV_df$Age)) # uniform probability for all ages
+ILV_df$Age <- ifelse(is.na(ILV_df$Age), 1997, as.numeric(ILV_df$Age)) # uniform probability for all ages
 
 # Make sex sim and age diff matrix
 sex_sim <- matrix(0, nrow = nrow(nxn[[1]]), ncol = ncol(nxn[[1]]))
@@ -236,16 +275,26 @@ for (i in 1:(nrow(sex_sim) - 1)) {
 }
 diag(sex_sim) <- 1
 
+return(list(sex_sim, age_diff))
+}
+
+ILV_mat <- sim_dif_mat(nxn)
+ILV_mat_int <- sim_dif_mat(nxn_int)
+
+# Save ILV matrices
+saveRDS(ILV_mat, "ILV_mat.RData")
+saveRDS(ILV_mat_int, "ILV_mat_int.RData")
+
+
 # HRO Matrix ------------------------------------------------------
 
-# Read in file
-list_years <- readRDS("list_years_ovrlap.RData")
-
 # Aggregate list into one homerange overlap matrix
-list_years_df <- merge(list_years[[1]], list_years[[2]], all = T)
+list_years <- list_years_int
 
 # Transform coordinate data into a Spatial Points Dataframe in km
-create_coord_data <- function(df) {
+create_coord_data <- function(list, period) {
+  
+  coords_list <- lapply(list, function(df) {
   
   # Extract IDs and coordinates
   ids <- df$Code
@@ -260,54 +309,89 @@ create_coord_data <- function(df) {
   # Transform to a UTM CRS that uses km as the unit
   coords_sp_utm <- spTransform(coords_sp, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
   
-  return(coords_sp_utm)
+  return(coords_sp_utm)})
+  
+  return(coords_list)
 }
 
-dolph.sp <- create_coord_data(list_years_df)
-
-# Visualize data extent
-vis.sf <- function(dolph.sp) {
-  dolp.sf <- st_as_sf(dolph.sp)
-  return(dolp.sf)
-}
-
-dolph.sf <- vis.sf(dolph.sp)
-
-vis_coord <- lapply(seq_along(dolph.sf), function (i) {ggplot(dolph.sf[[i]]) +
-    geom_sf(aes(color = "Dolphins"), size = 2, alpha = 0.5) +
-    theme_bw() +
-    labs(title = "Distribution") +
-    scale_color_manual(values = c("Dolphins" = "blue"))})
-wrap_plots(vis_coord, nrow = 1)
-
-# Look into what bandwidth 
-value <- 1
-period <- 1
-n <- length(dolph.sp[[period]]@coords[, value]) 
-bw_scott <- (4 / (3 * n))^(1/5) * sd(dolph.sp[[period]]@coords[, value])  # Scott's rule
-## Use the calculated bandwidth in density estimation
-density_estimate <- density(dolph.sp[[period]]@coords[, value], bw = bw_scott)
-## Plot the density estimate
-plot(density_estimate)
-
-# Calculate the maximum distance between points
-max(sqrt((dolph.sp[[period]]@coords[,1] - min(dolph.sp[[period]]@coords[,1]))^2 + 
-           (dolph.sp[[period]]@coords[,2] - min(dolph.sp[[period]]@coords[,2]))^2))
+dolph.sp <- create_coord_data(list_years)
+dolph.sp_int <- create_coord_data(list_years_int)
 
 # Use the calculated extent in kernelUD
-kernel <- kernelUD(dolph.sp, h = 1000)
+dolph.sp <- dolph.sp_int
+kernel <- lapply(dolph.sp, function(df) kernelUD(df, h = 1000))
 
 # Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)
-kov <- kerneloverlaphr(kernel, method = "HR", lev = 95)
+kov <- lapply(kernel, function(df) kerneloverlaphr(df, method = "HR", lev = 95))
+
+# Order data
+order_rows <- rownames(nxn[[1]])
+order_cols <- colnames(nxn[[1]])
+
+# Apply the order to each matrix in the list
+kov <- lapply(kov, function(mat) mat[order_rows, order_cols])
 
 # Save HRO
 saveRDS(kov, "kov.RDS")
+saveRDS(kov, "kov_int.RDS")
+
 # GR Matrix ------------------------------------------------------
 # HI Matrices ------------------------------------------------------
 
+# Visualize data: HAB v HI
+HAB_HI_data <- orig_data[, c("Year", "ConfHI")]
+HAB_HI_data$ConfHI <- ifelse(HAB_HI_data$ConfHI != "0", 1, 0)
+HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) sum(x == 1))
+HAB_HI_data$HAB <- c(rep(0, 4), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 5))
+# Create a barplot
+ggplot(aes(x = Year), data = HAB_HI_data) +
+  geom_bar(aes(y = ConfHI, fill = "ConfHI"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
+  geom_bar(aes(y = HAB, fill = "HAB"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
+  scale_y_continuous(name = "ConfHI", sec.axis = sec_axis(~., name = "HAB")) +
+  labs(title = "HAB and HI over Years", x = "Year") +
+  scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
+                    name = "Variables", 
+                    labels = c("ConfHI", "HAB"))
+
+# Extract specific columns from each data frame in list_years
+aux_data <- function(list_years) {
+  aux <- lapply(list_years, function(df) {
+    data.frame(Code = df$Code,
+               Behaviors = df$Behaviors,
+               HumanInteraction = df$HumanInteraction,
+               ConfHI = df$ConfHI)})
+  
+  # Add the 'Foraging' variable to each data frame in the 'aux' list
+  aux <- lapply(aux, function(df) {
+    df$Foraging <- "Other"
+    df$Foraging[grepl(pattern = 'Feed', x = df$Behaviors, ignore.case = FALSE)] <- "Feed"
+    df
+  })
+  return(aux)
+}
+
+aux <- aux_data(list_years)
+aux_int <- aux_data(list_years_int)
+
+# Categorize ID to Foraging
+ID_forg <- function(aux_data) {
+  IDbehav <- lapply(aux_data, function(df) {
+    df <- table(df$Code, df$Foraging)
+    df <- as.data.frame(df, stringsAsFactors = FALSE)
+    df <- df[, c(1, 3)]
+    colnames(df) <- c("Code", "Forg_Freq")
+    df <- aggregate(. ~ Code, data = df, sum)
+    df
+  })
+  return(IDbehav)
+}
+
+IDbehav <- ID_forg(aux)
+IDbehav_int <- ID_forg(aux_int)
+
 # Separate HI Behaviors
 #' BG = Beg: F, G
-#' SD = Scavenge and Depredation: B, C, D, E, A
+#' SD = Scavenge and Depredation: B, C, D, E
 #' FG = Fixed Gear Interaction: P
 # Change the code using ifelse statements
 subset_HI <- function(aux_data) {
@@ -320,6 +404,7 @@ subset_HI <- function(aux_data) {
 }
 
 aux <- subset_HI(aux)
+aux_int <- subset_HI(aux_int)
 
 # Categorize DiffHI to IDs
 diff_raw <- function(aux_data) {
@@ -330,6 +415,7 @@ diff_raw <- function(aux_data) {
   })}
 
 rawHI_diff <- diff_raw(aux)
+rawHI_diff_int <- diff_raw(aux_int)
 
 # Create a frequency count for each HI behavior
 get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
@@ -342,10 +428,14 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
   })
 }
 
-# Including zeros
+# Two period data
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
+# Three period data
+IDbehav_BG_int <- get_IDHI("BG", IDbehav_int, rawHI_diff_int)
+IDbehav_FG_int <- get_IDHI("FG", IDbehav_int, rawHI_diff_int)
+IDbehav_SD_int <- get_IDHI("SD", IDbehav_int, rawHI_diff_int)
 
 # Clump all the HI behaviors together
 clump_behav <- function(aux_data) {
@@ -367,6 +457,7 @@ clump_behav <- function(aux_data) {
 }
 
 rawHI <- clump_behav(aux)
+rawHI_int <- clump_behav(aux_int)
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
@@ -380,6 +471,7 @@ create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
 }
 
 IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
+IDbehav_HI_int <- create_IDbehav_HI(IDbehav_int, rawHI_int)
 
 # Proportion of time Foraging spent in HI
 Prop_HI <- function(IDbehav) {
@@ -393,13 +485,29 @@ Prop_HI <- function(IDbehav) {
   })
 }
 
+# Two period data
 prob_HI <- Prop_HI(IDbehav_HI)
 prob_BG <- Prop_HI(IDbehav_BG)
 prob_SD <- Prop_HI(IDbehav_SD)
 prob_FG <- Prop_HI(IDbehav_FG)
+# Three period data
+prob_HI_int <- Prop_HI(IDbehav_HI_int)
+prob_BG_int <- Prop_HI(IDbehav_BG_int)
+prob_SD_int <- Prop_HI(IDbehav_SD_int)
+prob_FG_int <- Prop_HI(IDbehav_FG_int)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
-dis_matr <- function(Prop_HI) {
+dis_matr <- function(Prop_HI, nxn) {
+  
+  # Order data
+  order_rows <- rownames(nxn[[1]])
+  
+  # Apply the order to each matrix in the list
+  Prop_HI <- lapply(Prop_HI, function (df) {
+    df$Code <- df$Code[match(order_rows, df$Code)]
+    return(df)})
+  
+  # Create matrix
   dissimilarity_HI <- list()
   for (i in seq_along(Prop_HI)) {
     fake_HIprop <- Prop_HI[[i]]$HIprop
@@ -408,21 +516,51 @@ dis_matr <- function(Prop_HI) {
   return(dissimilarity_HI)
 }
 
-dist_HI <- dis_matr(prob_HI)
-dist_BG <- dis_matr(prob_BG)
-dist_SD <- dis_matr(prob_SD)
-dist_FG <- dis_matr(prob_FG)
+# Two period data
+dist_HI <- dis_matr(prob_HI, nxn)
+dist_BG <- dis_matr(prob_BG, nxn)
+dist_SD <- dis_matr(prob_SD, nxn)
+dist_FG <- dis_matr(prob_FG, nxn)
 
 saveRDS(dist_HI, "dist_HI.RData")
 saveRDS(dist_BG, "dist_BG.RData")
 saveRDS(dist_SD, "dist_SD.RData")
 saveRDS(dist_FG, "dist_FG.RData")
 
+# Three period data
+dist_HI_int <- dis_matr(prob_HI_int, nxn_int)
+dist_BG_int <- dis_matr(prob_BG_int, nxn_int)
+dist_SD_int <- dis_matr(prob_SD_int, nxn_int)
+dist_FG_int <- dis_matr(prob_FG_int, nxn_int)
 
+saveRDS(dist_HI_int, "dist_HI_int.RData")
+saveRDS(dist_BG_int, "dist_BG_int.RData")
+saveRDS(dist_SD_int, "dist_SD_int.RData")
+saveRDS(dist_FG_int, "dist_FG_int.RData")
 
 
 ###########################################################################
 # PART 4: Run MCMC GLMM ---------------------------------------------
+
+# Read in social association matrix and listed data
+## Two period data
+dist_HI <- readRDS("dist_HI.RData") # HI Sim Matrix
+dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
+dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
+dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
+ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
+kov <- readRDS("kov.RDS")  # Home range overlap
+nxn <- readRDS("nxn.RData") # Association Matrix
+SE_list <- readRDS("SE_list.RData")
+## Three period data
+dist_HI <- readRDS("dist_HI_int.RData") # HI Sim Matrix
+dist_BG <- readRDS("dist_BG_int.RData") # BG Sim Matrix
+dist_FG <- readRDS("dist_FG_int.RData") # FG Sim Matrix
+dist_SD <- readRDS("dist_SD_int.RData") # SD Sim Matrix
+ILV_mat <-readRDS("ILV_mat_int.RData") # Age and Sex Matrices
+kov <- readRDS("kov_int.RDS")  # Home range overlap
+nxn <- readRDS("nxn_int.RData") # Association Matrix
+SE_list <- readRDS("SE_list_int.RData")
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -433,13 +571,15 @@ node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow =
 node_ids_j <- lapply(node_ids_i, function(df) t(df))
 
 # Format data
+period = 3
 upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
 edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn))))
-HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-BG <- abind(lapply(dist_BG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-FG <- abind(lapply(dist_FG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-SD <- abind(lapply(dist_SD, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn)))) # Two
+HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn)))) # Three
+HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+BG <- abind(lapply(dist_BG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+FG <- abind(lapply(dist_FG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+SD <- abind(lapply(dist_SD, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
 #SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
@@ -447,43 +587,47 @@ two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]
 # Put data into a dataframe
 df_list = data.frame(edge_weight = HAB_data[, 1],
                      HAB = HAB_data[, 2],
-                     HRO = rep(kov[upper.tri(kov, diag = TRUE)], 2),
-                     sex_similarity = rep(sex_sim[upper.tri(sex_sim, diag = TRUE)], 2),
-                     age_difference = rep(scale(c(age_diff[upper.tri(age_diff, diag = TRUE)])), 2),
+                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], period),
+                     age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], period),
                      #GR = gr_list,
-                     HI_differences = c(HI[,1], HI[,2]),
-                     BG_differences = c(BG[,1], BG[,2]),
-                     FG_differences = c(FG[,1], FG[,2]),
-                     SD_differences = c(SD[,1], SD[,2]),
+                     HI_differences = c(HI[,c(1:period)]),
+                     # BG_differences = c(BG[,c(1:period)]),
+                     # FG_differences = c(FG[,c(1:period)]),
+                     # SD_differences = c(SD[,c(1:period)]),
                      #Obs.Err = c(SE[,1], SE[,2]),
-                     node_id_1 = c(one[[1]], one[[2]]),
-                     node_id_2 = c(two[[1]], two[[2]]))
+                     node_id_1 = unlist(one),
+                     node_id_2 = unlist(two))
 
 # Multimembership models in MCMCglmm
-## HI Behavior Combined
+## HI Behavior Combined Two Year Period ##
 fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
                      random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
-summary(fit_mcmc)
+summary(fit_mcmc.1)
 
-## HI Behavior Separated
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ BG_differences * HAB + FG_differences * HAB + SD_differences * HAB + 
+                         HRO + age_difference + sex_similarity, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
+summary(fit_mcmc.1)
+
+## HI Behavior Combined Three Year Period ##
 fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
-                     random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
-summary(fit_mcmc)
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+summary(fit_mcmc.2)
 
 # Check for model convergence
-plot(fit_mcmc$Sol)
-plot(fit_mcmc$VCV)
+plot(fit_mcmc.2$Sol)
+plot(fit_mcmc.2$VCV)
 
 # Extract Posteriors
-posterior <- fit_mcmc$Sol
+posterior <- fit_mcmc.2$Sol
 
 # Plot the posterior distribution
-mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB", "HAB", 
-                                   "age_difference", "sex_similarity"))
+mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB", 
+                                   "HAB", "age_difference", "sex_similarity", "HRO"))
 mcmc_areas(
   posterior, 
-  pars = c("(Intercept)", "HI_differences:HAB", "HAB", 
-           "age_difference", "sex_similarity"),
+  pars = c("(Intercept)", "HI_differences:HAB", "HI_differences", "HAB"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
