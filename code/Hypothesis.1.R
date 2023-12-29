@@ -1,5 +1,7 @@
 # Network Analysis of Anthropogenic Influences in Bottlenose dolphins
 
+# Global Network Analysis Hypothesis #1 #
+
 # Set working directory here
 setwd("../data")
 
@@ -342,7 +344,7 @@ saveRDS(kov, "kov_int.RDS")
 HAB_HI_data <- orig_data[, c("Year", "ConfHI")]
 HAB_HI_data$ConfHI <- ifelse(HAB_HI_data$ConfHI != "0", 1, 0)
 HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) sum(x == 1))
-HAB_HI_data$HAB <- c(rep(0, 4), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 5))
+HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
 # Create a barplot
 ggplot(aes(x = Year), data = HAB_HI_data) +
   geom_bar(aes(y = ConfHI, fill = "ConfHI"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
@@ -397,7 +399,7 @@ IDbehav_int <- ID_forg(aux_int)
 subset_HI <- function(aux_data) {
   for (i in seq_along(aux_data)) {
     aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
-                                   ifelse(aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E", "A"), "SD",
+                                   ifelse(aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E"), "SD",
                                           ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
   }
   return(aux_data)  # Return the modified list of data frames
@@ -545,18 +547,18 @@ saveRDS(dist_FG_int, "dist_FG_int.RData")
 # Read in social association matrix and listed data
 ## Two period data
 dist_HI <- readRDS("dist_HI.RData") # HI Sim Matrix
-dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
-dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
-dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
+# dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
+# dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
+# dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
 SE_list <- readRDS("SE_list.RData")
 ## Three period data
 dist_HI <- readRDS("dist_HI_int.RData") # HI Sim Matrix
-dist_BG <- readRDS("dist_BG_int.RData") # BG Sim Matrix
-dist_FG <- readRDS("dist_FG_int.RData") # FG Sim Matrix
-dist_SD <- readRDS("dist_SD_int.RData") # SD Sim Matrix
+# dist_BG <- readRDS("dist_BG_int.RData") # BG Sim Matrix
+# dist_FG <- readRDS("dist_FG_int.RData") # FG Sim Matrix
+# dist_SD <- readRDS("dist_SD_int.RData") # SD Sim Matrix
 ILV_mat <-readRDS("ILV_mat_int.RData") # Age and Sex Matrices
 kov <- readRDS("kov_int.RDS")  # Home range overlap
 nxn <- readRDS("nxn_int.RData") # Association Matrix
@@ -574,19 +576,23 @@ node_ids_j <- lapply(node_ids_i, function(df) t(df))
 period = 3
 upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
 edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn)))) # Two
-HAB_data <- cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn)))) # Three
-HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-BG <- abind(lapply(dist_BG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-FG <- abind(lapply(dist_FG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-SD <- abind(lapply(dist_SD, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-#SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn))))) # Two
+HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn))))) # Three
+colnames(HAB_data) <- c("SRI", "HAB")
+HAB_data$During <- ifelse(HAB_data$HAB == 2, 0, 1)
+HAB_data$After <- ifelse(HAB_data$HAB == 3, 0, 1)
+HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+# BG <- abind(lapply(dist_BG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+# FG <- abind(lapply(dist_FG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+# SD <- abind(lapply(dist_SD, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
+# SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 
 # Put data into a dataframe
 df_list = data.frame(edge_weight = HAB_data[, 1],
-                     HAB = HAB_data[, 2],
+                     HAB_During = HAB_data[, 3],
+                     HAB_After = HAB_data[, 4],
                      HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
                      sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], period),
                      age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], period),
@@ -605,29 +611,30 @@ fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference
                      random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
 summary(fit_mcmc.1)
 
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ BG_differences * HAB + FG_differences * HAB + SD_differences * HAB + 
-                         HRO + age_difference + sex_similarity, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
-summary(fit_mcmc.1)
-
 ## HI Behavior Combined Three Year Period ##
-fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
+fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_differences * HAB_During + HI_differences * HAB_After + HRO + age_difference + sex_similarity, 
                        random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
 summary(fit_mcmc.2)
 
 # Check for model convergence
-plot(fit_mcmc.2$Sol)
-plot(fit_mcmc.2$VCV)
+model <- fit_mcmc.2
+plot(model$Sol)
+plot(model$VCV)
 
 # Extract Posteriors
-posterior <- fit_mcmc.2$Sol
+posterior <- model$Sol
 
 # Plot the posterior distribution
-mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB", 
-                                   "HAB", "age_difference", "sex_similarity", "HRO"))
+mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", #"HI_differences:HAB", 
+                                   "HI_differences:HAB_During", "HI_differences:HAB_After",
+                                   "HAB_During", "HAB_After", #"HAB", 
+                                   "age_difference", "sex_similarity", "HRO"))
 mcmc_areas(
   posterior, 
-  pars = c("(Intercept)", "HI_differences:HAB", "HI_differences", "HAB"),
+  pars = c("(Intercept)", "HI_differences", #"HI_differences:HAB", 
+           "HI_differences:HAB_During", "HI_differences:HAB_After",
+           "HAB_During", "HAB_After", #"HAB", 
+           "age_difference", "sex_similarity", "HRO"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
