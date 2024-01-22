@@ -18,13 +18,6 @@ library(bayesplot) # plot parameters
 library(doParallel)
 source("../code/functions.R") # Matrix_to_edge_list
 
-library(nimble) # For MCMC
-library(mcmcplots) # For MCMC plots
-library(MCMCvis)
-library(tidyverse)
-source("../code/attach.nimble_v2.R")
-
-
 ###########################################################################
 # PART 1: Wrangle Data ---------------------------------------------
 
@@ -169,67 +162,40 @@ saveRDS(result_df, "result_df.RData")
 ###########################################################################
 # PART 3: Run Model ---------------------------------------------
 
-# Models in nimble
-model1 <- nimbleCode({
+# Set up data
+result_df <- readRDS("result_df.RData")
+
+# Visualize data
+result_df$Period <- ifelse(result_df$Period == 0, "Pre_HAB", "Post_HAB")
+## Between
+ggplot(result_df, aes(x = Period, y = Between, fill = HI)) + 
+  geom_boxplot()
+## Strength
+ggplot(result_df, aes(x = Period, y = Strength, fill = HI)) + 
+  geom_boxplot() 
+## Degree
+ggplot(result_df, aes(x = Period, y = Degree, fill = HI)) + 
+  geom_boxplot() 
   
-  #Priors
-  Intercept ~ dt(mu=0, sigma=1, df=1)
-  HI_Effect ~ dt(mu=0, sigma=1, df=1)
-  Obs.Err ~ T(dt(mu=0, sigma=1, df=1), 0, )
+# Check distributions
+hist(c(scale(result_df$Between))) # continuous
+hist(c(scale(result_df$Degree)))
+hist(c(scale(result_df$Strength)))
 
-  for (j in 1:n.obs) {
-  
-    # Process Model
-        Between[i] <- Intercept + HI_Effect * HI[i] * Period[i]
-        
-    # Observation Model (Likelihood) 
-        Between_Obs[i] ~ dnorm(mean = Between[i], sd = Obs_Err)
-    
-  }#i
-  
-  
-})#model1
+# Make dummy variables
+result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
+result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
+result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
 
-# Parameters monitored (are there any new parameters to include?)
-parameters <- c("Intercept", "HI_Effect")
-
-# MCMC Settings
-ni <- 40000
-nt <- 40
-nb <- 20000
-nc <- 3
-
-# Data
-nimble.data = list(Between = result_df$Between,
-                   HI = as.numeric(result_df$HI),
-                   Period = result_df$Period)
-
-nimble.constants = list(n.obs = nrow(result_df))
-
-mcmc.output <- nimbleMCMC(code = model1,
-                          data = nimble.data,
-                          constants=nimble.constants,
-                          monitors = parameters,
-                          niter = ni,
-                          nburnin = nb,
-                          nchains = nc,
-                          thin=nt,
-                          summary=TRUE,
-                          samplesAsCodaMCMC = TRUE)
-
-
-
+# Look into nodal regression
 ## HI Behavior Combined Two Year Period ##
-fit_mcmc.b <- MCMCglmm(Between ~ HI * Period, 
-                       random=~ID, data = result_df, nitt = 10000)
-summary(fit_mcmc.b)
+fit_mcmc.b <- MCMCglmm(Between ~ BG * Period + FG * Period + SD, data = result_df, nitt = 10000)
+summary(fit_mcmc.b) # Might need to use a negative binomial dist
 
-fit_mcmc.s <- MCMCglmm(Strength ~ HI * Period, 
-                       random=~ID, data = result_df, nitt = 10000)
+fit_mcmc.s <- MCMCglmm(Strength ~ BG * Period + FG * Period + SD, data = result_df, nitt = 10000)
 summary(fit_mcmc.s)
 
-fit_mcmc.d <- MCMCglmm(Degree ~ HI * Period, 
-                       random=~ID, data = result_df, nitt = 10000)
+fit_mcmc.d <- MCMCglmm(Degree ~ BG * Period + FG * Period + SD, data = result_df, nitt = 10000)
 summary(fit_mcmc.d)
 
 # Check for model convergence
@@ -241,8 +207,8 @@ plot(model$VCV)
 posterior <- model$Sol
 
 # Plot the posterior distribution
-mcmc_intervals(posterior, pars = c("(Intercept)", "HIFG", "HINF", "HISD",
-                                   "Period", "HIFG:Period", "HINF:Period", "HISD:Period"))
+mcmc_intervals(posterior, pars = c("(Intercept)", "BG", "FG", "SD",
+                                   "Period", "BG:Period", "Period:FG"))
 mcmc_areas(
   posterior, 
   pars = c("(Intercept)", "HIFG", "HINF", "HISD",

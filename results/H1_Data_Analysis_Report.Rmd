@@ -1,0 +1,316 @@
+---
+title: "Data Analysis Report for Global Network Analysis Hypothesis #1"
+author: "Kyra Bankhead"
+date: "2024-01-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Defining Resolution for Hypothesis 1 Data Analysis
+
+### In this report, I will explain the variations in the outcomes of two regression models (MCMC GLMMs) utilizing distinct potential data resolutions. I have divided the SRI calculations and their predictor matrices based on two different resolutions: 
+
+### 1. Two Period Resolution:
+
+* Low red tide intensity: 1998-2004
+* High red tide intensity: 2005-2014 
+
+### 2. Three Period Resolution:  
+
+* Before red tide peak intensity: 1995-2000 
+* During red tide peak intensity: 2001-2006 
+* After red tide peak intensity: 2007-2012
+
+### The choice for these two resolutions were decided based on the relationship between human-interaction frequency and red tide data (# weeks with >100,000 cells/l). This is displayed in the following bar graph:
+
+
+```{r data, message=FALSE, warning=FALSE, include=FALSE}
+
+# Set working directory here
+setwd("../data")
+
+# Load all necessary packages
+library(asnipe) # get_group_by_individual--Damien Farine
+library(assocInd) # Could do permutatioNP
+library(vegan)
+library(assortnet) # associative indices
+library(kinship2) # genetic relatedness
+library(ggplot2) # Visualization
+library(abind) # array
+library(MCMCglmm) # MCMC models
+library(coda)
+library(bayesplot) # plot parameters
+library(sf) # Convert degrees to meters
+library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
+library(adehabitatHR) # Caluculate MCPs and Kernel density 
+library(rgdal) # Overlap
+source("../code/functions.R") # nxn
+
+```
+
+```{r HAB_plots, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Read in data
+orig_data <- read.csv("../data/orig_data.csv") # original data
+
+# Visualize data: HAB v HI
+HAB_HI_data <- orig_data[, c("Year", "ConfHI")]
+HAB_HI_data$ConfHI <- ifelse(HAB_HI_data$ConfHI != "0", 1, 0)
+HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) sum(x == 1))
+HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
+# Create a barplot
+ggplot(aes(x = Year), data = HAB_HI_data) +
+  geom_bar(aes(y = ConfHI, fill = "ConfHI"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
+  geom_bar(aes(y = HAB, fill = "HAB"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
+  scale_y_continuous(name = "ConfHI", sec.axis = sec_axis(~., name = "HAB")) +
+  labs(title = "HAB and HI over Years", x = "Year") +
+  scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
+                    name = "Variables", 
+                    labels = c("ConfHI", "HAB"))
+
+```
+
+
+
+```{r dataframe_2, message=FALSE, warning=FALSE, include=FALSE}
+
+# Read in social association matrix and listed data
+
+## Two period data
+dist_HI <- readRDS("../data/dist_HI.RData") # HI Sim Matrix
+ILV_mat <-readRDS("../data/ILV_mat.RData") # Age and Sex Matrices
+kov <- readRDS("../data/kov.RDS")  # Home range overlap
+nxn <- readRDS("../data/nxn.RData") # Association Matrix
+
+# Prepare random effect for MCMC
+num_nodes <- lapply(nxn, function(df) dim(df)[1])
+node_names <- lapply(nxn, function(df) colnames(df))
+
+# Sepaindex IDs into i and j
+node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
+node_ids_j <- lapply(node_ids_i, function(df) t(df))
+
+# Format data
+period = 2
+upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
+edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+
+## Split by 2 for data
+HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn))))) # Two
+colnames(HAB_data) <- c("SRI", "HAB")
+HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
+two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
+
+# Put data into a dataframe
+df_list = data.frame(edge_weight = HAB_data[, 1],
+                     HAB = HAB_data[, 2],
+                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], period),
+                     age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], period),
+                     HI_differences = c(HI[,c(1:period)]),
+                     node_id_1 = unlist(one),
+                     node_id_2 = unlist(two))
+
+```
+
+
+## Model 1: Two Period Resolution (1998-2004 | 2005-2014)
+
+```{r model_1, message=FALSE, warning=FALSE, include=FALSE}
+
+## HI Behavior Combined Two Year Period ##
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
+                     random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
+
+
+```
+
+
+### The graph below represents the parameter distribution estimates for each effect in model 1:
+
+#### Association Index (SRI) ~ HI_differences * HAB + HRO + age_difference + sex_similarity
+
+##### Description of parameters' effect on the association index (SRI):
+
+* **HI_differences:** Dyadic human-interaction (HI) dissimilarity effect (difference in HI engagement frequency between two individuals).
+* **HAB:** Binary effect of the harmful algal bloom, where 0 is the period of low red tide intensity (1998-2004) and 1 is the period of high red tide intensity (2005-2014).
+* **HI_differences:HAB:** Interactive effect between HI dissimilarity and the binary effect of the harmful algal bloom. 
+* **HRO:** Home range overlap effect.
+* **age_difference:** Dyadic age dissimilarity effect (difference in age).
+* **sex_similarity:** Dyadic binary sex similarity effect, where 0 represents different sexes and 1 is same sex.
+
+
+```{r model_1 plot, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Check for model convergence
+model <- fit_mcmc.1
+
+# Extract Posteriors
+posterior <- model$Sol
+
+# Summary of parameters
+summary(fit_mcmc.1)
+
+# Plot the posterior distribution
+mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB", "HAB", "age_difference", "sex_similarity", "HRO"))
+
+```
+
+
+### Model 1 Results
+
+The model estimated significant effects of sex, age, home range overlap, HAB and HI foraging behavior. Each of the directions of effects make sense ecologically. 
+
+* **Age difference** has a negative effect on the association index, meaning that dyads that are more similar in age were estimated to have a higher association index Therefore, this model accounted for age in influencing assortativity of the dolphins' community structure.
+
+* **Sex similarity** has a positive effect on the association index, meaning that dyads that are the same sex were estimated to have a higher association index. Therefore, this model accounted for sex in influencing assortativity of the dolphins' community structure.
+
+* **Home range overlap** has a positive effect on the association index, meaning that dyads that have overlapping home ranges were estimated to have a higher association index. Therefore, this model accounted for home range in influencing assortativity of the dolphins' community structure.
+
+* **HI difference** has a negative effect on the association index, meaning that dyads that are more similar in their engagement in HI behaviors were estimated to have a higher association index. Therefore, this model estimated an effect of HI engagement in influencing assortativity of the dolphins' community structure while accounting for age, sex and home range.
+
+* **Harmful algal bloom** has a positive effect on the association index, meaning that dyadic association indexs were higher during the high red tide intensity period. Therefore, this model estimated an effect of harmful algal bloom in influencing assortativity of the dolphins' community structure while accounting for age, sex and home range.
+
+* **Interaction between HAB and HI behavior** had a negative effect on association index, meaning that the effect of the dissimilarity in HI engagement between dyads was stronger during the high red tide intensity period.
+
+Although the interactive effect between HAB and HI behavior was not significant (>95% above or below zero), more than 86% of the distribution was below zero, meaning that the model estimated most of this parameter's effect to be negative. The wide distribution of this data could be due to the large number of zeros in each period’s HI dissimilarity matrix. This problem was minimized in the additive HI dissimilarity effect as it calculated likelihood estimates using both resolution periods' matrices.
+
+
+### Model 1 Pros:
+
+* Easier to understand visually than model 2.
+
+* Much lower Deviance Information Criterion (DIC), which is a Bayesian method for model comparison where a lower value represents a better fit model: -29206.2 vs. -49637.6.
+
+### Model 1 Cons:
+
+* The interaction term is not significant.
+
+
+
+## Model 2: Three Period Resolution (1995-2000 | 2001-2006 | 2007-2012)
+
+```{r dataframe_3, message=FALSE, warning=FALSE, include=FALSE}
+
+## Three period data
+dist_HI <- readRDS("../data/dist_HI_int.RData") # HI Sim Matrix
+ILV_mat <-readRDS("../data/ILV_mat_int.RData") # Age and Sex Matrices
+kov <- readRDS("../data/kov_int.RDS")  # Home range overlap
+nxn <- readRDS("../data/nxn_int.RData") # Association Matrix
+
+# Prepare random effect for MCMC
+num_nodes <- lapply(nxn, function(df) dim(df)[1])
+node_names <- lapply(nxn, function(df) colnames(df))
+
+# Sepaindex IDs into i and j
+node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow = df, ncol = df))
+node_ids_j <- lapply(node_ids_i, function(df) t(df))
+
+# Format data
+period = 3
+upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
+edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+
+## Split by 3 for int data
+HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn))))) # Three
+colnames(HAB_data) <- c("SRI", "HAB")
+HAB_data$During <- ifelse(HAB_data$HAB == 2, 1, 0)
+HAB_data$After <- ifelse(HAB_data$HAB == 3, 1, 0)
+
+HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
+two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
+
+# Put data into a dataframe
+df_list = data.frame(edge_weight = HAB_data[, 1],
+                     HAB_During = HAB_data[, 3],
+                     HAB_After = HAB_data[, 4],
+                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], period),
+                     age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], period),
+                     HI_differences = c(HI[,c(1:period)]),
+                     node_id_1 = unlist(one),
+                     node_id_2 = unlist(two))
+
+```
+
+
+```{r model_2, message=FALSE, warning=FALSE, include=FALSE}
+
+## HI Behavior Combined Three Year Period ##
+fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_differences * HAB_During + HI_differences * HAB_After + HRO + age_difference + sex_similarity, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+
+
+```
+
+
+### The graph below represents the parameter distribution estimates for each effect in model 2:
+
+#### Association Index (SRI) ~ HI_differences * HAB_During + HI_differences * HAB_After + HRO + age_difference + sex_similarity
+
+##### Description of parameters' effect on the association index (SRI):
+
+* **HI_differences:** Dyadic HI dissimilarity effect (difference in HI engagement frequency between two individuals).
+* **HAB_During:** Binary effect of the 2001-2006 harmful algal bloom period, where 0 was assigned to the periods before and after the red tide peak intensity (1995-2000 and 2007-2012) and 1 was assigned to the period during the red tide peak intensity period (2001-2006).
+* **HAB_After:** Binary effect of the 2007-2012 harmful algal bloom period, where 0 was assigned to the periods before and during the red tide peak intensity (1995-2000 and 2001-2006) and 1 was assigned to the period after the red tide peak intensity period (2007-2012).
+* **HI_differences:HAB_During:** Interactive effect between HI dissimilarity and the binary effect of the 2001-2006 harmful algal bloom period. 
+* **HI_differences:HAB_After:** Interactive effect between HI dissimilarity and the binary effect of the 2007-2012 harmful algal bloom period. 
+* **HRO:** Home range overlap effect.
+* **age_difference:** Dyadic age dissimilarity effect (difference in age).
+* **sex_similarity:** Dyadic binary sex similarity effect, where 0 represents different sexes and 1 is same sex.
+
+
+```{r model_2 plot, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Check for model convergence
+model <- fit_mcmc.2
+
+# Extract Posteriors
+posterior <- model$Sol
+
+# Summary of parameters
+summary(fit_mcmc.2)
+
+# Plot the posterior distribution
+mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", "HI_differences:HAB_During", "HI_differences:HAB_After", "HAB_During", "HAB_After", "age_difference", "sex_similarity", "HRO"))
+
+```
+
+
+### Model 2 Results
+
+The model estimated significant effects of sex, age, home range overlap, HAB, HI foraging behavior, and the interaction between HAB and HI behavior. This model produced the same results for the biological and ecological effects as well as the additive HI dissimilarity effect. Similar directions for the HAB and interactive terms were produced as well with slightly different interpretations.
+
+* **During harmful algal bloom** has a positive effect on the association index, meaning that dyadic association indexs were highest during the red tide peak intensity period. Therefore, this model estimated an effect of the 2001-2006 harmful algal bloom period in influencing assortativity of the dolphins' community structure while accounting for age, sex and home range.
+
+* **After harmful algal bloom** has a positive effect on the association index, meaning that dyadic association indexs were higher after the red tide peak intensity period than before but lower than during. Therefore, this model estimated an effect of the 2007-2012 harmful algal bloom period in influencing assortativity of the dolphins' community structure while accounting for age, sex and home range.
+
+* **Interaction between during HAB and HI behavior** had a negative effect on association index, meaning that the effect of the dissimilarity in HI engagement between dyads was strongest during the red tide peak intensity period.
+
+* **Interaction between after HAB and HI behavior** had a negative effect on association index, meaning that the effect of the dissimilarity in HI engagement between dyads was stronger after the red tide peak intensity period than before but lower than during.
+
+
+Both of the interactive effect between HAB and human-centric behavior were significant in this model.
+
+
+### Model 2 Pros:
+
+* Relatively similar results as model 1.
+
+* During has the highest effect but both are high and negative compared to before. The harmful algal bloom effects were stronger after the peak intensity period, however this model breaks down this effect in more detail than model 1.
+
+* Both of the interaction effects are significant.
+
+### Model 2 Cons:
+
+* A bit more complicated to understand visually than model 1.
+
+* Much higher DIC: -49637.6 vs. -29206.2.
+
+
+

@@ -24,8 +24,7 @@ source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
 orig_data <- read.csv("orig_data.csv") # original data
-list_years <- readRDS("list_years.RData") # (1998-2004)/(2005-2014)
-list_years_int <- readRDS("list_years_int.RData") # (1995-2000)/(2001-2006)/(2007-20012)
+list_years_int <- readRDS("list_years_int.RData") # (1995-2000)/(2001-2006)/(2007-2012)
 nxn <- readRDS("nxn.RData") # association matrix of list_years
 nxn_int <- readRDS("nxn_int.RData") # association matrix of list_years_int
 
@@ -461,6 +460,13 @@ clump_behav <- function(aux_data) {
 rawHI <- clump_behav(aux)
 rawHI_int <- clump_behav(aux_int)
 
+# Get total number of HI individuals
+total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$ConfHI > 0]))))
+BG_IDs <- unique(unlist(lapply(IDbehav_BG, function (df) unique(df$Code[df$HI > 0]))))
+FG_IDs <- unique(unlist(lapply(IDbehav_FG, function (df) unique(df$Code[df$HI > 0]))))
+SD_IDs <- unique(unlist(lapply(IDbehav_SD, function (df) unique(df$Code[df$HI > 0]))))
+ovrlap_IDs <- intersect(intersect(BG_IDs, FG_IDs), SD_IDs)
+
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
   IDbehav_HI <- lapply(seq_along(IDbehav_data), function(i) {
@@ -545,24 +551,11 @@ saveRDS(dist_FG_int, "dist_FG_int.RData")
 # PART 4: Run MCMC GLMM ---------------------------------------------
 
 # Read in social association matrix and listed data
-## Two period data
-dist_HI <- readRDS("dist_HI.RData") # HI Sim Matrix
-# dist_BG <- readRDS("dist_BG.RData") # BG Sim Matrix
-# dist_FG <- readRDS("dist_FG.RData") # FG Sim Matrix
-# dist_SD <- readRDS("dist_SD.RData") # SD Sim Matrix
-ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
-kov <- readRDS("kov.RDS")  # Home range overlap
-nxn <- readRDS("nxn.RData") # Association Matrix
-SE_list <- readRDS("SE_list.RData")
-## Three period data
 dist_HI <- readRDS("dist_HI_int.RData") # HI Sim Matrix
-# dist_BG <- readRDS("dist_BG_int.RData") # BG Sim Matrix
-# dist_FG <- readRDS("dist_FG_int.RData") # FG Sim Matrix
-# dist_SD <- readRDS("dist_SD_int.RData") # SD Sim Matrix
 ILV_mat <-readRDS("ILV_mat_int.RData") # Age and Sex Matrices
 kov <- readRDS("kov_int.RDS")  # Home range overlap
 nxn <- readRDS("nxn_int.RData") # Association Matrix
-SE_list <- readRDS("SE_list_int.RData")
+#SE_list <- readRDS("SE_list_int.RData")
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -573,18 +566,16 @@ node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow =
 node_ids_j <- lapply(node_ids_i, function(df) t(df))
 
 # Format data
-period = 3
 upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
 edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2]), c(rep(0, nrow(edge_nxn)), rep(1, nrow(edge_nxn))))) # Two
+
+## Split by 3 for int data
 HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn))))) # Three
 colnames(HAB_data) <- c("SRI", "HAB")
-HAB_data$During <- ifelse(HAB_data$HAB == 2, 0, 1)
-HAB_data$After <- ifelse(HAB_data$HAB == 3, 0, 1)
+HAB_data$During <- ifelse(HAB_data$HAB == 2, 1, 0)
+HAB_data$After <- ifelse(HAB_data$HAB == 3, 1, 0)
+
 HI <- abind(lapply(dist_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-# BG <- abind(lapply(dist_BG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-# FG <- abind(lapply(dist_FG, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
-# SD <- abind(lapply(dist_SD, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = period)
 # SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
@@ -594,30 +585,21 @@ df_list = data.frame(edge_weight = HAB_data[, 1],
                      HAB_During = HAB_data[, 3],
                      HAB_After = HAB_data[, 4],
                      HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
-                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], period),
-                     age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], period),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], 2),
+                     age_difference = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], 2),
                      #GR = gr_list,
-                     HI_differences = c(HI[,c(1:period)]),
-                     # BG_differences = c(BG[,c(1:period)]),
-                     # FG_differences = c(FG[,c(1:period)]),
-                     # SD_differences = c(SD[,c(1:period)]),
+                     HI_differences = c(HI[,c(1:2)]),
                      #Obs.Err = c(SE[,1], SE[,2]),
                      node_id_1 = unlist(one),
                      node_id_2 = unlist(two))
 
 # Multimembership models in MCMCglmm
-## HI Behavior Combined Two Year Period ##
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_differences * HAB + HRO + age_difference + sex_similarity, 
-                     random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000)
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_differences * HAB_During + HI_differences * HAB_After + HRO + age_difference + sex_similarity, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
 summary(fit_mcmc.1)
 
-## HI Behavior Combined Three Year Period ##
-fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_differences * HAB_During + HI_differences * HAB_After + HRO + age_difference + sex_similarity, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-summary(fit_mcmc.2)
-
 # Check for model convergence
-model <- fit_mcmc.2
+model <- fit_mcmc.1
 plot(model$Sol)
 plot(model$VCV)
 
@@ -627,16 +609,43 @@ posterior <- model$Sol
 # Plot the posterior distribution
 mcmc_intervals(posterior, pars = c("(Intercept)", "HI_differences", #"HI_differences:HAB", 
                                    "HI_differences:HAB_During", "HI_differences:HAB_After",
-                                   "HAB_During", "HAB_After", #"HAB", 
+                                   "HAB_During", "HAB_After", 
+                                   #"HAB", 
                                    "age_difference", "sex_similarity", "HRO"))
 mcmc_areas(
   posterior, 
-  pars = c("(Intercept)", "HI_differences", #"HI_differences:HAB", 
-           "HI_differences:HAB_During", "HI_differences:HAB_After",
-           "HAB_During", "HAB_After", #"HAB", 
+  pars = c("(Intercept)", 
+           "HI_differences:HAB_During", 
+           "HI_differences:HAB_After",
+           "HAB_During", "HAB_After", 
+           "HAB", 
            "age_difference", "sex_similarity", "HRO"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
 )
 
+# Test if model is good for predicting data
+# Make empty list for each row's distribution
+edge_weight <- Obs.edge_weight <- vector("list", length = nrow(df_list))
+# Make an empty vector for the true and false values
+exp.obs <- NULL
+posterior <- as.data.frame(posterior)
+
+for (i in 1:nrow(df_list)) {
+  # Expected bill length
+  edge_weight[[i]] <-  posterior[,"(Intercept)"] + posterior[,"HI_differences:HAB"]*(df_list$HI_differences[i] * df_list$HAB[i]) + 
+    posterior[,"HI_differences"] * df_list$HI_differences[i] + posterior[,"HAB"] * df_list$HAB[i]
+    posterior[,"HRO"]*df_list$HRO[i] + 
+    posterior[,"age_difference"]*df_list$age_difference[i] + 
+    posterior[,"sex_similarity"]*df_list$sex_similarity[i]
+  
+  # Observed bill length
+  Obs.edge_weight[[i]] <- rnorm(n = 1700, mean = edge_weight[[i]], sd = rep(sd(edge_weight[[i]]), nrow(df_list)))
+  
+  # Calculate how often observed values fall into expected
+  exp.obs[i] <- df_list$edge_weight[i] >= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[1] & 
+    df_list$edge_weight[i] <= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[2]
+}
+
+sum(exp.obs)/length(exp.obs)
