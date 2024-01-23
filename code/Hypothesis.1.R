@@ -482,9 +482,6 @@ Prop_HI <- function(IDbehav) {
 
 # Two period data
 prob_HI <- Prop_HI(IDbehav_HI)
-prob_BG <- Prop_HI(IDbehav_BG)
-prob_SD <- Prop_HI(IDbehav_SD)
-prob_FG <- Prop_HI(IDbehav_FG)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(Prop_HI, nxn) {
@@ -508,14 +505,24 @@ dis_matr <- function(Prop_HI, nxn) {
 
 # Two period data
 dist_HI <- dis_matr(prob_HI, nxn)
-dist_BG <- dis_matr(prob_BG, nxn)
-dist_SD <- dis_matr(prob_SD, nxn)
-dist_FG <- dis_matr(prob_FG, nxn)
 
-saveRDS(dist_HI, "dist_HI.RData")
-saveRDS(dist_BG, "dist_BG.RData")
-saveRDS(dist_SD, "dist_SD.RData")
-saveRDS(dist_FG, "dist_FG.RData")
+# Transform to similarity
+# Method 1: Normalize Euclidian distances to make it range [0,1] and then simply apply 1-normalized distance
+sim_HI <- lapply(dist_HI, function (df) {
+  # normalize distances to [0,1]
+  normdistance <- df / max(df)
+  # similarity [0,1] = 1 - distance[0,1]
+  similarity1 = 1-normdistance
+  return(similarity1)
+})
+
+# Method 2: using Euler's number (base of the natural log) to rescale and convert distances to [0,1] similarity
+sim_HI2 <- lapply(dist_HI, function (df) {
+  similarity2 = 1/exp(df)
+  return(similarity2)
+})
+
+saveRDS(sim_HI, "sim_HI.RData")
 
 
 ###########################################################################
