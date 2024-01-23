@@ -24,9 +24,8 @@ source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
 orig_data <- read.csv("orig_data.csv") # original data
-list_years_int <- readRDS("list_years_int.RData") # (1995-2000)/(2001-2006)/(2007-2012)
-nxn <- readRDS("nxn.RData") # association matrix of list_years
-nxn_int <- readRDS("nxn_int.RData") # association matrix of list_years_int
+list_years <- readRDS("list_years_int.RData") # (1995-2000)/(2001-2006)/(2007-2012)
+nxn <- readRDS("nxn_int.RData") # association matrix of list_years_int
 
 ###########################################################################
 # PART 1: Wrangle Data ---------------------------------------------
@@ -372,40 +371,36 @@ aux_data <- function(list_years) {
 }
 
 aux <- aux_data(list_years)
-aux_int <- aux_data(list_years_int)
 
 # Categorize ID to Foraging
-ID_forg <- function(aux_data) {
+ID_sight <- function(aux_data) {
   IDbehav <- lapply(aux_data, function(df) {
-    df <- table(df$Code, df$Foraging)
-    df <- as.data.frame(df, stringsAsFactors = FALSE)
-    df <- df[, c(1, 3)]
-    colnames(df) <- c("Code", "Forg_Freq")
-    df <- aggregate(. ~ Code, data = df, sum)
+    df <- data.frame(
+      Code = unique(df$Code),
+      Sightings = tapply(df$Code, df$Code, length)
+    )
     df
   })
   return(IDbehav)
 }
 
-IDbehav <- ID_forg(aux)
-IDbehav_int <- ID_forg(aux_int)
+IDbehav <- ID_sight(aux)
 
 # Separate HI Behaviors
 #' BG = Beg: F, G
-#' SD = Scavenge and Depredation: B, C, D, E
+#' SD = Scavenge and Depredation: A, B, C, D, E
 #' FG = Fixed Gear Interaction: P
 # Change the code using ifelse statements
 subset_HI <- function(aux_data) {
   for (i in seq_along(aux_data)) {
     aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
-                                   ifelse(aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E"), "SD",
+                                   ifelse(aux_data[[i]]$ConfHI %in% c("A", "B", "C", "D", "E"), "SD",
                                           ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
   }
   return(aux_data)  # Return the modified list of data frames
 }
 
 aux <- subset_HI(aux)
-aux_int <- subset_HI(aux_int)
 
 # Categorize DiffHI to IDs
 diff_raw <- function(aux_data) {
@@ -416,7 +411,6 @@ diff_raw <- function(aux_data) {
   })}
 
 rawHI_diff <- diff_raw(aux)
-rawHI_diff_int <- diff_raw(aux_int)
 
 # Create a frequency count for each HI behavior
 get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
@@ -429,14 +423,9 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
   })
 }
 
-# Two period data
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
-# Three period data
-IDbehav_BG_int <- get_IDHI("BG", IDbehav_int, rawHI_diff_int)
-IDbehav_FG_int <- get_IDHI("FG", IDbehav_int, rawHI_diff_int)
-IDbehav_SD_int <- get_IDHI("SD", IDbehav_int, rawHI_diff_int)
 
 # Clump all the HI behaviors together
 clump_behav <- function(aux_data) {
@@ -458,7 +447,6 @@ clump_behav <- function(aux_data) {
 }
 
 rawHI <- clump_behav(aux)
-rawHI_int <- clump_behav(aux_int)
 
 # Get total number of HI individuals
 total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$ConfHI > 0]))))
@@ -472,20 +460,19 @@ create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
   IDbehav_HI <- lapply(seq_along(IDbehav_data), function(i) {
     df <- IDbehav_data[[i]]
     df$HI <- rawHI_data[[i]]$ConfHI
-    colnames(df) <- c("Code", "Foraging", "HI")
+    colnames(df) <- c("Code", "Sightings", "HI")
     df
   })
   return(IDbehav_HI)
 }
 
 IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
-IDbehav_HI_int <- create_IDbehav_HI(IDbehav_int, rawHI_int)
 
-# Proportion of time Foraging spent in HI
+# Proportion of time Sightings spent in HI
 Prop_HI <- function(IDbehav) {
   lapply(seq_along(IDbehav), function(i) {
     df <- IDbehav[[i]]
-    df$HIprop <- as.numeric(df$HI) / as.numeric(df$Foraging)
+    df$HIprop <- as.numeric(df$HI) / as.numeric(df$Sightings)
     df$HIprop[is.na(df$HIprop)] <- 0
     # Keep only 'Code' and 'HIprop' columns
     df <- df[, c('Code', 'HIprop')]
@@ -498,11 +485,6 @@ prob_HI <- Prop_HI(IDbehav_HI)
 prob_BG <- Prop_HI(IDbehav_BG)
 prob_SD <- Prop_HI(IDbehav_SD)
 prob_FG <- Prop_HI(IDbehav_FG)
-# Three period data
-prob_HI_int <- Prop_HI(IDbehav_HI_int)
-prob_BG_int <- Prop_HI(IDbehav_BG_int)
-prob_SD_int <- Prop_HI(IDbehav_SD_int)
-prob_FG_int <- Prop_HI(IDbehav_FG_int)
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(Prop_HI, nxn) {
@@ -534,17 +516,6 @@ saveRDS(dist_HI, "dist_HI.RData")
 saveRDS(dist_BG, "dist_BG.RData")
 saveRDS(dist_SD, "dist_SD.RData")
 saveRDS(dist_FG, "dist_FG.RData")
-
-# Three period data
-dist_HI_int <- dis_matr(prob_HI_int, nxn_int)
-dist_BG_int <- dis_matr(prob_BG_int, nxn_int)
-dist_SD_int <- dis_matr(prob_SD_int, nxn_int)
-dist_FG_int <- dis_matr(prob_FG_int, nxn_int)
-
-saveRDS(dist_HI_int, "dist_HI_int.RData")
-saveRDS(dist_BG_int, "dist_BG_int.RData")
-saveRDS(dist_SD_int, "dist_SD_int.RData")
-saveRDS(dist_FG_int, "dist_FG_int.RData")
 
 
 ###########################################################################
