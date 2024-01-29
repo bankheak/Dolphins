@@ -254,7 +254,7 @@ turnover_w <- function(data, iter=1000, subseq=FALSE, plot=FALSE){
 subset_HI <- function(aux_data) {
   for (i in seq_along(aux_data)) {
     aux_data[[i]]$DiffHI <- ifelse(
-      aux_data[[i]]$ConfHI %in% c("B", "C", "D", "E", "H"), "SD",
+      aux_data[[i]]$ConfHI %in% c("A", "B", "C", "D", "E", "H"), "SD",
       ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
              ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None"))
     )

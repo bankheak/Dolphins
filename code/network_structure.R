@@ -40,8 +40,7 @@ ig_func <- function(nxn) {
       diag = FALSE)})
   return(ig)}
 
-ig <- ig_func(nxn)
-ig_ovrlap <- ig_func(nxn_ovrlap)
+ig <- ig_func(nxn_ovrlap)
 
 # Set the node names based on row names
 row_name_assign <- function(nxn, ig) {
@@ -67,11 +66,10 @@ row_names_HI <- row_name_HI_func(list_years)
 row_names_HI_ovrlap <- row_name_HI_func(list_years_ovrlap)
 
 # Plot network
-ig <- ig
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow=c(1, 2), mar = c(0.5, 0.5, 0.5, 0.5))
+par(mfrow=c(1, 3), mar = c(0.5, 0.5, 0.5, 0.5))
 
-main_labels <- c("1998-2004 Network", "2005-2011 Network")
+main_labels <- c("Before Network", "During Network", "After Network")
 
 # Loop through the list of graphs and plot them side by side
 for (i in 1:length(ig)) {

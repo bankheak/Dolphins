@@ -8,6 +8,8 @@ setwd("../data")
 # Load all necessary packages
 library(tnet) # For weights
 library(igraph) # Measure centrality here
+library(ggraph)
+library(grid)
 library(assortnet) # associative indices
 library(ggplot2) # Visualization
 library(abind) # array
@@ -179,6 +181,8 @@ names_NF[[i]] <- unique_codes[!(unique_codes %in% names_BG[[i]] |
 
 
 HI_list <- list(BG = names_BG, FG = names_FG, SD = names_SD, NF = names_NF)
+
+saveRDS(HI_list, "HI_list.RData")
 
 # Combine the data
 local_metrics_HI <- data.frame(ID = compare_between$ID,
@@ -376,3 +380,66 @@ for (j in c("BG", "FG", "SD")) {
 heatmap_list[[1]] # BG
 heatmap_list[[2]] # FG
 heatmap_list[[3]] # SD
+
+###########################################################################
+# PART 5: Multinetwork ---------------------------------------------
+
+## Create social network
+ig_func <- function(nxn) {
+  ig <- lapply(nxn, function (df) {
+    graph_from_adjacency_matrix(
+      df,
+      mode = "undirected",
+      weighted = TRUE,
+      diag = FALSE)})
+  return(ig)}
+
+ig <- ig_func(nxn)
+
+# Set the node names based on row names
+row_name_assign <- function(nxn, ig) {
+  row_names <- lapply(nxn, function (df) {rownames(df)})
+  for (i in seq_along(ig)) {
+    V(ig[[i]])$name <- row_names[[i]]
+  }
+}
+
+row_name_assign(nxn, ig)
+
+# Only show IDs of HI dolphins
+HI_list <- readRDS("HI_list.RData")
+HI_list <- HI_list[-4] # Get rid of natural foragers
+
+# Plot network
+# Set up the plotting area with 1 row and 2 columns for side-by-side plots
+par(mfrow=c(3, 3), mar = c(0.8, 0.8, 0.8, 0.8))
+
+# Loop through the list of graphs and plot them side by side
+for (i in 1:length(ig)) {
+  for (j in HI_list) {
+    
+    # Get nodes for each behavior
+    labeled_nodes <- V(ig[[i]])$name %in% j[[i]]
+    
+    plot(ig[[i]],
+         layout = layout_with_fr(ig[[i]]),
+         edge.width = E(ig[[i]])$weight * 4, # edge thickness
+         vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individuals strength (centrality)
+         vertex.frame.color = NA,
+         vertex.label.family = "Helvetica",
+         vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
+         vertex.label.color = "black",
+         vertex.label.cex = 0.8,
+         vertex.label.dist = 2,
+         vertex.frame.width = 0.01,
+         vertex.color = ifelse(labeled_nodes, "red", "grey"))
+    
+    # Add the plot with a box around it
+    box()
+    
+  }
+}
+
+par(mfrow=c(1, 1))
+
+

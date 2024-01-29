@@ -267,8 +267,15 @@ saveRDS(kov, "kov.RDS")
 # Read in sex and age data
 ILV <- read.csv("Paternity_data.csv") 
 
+# Order data
+order_rows <- rownames(nxn[[1]])
+order_cols <- colnames(nxn[[1]])
+ILV <- ILV[ILV$Alias %in% order_rows, ]
+ILV$Alias <- ILV$Alias[match(order_rows, ILV$Alias)]
+
 # Subset paternity data
 pedigree_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Mom", "Dad", "Sex")]
+
 # Fix dad data
 pedigree_df$Dad <- ifelse(pedigree_df$Dad == "na", NA, pedigree_df$Dad)
 pedigree_df$Dad <- ifelse(pedigree_df$Dad == "FB26 or FB66", "FB26", pedigree_df$Dad)
@@ -280,6 +287,7 @@ pedigree_df$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
 # Make sex numeric
 pedigree_df$Sex <- ifelse(pedigree_df$Sex == "Female", 2, 
                      ifelse(pedigree_df$Sex == "Male", 1, NA))
+
 # Make id numeric
 pedigree_df$ID <- rownames(pedigree_df)
 ## Moms
@@ -287,45 +295,70 @@ for (i in 1:nrow(pedigree_df)) {
   pedigree_df$Mom <- ifelse(pedigree_df$Mom %in% pedigree_df$Alias[i], 
                             pedigree_df$ID[i], pedigree_df$Mom)
 }
-pedigree_df$Mom <- ifelse(nchar(pedigree_df$Mom) > 3, NA, pedigree_df$Mom)
-### Fill in the rest of the NAs with random numbers
-start_value <- 118
-for (i in 1:nrow(pedigree_df)) {
-  if (is.na(pedigree_df$Mom[i])) {
-    pedigree_df$Mom[i] <- start_value
-    start_value <- start_value + 1
-  }
+### Only take the moms that aren't found in the 117 list
+missing_moms<- subset(pedigree_df, nchar(Mom) > 3)
+number_mom <- data.frame(Mom = unique(missing_moms$Mom), 
+                         ID = c(118:(117 + length(unique(missing_moms$Mom)))))
+for (i in 1:nrow(missing_moms)) {
+  missing_moms$Mom <- ifelse(missing_moms$Mom %in% number_mom$Mom[i], 
+                             number_mom$ID[i],
+                             missing_moms$Mom)
 }
+### Fill in the rest of the NAs with random numbers
+missing_moms_match<- subset(pedigree_df, nchar(Mom) > 3)
+matching_indices <- match(pedigree_df$Mom, missing_moms_match$Mom)
+pedigree_df$Mom <- ifelse(!is.na(matching_indices), missing_moms$Mom[matching_indices], pedigree_df$Mom)
 
 ## Dads
 for (i in 1:nrow(pedigree_df)) {
   pedigree_df$Dad <- ifelse(pedigree_df$Dad %in% pedigree_df$Alias[i], 
                             pedigree_df$ID[i], pedigree_df$Dad)
 }
-pedigree_df$Dad <- ifelse(nchar(pedigree_df$Dad) > 3, NA, pedigree_df$Dad)
-### Fill in the rest of the NAs with random numbers
-start_value <- 118
-for (i in 1:nrow(pedigree_df)) {
-  if (is.na(pedigree_df$Dad[i])) {
-    pedigree_df$Dad[i] <- start_value
-    start_value <- start_value + 1
-  }
+### Only take the moms that aren't found in the 117 list
+missing_dads<- subset(pedigree_df, nchar(Dad) > 3)
+number_dad <- data.frame(Dad = unique(missing_dads$Dad), 
+                         ID = c(118:(117 + length(unique(missing_dads$Dad)))))
+for (i in 1:nrow(missing_dads)) {
+  missing_dads$Dad <- ifelse(missing_dads$Dad %in% number_dad$Dad[i], 
+                             number_dad$ID[i],
+                             missing_dads$Dad)
 }
+### Fill in the rest of the NAs with random numbers
+missing_dads_match<- subset(pedigree_df, nchar(Dad) > 3)
+matching_indices <- match(pedigree_df$Dad, missing_dads_match$Dad)
+pedigree_df$Dad <- ifelse(!is.na(matching_indices), missing_dads$Dad[matching_indices], pedigree_df$Dad)
 
 # Now create data for function
-pedigree_data <- data.frame(id = pedigree_df$ID,
-                          mom = pedigree_df$Mom,
-                          dad = pedigree_df$Dad,
+pedigree_data <- data.frame(id = as.numeric(pedigree_df$ID),
+                          mom = as.numeric(pedigree_df$Mom),
+                          dad = as.numeric(pedigree_df$Dad),
                           sex = pedigree_df$Sex)
 
-kin_matrix <- kinship(id = pedigree_data$Alias, 
-                      dadid = pedigree_data$Dad, 
-                      momid = pedigree_data$Mom,
-                      sex = pedigree_data$Sex)
+# Assuming your dataframe is named pedigree_data
+pedigree_data$dad[is.na(pedigree_data$dad)] <- 0  # Replace NA with 0 or another appropriate code
+pedigree_data$mom[is.na(pedigree_data$mom)] <- 0  # Replace NA with 0 or another appropriate code
 
-tped <- with(pedigree_data, pedigree(id, dad, mom, sex))
-round(8*kinship(tped))
+# Get rid of missing individuals in mom and dad
+pedigree_data$mom <- ifelse(pedigree_data$mom > 117, 0, pedigree_data$mom)
+pedigree_data$dad <- ifelse(pedigree_data$dad > 117, 0, pedigree_data$dad)
+pedigree_data$mom <- ifelse(pedigree_data$dad == 0, 0, pedigree_data$mom)
+pedigree_data$dad <- ifelse(pedigree_data$mom == 0, 0, pedigree_data$dad)
 
+# Change errors
+pedigree_data$sex[pedigree_data$id %in% c(25, 23)] <- 1
+pedigree_data$sex[pedigree_data$id %in% c(4, 6, 29)] <- 2
+
+# Create GR matrix
+ped <- pedigree(id = pedigree_data$id, 
+                dadid = pedigree_data$dad, 
+                momid = pedigree_data$mom,
+                sex = pedigree_data$sex)
+plot(ped)
+
+# Calculate kinship matrix
+kinship_matrix <- kinship(ped)
+
+saveRDS(kinship_matrix, "kinship_matrix.RData")
 
 # HI Matrices ------------------------------------------------------
 
@@ -476,12 +509,6 @@ sim_HI <- lapply(dist_HI, function (df) {
   return(similarity1)
 })
 
-# Method 2: using Euler's number (base of the natural log) to rescale and convert distances to [0,1] similarity
-sim_HI2 <- lapply(dist_HI, function (df) {
-  similarity2 = 1/exp(df)
-  return(similarity2)
-})
-
 saveRDS(sim_HI, "sim_HI.RData")
 
 
@@ -493,6 +520,7 @@ sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
+gr <- readRDS("kinship_matrix.RData")
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -513,7 +541,6 @@ HAB_data$During <- ifelse(HAB_data$HAB == 2, 1, 0)
 HAB_data$After <- ifelse(HAB_data$HAB == 3, 1, 0)
 
 HI <- abind(lapply(sim_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
-# SE <- abind(lapply(SE_list, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 
@@ -524,14 +551,14 @@ df_list = data.frame(edge_weight = HAB_data[, 1],
                      HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
                      sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], 3),
                      age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], 3),
-                     #GR = gr_list,
+                     GR = rep(gr[upper.tri(gr, diag = TRUE)], 3),
                      HI_similarity = c(HI[,c(1:3)]),
-                     #Obs.Err = c(SE[,1], SE[,2]),
                      node_id_1 = unlist(one),
                      node_id_2 = unlist(two))
 
 # Multimembership models in MCMCglmm
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + HRO + age_similarity + sex_similarity, 
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
+                         HRO + age_similarity + sex_similarity + GR, 
                        random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
 summary(fit_mcmc.1)
 
