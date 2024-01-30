@@ -185,7 +185,7 @@ order_cols <- colnames(nxn[[1]])
 
 # Now reorder the sex and age dataframe
 ILV_df <- ILV_df[ILV_df$Code %in% order_rows, ]
-ILV_df$Code <- ILV_df$Code[match(order_rows, ILV_df$Code)]
+ILV_df$Code <- ILV_df[match(order_rows, ILV_df$Code)]
 
 # Estimate unknowns
 ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
@@ -265,16 +265,20 @@ saveRDS(kov, "kov.RDS")
 # GR Matrix ------------------------------------------------------
 
 # Read in sex and age data
-ILV <- read.csv("Paternity_data.csv") 
+ILV_pat <- read.csv("Paternity_data.csv") 
 
 # Order data
 order_rows <- rownames(nxn[[1]])
 order_cols <- colnames(nxn[[1]])
-ILV <- ILV[ILV$Alias %in% order_rows, ]
-ILV$Alias <- ILV$Alias[match(order_rows, ILV$Alias)]
+# Reorder rows in 'ILV' based on 'order_rows'
+ILV <- ILV_pat[ILV_pat$Alias %in% order_rows, ]
+ILV <- ILV[match(order_rows, ILV$Alias), ]
 
 # Subset paternity data
-pedigree_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Mom", "Dad", "Sex")]
+pedigree_df <- data.frame(Alias = ILV$Alias,
+                          Mom = ILV$Mom,
+                          Dad = ILV$Dad,
+                          Sex = ILV$Sex)
 
 # Fix dad data
 pedigree_df$Dad <- ifelse(pedigree_df$Dad == "na", NA, pedigree_df$Dad)
@@ -289,41 +293,53 @@ pedigree_df$Sex <- ifelse(pedigree_df$Sex == "Female", 2,
                      ifelse(pedigree_df$Sex == "Male", 1, NA))
 
 # Make id numeric
-pedigree_df$ID <- rownames(pedigree_df)
 ## Moms
+pedigree_df$ID <- rownames(pedigree_df)
 for (i in 1:nrow(pedigree_df)) {
   pedigree_df$Mom <- ifelse(pedigree_df$Mom %in% pedigree_df$Alias[i], 
                             pedigree_df$ID[i], pedigree_df$Mom)
 }
-### Only take the moms that aren't found in the 117 list
-missing_moms<- subset(pedigree_df, nchar(Mom) > 3)
-number_mom <- data.frame(Mom = unique(missing_moms$Mom), 
-                         ID = c(118:(117 + length(unique(missing_moms$Mom)))))
-for (i in 1:nrow(missing_moms)) {
-  missing_moms$Mom <- ifelse(missing_moms$Mom %in% number_mom$Mom[i], 
-                             number_mom$ID[i],
-                             missing_moms$Mom)
-}
-### Fill in the rest of the NAs with random numbers
-missing_moms_match<- subset(pedigree_df, nchar(Mom) > 3)
-matching_indices <- match(pedigree_df$Mom, missing_moms_match$Mom)
-pedigree_df$Mom <- ifelse(!is.na(matching_indices), missing_moms$Mom[matching_indices], pedigree_df$Mom)
 
 ## Dads
 for (i in 1:nrow(pedigree_df)) {
   pedigree_df$Dad <- ifelse(pedigree_df$Dad %in% pedigree_df$Alias[i], 
                             pedigree_df$ID[i], pedigree_df$Dad)
 }
-### Only take the moms that aren't found in the 117 list
+
+# Only take the ids that aren't found in the 117 list
+missing_moms<- subset(pedigree_df, nchar(Mom) > 3)
 missing_dads<- subset(pedigree_df, nchar(Dad) > 3)
+
+## Create the sequence of numbers starting from 118
+number_mom <- data.frame(Mom = unique(missing_moms$Mom), 
+                         ID = c(118:(117 + length(unique(missing_moms$Mom)))))
+## Fill in numbers
+for (i in 1:nrow(missing_moms)) {
+  missing_moms$Mom <- ifelse(missing_moms$Mom %in% number_mom$Mom[i], 
+                             number_mom$ID[i],
+                             missing_moms$Mom)
+}
+## Make ID numeric
+missing_moms$Mom <- as.numeric(missing_moms$Mom)
+
+## Do the same thing with dads
 number_dad <- data.frame(Dad = unique(missing_dads$Dad), 
-                         ID = c(118:(117 + length(unique(missing_dads$Dad)))))
+                         ID = c((max(missing_moms$Mom) + 1):(max(missing_moms$Mom) + length(unique(missing_dads$Dad)))))
 for (i in 1:nrow(missing_dads)) {
   missing_dads$Dad <- ifelse(missing_dads$Dad %in% number_dad$Dad[i], 
                              number_dad$ID[i],
                              missing_dads$Dad)
 }
-### Fill in the rest of the NAs with random numbers
+## Make ID numeric
+missing_dads$Dad <- as.numeric(missing_dads$Dad)
+
+# Fill in the rest of the NAs with random numbers
+## Moms
+missing_moms_match <- subset(pedigree_df, nchar(Mom) > 3)
+matching_indices <- match(pedigree_df$Mom, missing_moms_match$Mom)
+pedigree_df$Mom <- ifelse(!is.na(matching_indices), missing_moms$Mom[matching_indices], pedigree_df$Mom)
+
+## Dads
 missing_dads_match<- subset(pedigree_df, nchar(Dad) > 3)
 matching_indices <- match(pedigree_df$Dad, missing_dads_match$Dad)
 pedigree_df$Dad <- ifelse(!is.na(matching_indices), missing_dads$Dad[matching_indices], pedigree_df$Dad)
@@ -338,15 +354,22 @@ pedigree_data <- data.frame(id = as.numeric(pedigree_df$ID),
 pedigree_data$dad[is.na(pedigree_data$dad)] <- 0  # Replace NA with 0 or another appropriate code
 pedigree_data$mom[is.na(pedigree_data$mom)] <- 0  # Replace NA with 0 or another appropriate code
 
-# Get rid of missing individuals in mom and dad
-pedigree_data$mom <- ifelse(pedigree_data$mom > 117, 0, pedigree_data$mom)
-pedigree_data$dad <- ifelse(pedigree_data$dad > 117, 0, pedigree_data$dad)
-pedigree_data$mom <- ifelse(pedigree_data$dad == 0, 0, pedigree_data$mom)
-pedigree_data$dad <- ifelse(pedigree_data$mom == 0, 0, pedigree_data$dad)
+# Add Fake Fathers
+for (i in which(pedigree_data$mom > 0 & pedigree_data$dad == 0)) {
+  pedigree_data$dad[i] <- i + 155
+}
+
+# Create fake individuals
+fake_ids <- 118:(max(pedigree_data$dad) + 1)
+fake <- data.frame(id = fake_ids,
+                   mom = rep(0, length(fake_ids)),
+                   dad = rep(0, length(fake_ids)),
+                   sex = rep(3, length(fake_ids)))
+pedigree_data <- rbind(pedigree_data, fake)
 
 # Change errors
-pedigree_data$sex[pedigree_data$id %in% c(25, 23)] <- 1
-pedigree_data$sex[pedigree_data$id %in% c(4, 6, 29)] <- 2
+pedigree_data$sex[pedigree_data$id %in% c(139:270)] <- 1
+pedigree_data$sex[pedigree_data$id %in% c(118:138)] <- 2
 
 # Create GR matrix
 ped <- pedigree(id = pedigree_data$id, 
@@ -357,8 +380,10 @@ plot(ped)
 
 # Calculate kinship matrix
 kinship_matrix <- kinship(ped)
+kinship_matrix <- kinship_matrix[1:117, 1:117]
 
 saveRDS(kinship_matrix, "kinship_matrix.RData")
+
 
 # HI Matrices ------------------------------------------------------
 

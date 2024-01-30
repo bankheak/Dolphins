@@ -410,19 +410,39 @@ row_name_assign(nxn, ig)
 HI_list <- readRDS("HI_list.RData")
 HI_list <- HI_list[-4] # Get rid of natural foragers
 
+# Read in centrality data
+result_df <- readRDS("result_df.RData")
+centrality_matrix <- matrix(c(mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "3-After_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "3-After_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])),
+                            nrow = 3, ncol = 3)
+centrality_matrix <- round(centrality_matrix, 2)
+
 # Plot network
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow=c(3, 3), mar = c(0.8, 0.8, 0.8, 0.8))
+par(mfrow = c(3, 3), mar = c(0.8, 0.8, 0.8, 0.8))
 
 # Loop through the list of graphs and plot them side by side
 for (i in 1:length(ig)) {
+  
+  combined_layout <- layout_with_fr(ig[[i]])
+  counter <- 0
+  
   for (j in HI_list) {
+    
+    counter <- counter + 1
     
     # Get nodes for each behavior
     labeled_nodes <- V(ig[[i]])$name %in% j[[i]]
     
     plot(ig[[i]],
-         layout = layout_with_fr(ig[[i]]),
+         layout = combined_layout,
          edge.width = E(ig[[i]])$weight * 4, # edge thickness
          vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individuals strength (centrality)
          vertex.frame.color = NA,
@@ -436,6 +456,9 @@ for (i in 1:length(ig)) {
     
     # Add the plot with a box around it
     box()
+    
+    # Add a number in the right corner
+    text(1, 1, centrality_matrix[i, counter], pos = 4, cex = 1.2, col = "black")
     
   }
 }
