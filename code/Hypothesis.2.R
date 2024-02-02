@@ -422,9 +422,60 @@ centrality_matrix <- matrix(c(mean(result_df$Degree[result_df$HI == "BG" & resul
                               mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "2-During_HAB"]),
                               mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])),
                             nrow = 3, ncol = 3)
-centrality_matrix <- round(centrality_matrix, 2)
+centrality_matrix <- round(centrality_matrix)
 
-# Plot network
+#----Modularity---
+# igraph format with weight
+n.cores <- detectCores()
+registerDoParallel(n.cores)
+dolphin_ig <- list()
+for (j in seq_along(list_years)) {
+    dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
+                                       mode="undirected",
+                                       weighted=TRUE, diag=FALSE)
+  }  
+
+
+# Modularity by the WalkTrap algorithm 
+dolphin_walk <- list()
+for (k in seq_along(list_years)) {
+    dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], weights = E(dolphin_ig[[k]])$weight, 
+                                          steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
+  } 
+
+# Create an unweighted network
+dolp_ig <- list()
+for (l in seq_along(list_years)) {
+    dolp_ig[[l]] <- graph.edgelist(el_years[[l]][,1:2])
+    # Add the edge weights to this network
+    E(dolp_ig[[l]])$weight <- as.numeric(el_years[[l]][,3])
+    # Create undirected network
+    dolp_ig[[l]] <- as.undirected(dolp_ig[[l]])
+  }   
+### End parallel processing
+stopImplicitCluster()
+
+# Newman's Q modularity
+newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
+                                                               start = NULL, options = arpack_defaults, callback = NULL, 
+                                                               extra = NULL, env = parent.frame())})
+
+# Generate a vector of colors based on the number of unique memberships
+for (i in seq_along(dolp_ig)) {
+  # Generate a vector of colors based on the number of unique memberships
+  col <- rainbow(max(newman[[i]]$membership))
+  
+  # Initialize the color attribute with NA
+  V(dolp_ig[[i]])$color <- NA
+  
+  # Loop through each membership value and assign colors to corresponding vertices
+  for (j in 1:max(newman[[i]]$membership)){
+    V(dolp_ig[[i]])$color[newman[[i]]$membership == j] <- rep(col[j], sum(newman[[i]]$membership == j))
+  }
+}
+
+
+# ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 par(mfrow = c(3, 3), mar = c(0.8, 0.8, 0.8, 0.8))
 
@@ -448,11 +499,11 @@ for (i in 1:length(ig)) {
          vertex.frame.color = NA,
          vertex.label.family = "Helvetica",
          vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
-         vertex.label.color = "black",
+         vertex.label.color = V(dolp_ig[[i]])$color,
          vertex.label.cex = 0.8,
          vertex.label.dist = 2,
          vertex.frame.width = 0.01,
-         vertex.color = ifelse(labeled_nodes, "red", "grey"))
+         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "grey"))
     
     # Add the plot with a box around it
     box()

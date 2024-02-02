@@ -156,8 +156,14 @@ order_cols <- colnames(nxn[[1]])
 # Apply the order to each matrix in the list
 nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 
+# Only use limited data
+pedigree_subset <- readRDS("pedigree_subset.RData")
+nxn_limit <- lapply(nxn, function(mat) mat[rownames(mat) %in% pedigree_subset$Alias, colnames(mat) %in% pedigree_subset$Alias])
+
 # Save nxn lists
 saveRDS(nxn, file = "nxn.RData")
+saveRDS(nxn_limit, file = "nxn_limit.RData")
+
 
 ###########################################################################
 # PART 3: Create ILV and HI Predictors ---------------------------------------------
@@ -177,6 +183,12 @@ ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0,
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
 
+# Only use limited data
+pedigree_subset <- readRDS("pedigree_subset.RData")
+ILV_limit <- subset(ILV_df, subset = ILV_df$Code %in% pedigree_subset$Alias)
+ILV_df <- ILV_limit
+nxn <- readRDS("nxn_limit.RData")
+
 # Make sim and diff matrices
 sim_dif_mat <- function(nxn) {
 # Order data
@@ -185,7 +197,7 @@ order_cols <- colnames(nxn[[1]])
 
 # Now reorder the sex and age dataframe
 ILV_df <- ILV_df[ILV_df$Code %in% order_rows, ]
-ILV_df$Code <- ILV_df[match(order_rows, ILV_df$Code)]
+ILV_df$Code <- ILV_df$Code[match(order_rows, ILV_df$Code)]
 
 # Estimate unknowns
 ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
@@ -218,6 +230,7 @@ ILV_mat[[2]] <-  1-(ILV_mat[[2]] / max(ILV_mat[[2]]))
 
 # Save ILV matrices
 saveRDS(ILV_mat, "ILV_mat.RData")
+saveRDS(ILV_mat, "ILV_mat_limit.RData")
 
 # HRO Matrix ------------------------------------------------------
 
@@ -259,8 +272,14 @@ order_cols <- colnames(nxn[[1]])
 # Apply the order to each matrix in the list
 kov <- lapply(kov, function(mat) mat[order_rows, order_cols])
 
+# Only use limited data
+pedigree_subset <- readRDS("pedigree_subset.RData")
+kov_limit <- lapply(kov, function(mat) mat[rownames(mat) %in% pedigree_subset$Alias, colnames(mat) %in% pedigree_subset$Alias])
+
 # Save HRO
 saveRDS(kov, "kov.RDS")
+saveRDS(kov_limit, "kov_limit.RDS")
+
 
 # GR Matrix ------------------------------------------------------
 
@@ -292,6 +311,13 @@ pedigree_df$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
 pedigree_df$Sex <- ifelse(pedigree_df$Sex == "Female", 2, 
                      ifelse(pedigree_df$Sex == "Male", 1, NA))
 
+# Limit data to non-missing paternity IDs
+pedigree_subset <- pedigree_df[!is.na(pedigree_df$Mom) | !is.na(pedigree_df$Dad), ]
+# Reset row names to be sequential
+row.names(pedigree_subset) <- NULL
+saveRDS(pedigree_subset, "pedigree_subset.RData")
+pedigree_df <- pedigree_subset
+
 # Make id numeric
 ## Moms
 pedigree_df$ID <- rownames(pedigree_df)
@@ -312,7 +338,7 @@ missing_dads<- subset(pedigree_df, nchar(Dad) > 3)
 
 ## Create the sequence of numbers starting from 118
 number_mom <- data.frame(Mom = unique(missing_moms$Mom), 
-                         ID = c(118:(117 + length(unique(missing_moms$Mom)))))
+                         ID = c((nrow(pedigree_df) + 1):(nrow(pedigree_df) + length(unique(missing_moms$Mom)))))
 ## Fill in numbers
 for (i in 1:nrow(missing_moms)) {
   missing_moms$Mom <- ifelse(missing_moms$Mom %in% number_mom$Mom[i], 
@@ -356,11 +382,11 @@ pedigree_data$mom[is.na(pedigree_data$mom)] <- 0  # Replace NA with 0 or another
 
 # Add Fake Fathers
 for (i in which(pedigree_data$mom > 0 & pedigree_data$dad == 0)) {
-  pedigree_data$dad[i] <- i + 155
+  pedigree_data$dad[i] <- i + max(pedigree_data$dad)
 }
 
 # Create fake individuals
-fake_ids <- 118:(max(pedigree_data$dad) + 1)
+fake_ids <- (nrow(pedigree_df) + 1):(max(pedigree_data$dad) + 1)
 fake <- data.frame(id = fake_ids,
                    mom = rep(0, length(fake_ids)),
                    dad = rep(0, length(fake_ids)),
@@ -370,6 +396,10 @@ pedigree_data <- rbind(pedigree_data, fake)
 # Change errors
 pedigree_data$sex[pedigree_data$id %in% c(139:270)] <- 1
 pedigree_data$sex[pedigree_data$id %in% c(118:138)] <- 2
+
+# For limited data
+pedigree_data$sex[pedigree_data$id %in% c(94:112, 117:nrow(pedigree_data))] <- 1
+pedigree_data$sex[pedigree_data$id %in% c(58:93)] <- 2
 
 # Create GR matrix
 ped <- pedigree(id = pedigree_data$id, 
@@ -381,8 +411,11 @@ plot(ped)
 # Calculate kinship matrix
 kinship_matrix <- kinship(ped)
 kinship_matrix <- kinship_matrix[1:117, 1:117]
-
 saveRDS(kinship_matrix, "kinship_matrix.RData")
+
+# Limited population
+kinship_matrix <- kinship_matrix[1:57, 1:57]
+saveRDS(kinship_matrix, "kinship_matrix_limit.RData")
 
 
 # HI Matrices ------------------------------------------------------
@@ -401,6 +434,12 @@ ggplot(aes(x = Year), data = HAB_HI_data) +
   scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
                     name = "Variables", 
                     labels = c("ConfHI", "HAB"))
+
+# Read in limited data
+nxn <- readRDS("nxn_limit.RData")
+pedigree_subset <- readRDS("pedigree_subset.RData")
+list_years_limit <- lapply(list_years, function (df) subset(df, subset = df$Code %in% pedigree_subset$Alias))
+list_years <- list_years_limit
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -535,6 +574,7 @@ sim_HI <- lapply(dist_HI, function (df) {
 })
 
 saveRDS(sim_HI, "sim_HI.RData")
+saveRDS(sim_HI, "sim_HI_limit.RData")
 
 
 ###########################################################################
@@ -547,6 +587,13 @@ kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
 gr <- readRDS("kinship_matrix.RData")
 
+# Read in limited social association matrix and listed data
+sim_HI <- readRDS("sim_HI_limit.RData") # HI Sim Matrix
+ILV_mat <-readRDS("ILV_mat_limit.RData") # Age and Sex Matrices
+kov <- readRDS("kov_limit.RDS")  # Home range overlap
+nxn <- readRDS("nxn_limit.RData") # Association Matrix
+gr <- readRDS("kinship_matrix_limit.RData")
+
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
 node_names <- lapply(nxn, function(df) colnames(df))
@@ -556,8 +603,8 @@ node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow =
 node_ids_j <- lapply(node_ids_i, function(df) t(df))
 
 # Format data
-upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
-edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = FALSE))
+edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = FALSE)]), along = 2)
 
 ## Split by 3 for int data
 HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn)))))
@@ -565,7 +612,7 @@ colnames(HAB_data) <- c("SRI", "HAB")
 HAB_data$During <- ifelse(HAB_data$HAB == 2, 1, 0)
 HAB_data$After <- ifelse(HAB_data$HAB == 3, 1, 0)
 
-HI <- abind(lapply(sim_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+HI <- abind(lapply(sim_HI, function(mat) mat[upper.tri(mat, diag = FALSE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 
@@ -573,13 +620,18 @@ two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]
 df_list = data.frame(edge_weight = HAB_data[, 1],
                      HAB_During = HAB_data[, 3],
                      HAB_After = HAB_data[, 4],
-                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
-                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], 3),
-                     age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], 3),
-                     GR = rep(gr[upper.tri(gr, diag = TRUE)], 3),
+                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = FALSE)])),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = FALSE)], 3),
+                     age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = FALSE)], 3),
+                     GR = rep(gr[upper.tri(gr, diag = FALSE)], 3),
                      HI_similarity = c(HI[,c(1:3)]),
                      node_id_1 = unlist(one),
                      node_id_2 = unlist(two))
+
+# Check for gr
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity + GR, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+summary(fit_mcmc.1)
 
 # Multimembership models in MCMCglmm
 fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
@@ -603,7 +655,7 @@ mean(posterior[, "HI_similarity:HAB_After"] > 0)
 mcmc_intervals(posterior, pars = c("(Intercept)", "HI_similarity", 
                                    "HI_similarity:HAB_During", "HI_similarity:HAB_After",
                                    "HAB_During", "HAB_After", 
-                                   "age_similarity", "sex_similarity", "HRO"))
+                                   "age_similarity", "sex_similarity", "HRO", "GR"))
 mcmc_areas(
   posterior, 
   pars = c("(Intercept)", 
@@ -611,7 +663,7 @@ mcmc_areas(
            "HI_similarity:HAB_During", 
            "HI_similarity:HAB_After",
            "HAB_During", "HAB_After", 
-           "age_similarity", "sex_similarity", "HRO"),
+           "age_similarity", "sex_similarity", "HRO", "GR"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
