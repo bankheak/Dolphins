@@ -629,18 +629,18 @@ df_list = data.frame(edge_weight = HAB_data[, 1],
                      node_id_2 = unlist(two))
 
 # Check for gr
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity + GR, 
+fit_mcmc.gr <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity + GR, 
                        random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-summary(fit_mcmc.1)
+summary(fit_mcmc.gr)
 
 # Multimembership models in MCMCglmm
 fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
-                         HRO + age_similarity + sex_similarity + GR, 
+                         HRO + age_similarity + sex_similarity, 
                        random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
 summary(fit_mcmc.1)
 
 # Check for model convergence
-model <- fit_mcmc.1
+model <- fit_mcmc.gr
 plot(model$Sol)
 plot(model$VCV)
 
@@ -652,10 +652,11 @@ mean(posterior[, "HI_similarity:HAB_During"] > 0)
 mean(posterior[, "HI_similarity:HAB_After"] > 0)
 
 # Plot the posterior distribution
-mcmc_intervals(posterior, pars = c("(Intercept)", "HI_similarity", 
-                                   "HI_similarity:HAB_During", "HI_similarity:HAB_After",
-                                   "HAB_During", "HAB_After", 
-                                   "age_similarity", "sex_similarity", "HRO", "GR"))
+mcmc_intervals(posterior, pars = c(#"(Intercept)", "HI_similarity", 
+                                   #"HI_similarity:HAB_During", "HI_similarity:HAB_After",
+                                   #"HAB_During", "HAB_After", 
+                                   "age_similarity", "sex_similarity", 
+                                   "HRO", "GR"))
 mcmc_areas(
   posterior, 
   pars = c("(Intercept)", 

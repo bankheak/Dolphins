@@ -17,6 +17,9 @@ library(MCMCglmm) # MCMC models
 library(coda)
 library(bayesplot) # plot parameters
 library(doParallel)
+library(hrbrthemes) # plot themes
+library(viridis) # plot themes
+library(patchwork) # plotting together
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -229,6 +232,21 @@ result_df$During <- ifelse(result_df$Period == "2-During_HAB", 1, 0)
 result_df$After <- ifelse(result_df$Period == "3-After_HAB", 1, 0)
 result_df$HI <- as.factor(result_df$HI)
 
+# Create weighted centrality metric
+
+## Scale the centrality metrics
+scaled_degree <- c(scale(result_df$Degree))
+scaled_strength <- c(scale(result_df$Strength))
+scaled_between <- c(scale(result_df$Between))
+
+## Put weights on centrality
+weighted_degree <- scaled_degree *  0.4
+weighted_strength <- scaled_strength *  0.4
+weighted_betweenness <- scaled_between *  0.2
+
+##Create the weighted metric
+result_df$composite_centrality <- weighted_degree + weighted_strength + weighted_betweenness
+
 # Save dataset
 saveRDS(result_df, "result_df.RData")
 
@@ -236,33 +254,16 @@ saveRDS(result_df, "result_df.RData")
 ###########################################################################
 # PART 3: Run Model ---------------------------------------------
 
-# Set up data
-result_df <- readRDS("result_df.RData")
-
-## Between
-ggplot(result_df, aes(x = Period, y = Between, fill = HI)) + 
-  geom_boxplot()
-## Strength
-ggplot(result_df, aes(x = Period, y = Strength, fill = HI)) + 
-  geom_boxplot() 
-## Degree
-ggplot(result_df, aes(x = Period, y = Degree, fill = HI)) + 
-  geom_boxplot() 
-  
-# Check distributions
+#Check distributions
 hist(result_df$Between) # continuous
 hist(result_df$Degree)
 hist(result_df$Strength)
+hist(result_df$composite_centrality) 
 
 # Make dummy variables
 result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
 result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
 result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
-
-# CHeck if just HI behavior changes over time
-# Try and plot multilayer network
-# Plot the x and y and plot netwirks in columns and rows
-# In the same plot graph dist of centrality metrics
 
 # Look into nodal regression
 ## HI Behavior Combined Two Year Period ##
@@ -278,8 +279,12 @@ fit_mcmc.d <- MCMCglmm(Degree ~ BG * During + FG * During + SD * During +
                        BG * After + FG * After + SD * After, data = result_df, nitt = 10000)
 summary(fit_mcmc.d)
 
+fit_mcmc.c <- MCMCglmm(composite_centrality ~ BG * During + FG * During + SD * During +
+                         BG * After + FG * After + SD * After, data = result_df, nitt = 10000)
+summary(fit_mcmc.c)
+
 # Check for model convergence
-model <- fit_mcmc.d
+model <- fit_mcmc.c
 plot(model$Sol)
 plot(model$VCV)
 
@@ -412,20 +417,22 @@ HI_list <- HI_list[-4] # Get rid of natural foragers
 
 # Read in centrality data
 result_df <- readRDS("result_df.RData")
-centrality_matrix <- matrix(c(mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "BG" & result_df$Period == "3-After_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "FG" & result_df$Period == "3-After_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$Degree[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])),
+centrality_matrix <- matrix(c(mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "3-After_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "3-After_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "2-During_HAB"]),
+                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])),
                             nrow = 3, ncol = 3)
 centrality_matrix <- round(centrality_matrix)
 
 #----Modularity---
 # igraph format with weight
+el_years <- readRDS("el_years.RData")
+
 n.cores <- detectCores()
 registerDoParallel(n.cores)
 dolphin_ig <- list()
@@ -477,25 +484,39 @@ for (i in seq_along(dolp_ig)) {
 
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-par(mfrow = c(3, 3), mar = c(0.8, 0.8, 0.8, 0.8))
+# Initialize a list to store layout information for each graph
+layout_list <- list()
+
+# Loop through the list of graphs and save layout information
+for (i in 1:length(ig)) {
+  layout_list[[i]] <- layout_with_fr(ig[[i]])
+}
+
+# Set up the plotting layout
+layout.matrix <- matrix(c(1:9), nrow = 3, ncol = 3)
+layout(mat = layout.matrix)    
+par(mar = c(0.8, 0.8, 0.8, 0.8))
 
 # Loop through the list of graphs and plot them side by side
-for (i in 1:length(ig)) {
+for (j in 1:length(HI_list)) {  # Loop through columns first
   
-  combined_layout <- layout_with_fr(ig[[i]])
+  # Extract layout for this graph
+  combined_layout <- layout_list[[1]]
   counter <- 0
   
-  for (j in HI_list) {
+  for (i in 1:length(ig)) {  # Loop through rows
     
     counter <- counter + 1
     
     # Get nodes for each behavior
-    labeled_nodes <- V(ig[[i]])$name %in% j[[i]]
+    labeled_nodes <- V(ig[[i]])$name %in% HI_list[[j]][[i]]  # Fixed index here
     
+    # Create the plot
     plot(ig[[i]],
          layout = combined_layout,
          edge.width = E(ig[[i]])$weight * 4, # edge thickness
-         vertex.size = sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individuals strength (centrality)
+         edge.color = adjustcolor("grey", alpha.f = 0.2),
+         vertex.size = ifelse(labeled_nodes, 10, 3), #sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individual's strength (centrality)
          vertex.frame.color = NA,
          vertex.label.family = "Helvetica",
          vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
@@ -503,17 +524,69 @@ for (i in 1:length(ig)) {
          vertex.label.cex = 0.8,
          vertex.label.dist = 2,
          vertex.frame.width = 0.01,
-         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "grey"))
+         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "black"))
     
     # Add the plot with a box around it
     box()
     
     # Add a number in the right corner
-    text(1, 1, centrality_matrix[i, counter], pos = 4, cex = 1.2, col = "black")
+    #text(1, 1, centrality_matrix[i, j], pos = 4, cex = 1.2, col = "black")
     
   }
 }
 
-par(mfrow=c(1, 1))
+
+# Set up data
+result_df <- readRDS("result_df.RData")
+
+## Composite Centrality
+ggplot(result_df, aes(x = Period, y = composite_centrality, fill = HI)) + 
+  geom_boxplot() 
+
+# Plot the density plots for each period
+plots_list <- list()
+
+for (i in 1:length(unique(result_df$Period))) {
+  
+  period_to_plot <- unique(result_df$Period)[i] # each period
+  filtered_df <- subset(result_df, Period == period_to_plot) # Separate data
+  
+  mean_nf <- mean(filtered_df$composite_centrality[filtered_df$HI == "NF"], na.rm = TRUE) # Calculate mean for HI=="NF"
+  
+  plot <- ggplot(filtered_df[filtered_df$HI != "NF", ], aes(x = composite_centrality, group = HI, fill = HI)) +
+    geom_density(adjust = 1.5, alpha = 0.4) +
+    geom_vline(xintercept = mean_nf, linetype = "dashed", color = "black", size = 1.5) + # Add vertical line
+    theme_ipsum() +
+    theme(axis.text.y = element_blank(),
+          axis.title.y = element_blank()) 
+  
+  plots_list[[i]] <- plot
+}
+
+# Output plots
+plots_list[[1]]
+plots_list[[2]]
+plots_list[[3]]
 
 
+# Plot the density plots for each HI
+plots_list_HI <- list()
+
+for (i in 1:(length(unique(result_df$HI))-1)) {
+  
+  HI_to_plot <- unique(result_df$HI)[i] # each period
+  filtered_df <- subset(result_df, HI == HI_to_plot) # Separate data
+  
+  plot <- ggplot(filtered_df, aes(x = composite_centrality, group = Period, fill = Period)) +
+    geom_density(adjust = 1.5, alpha = 0.4) +
+    theme_ipsum() +
+    theme(axis.text.y = element_blank(),
+          axis.title.y = element_blank()) 
+  
+  plots_list_HI[[i]] <- plot
+}
+
+# Output plots
+plots_list_HI[[1]]
+plots_list_HI[[2]]
+plots_list_HI[[3]]
