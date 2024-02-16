@@ -20,11 +20,14 @@ library(doParallel)
 library(hrbrthemes) # plot themes
 library(viridis) # plot themes
 library(patchwork) # plotting together
-library(dplyr)
+library(car) # durbinWatsonTest
 library(DescTools) #Schaff post-hoc test
 library(lme4) # lmm
 library(nlme) # unequal variance weights
 library(lmerTest) # summary output of lmm
+library(emmeans) # post-hoc test
+library(effects) # visualize effects
+library(sjPlot) # Confidence intervals
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -307,8 +310,22 @@ saveRDS(result_df, "result_df.RData")
 # Read in data
 result_df <- readRDS("result_df.RData")
 
+# First Visualize data
+ggplot(result_df, aes(x = Period, y = composite_centrality, fill = HI)) + 
+  geom_boxplot() 
+
+# Make dummy variables
+result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
+result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
+result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
+# Make factor variables
+result_df$HI <- as.factor(result_df$HI)
+result_df$Period <- as.factor(result_df$Period)
+
 # Check assumptions of model
-test_model <- lm(composite_centrality ~ HI * Period, data = result_df)
+test_model <- lm(composite_centrality ~ BG * During + BG * After +
+                   FG * During + FG * After + 
+                   SD * During + SD * After, data = result_df)
 summary(test_model)
 ## Check distributions
 hist(result_df$composite_centrality) # normal
@@ -317,63 +334,37 @@ bartlett.test(composite_centrality ~ HI, data = result_df) # not equal
 ## Independent
 durbinWatsonTest(test_model) # not independent
 
-# Make dummy variables
-result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
-result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
-result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
-
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
 # Fit the LMM
 lmm_model_0 <- lme(composite_centrality ~  1, random = ~1 | numeric_ID,
                    weights = varIdent(form = ~1 | HI), data = result_df)
-lmm_model_0 <- lme(composite_centrality ~  1, random = ~1 | numeric_ID,
-                   weights = varIdent(form = ~1 | HI), data = result_df)
-lmm_model_2 <- lmer(composite_centrality ~ BG + During + BG * After +
-                    FG * During + FG * After + 
-                    SD * During + SD * After + (1 | numeric_ID), data = result_df)
+lmm_model_1 <- lme(composite_centrality ~  BG + FG + SD, 
+                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
+                   data = result_df)
+lmm_model_2 <- lme(composite_centrality ~  BG + FG + SD + During + After, 
+                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
+                   data = result_df)
+lmm_model_3 <- lme(composite_centrality ~  BG * During + BG * After + 
+                     FG * During + FG * After + SD * During + SD *After, 
+                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
+                   data = result_df)
 
 # Model Selection
-AIC(lmm_model_0, lmm_model_1, lmm_model_2)
+AIC(lmm_model_0, lmm_model_1, lmm_model_2, lmm_model_3)
 
 # Print the summary of the model
-summary(lmm_model_0)
+summary(lmm_model_2)
 
-# Create the linear model with contrasts
-model <- oneway.test(composite_centrality ~ HI * Period, data = result_df, var.equal = FALSE)
-ScheffeTest(model, "HI")
+# Run post-hoc test
+emm_pairs <- emmeans(lmm_model_2, pairwise ~ BG + FG + SD + During + After, adjust = "hochberg")
+summary(emm_pairs, infer = TRUE)
 
-# Calculate the mean composite_cent for each ID and Period
-means <- aggregate(composite_centrality ~ ID + Period, data = result_df, FUN = mean)
-# Calculate the average composite_cent from each of the three periods for each ID
-average_means <- aggregate(composite_centrality ~ ID, data = means, FUN = mean)
-# Add this to new dataframe
-result_df$combined_centrality <- ifelse(result_df$ID %in% average_means$ID, average_means$composite_centrality, NA)
-
-# Create the linear model with contrasts
-model_2 <- aov(combined_centrality ~ HI, data = result_df)
-summary(model_2)
-ScheffeTest(model_2, "HI")
-
-##----- Look at only HI IDs -----##
-result_df_HI <- subset(result_df, subset = result_df$HI != "NF")
-
-# Check assumptions of model
-test_model <- lm(composite_centrality ~ HI * Period, data = result_df_HI)
-summary(test_model)
-## Check distributions
-hist(result_df_HI$composite_centrality)
-## Check for variance among groups
-bartlett.test(composite_centrality ~ HI, data = result_df_HI)
-## Independent
-durbinWatsonTest(test_model) # not independent
-
-# Create the linear model with just HI
-lmm_model <- lmer(composite_centrality ~ BG + FG + SD + During + After + 
-                      (1 | numeric_ID), data = result_df_HI)
-# Print the summary of the model
-summary(lmm_model)
+# Visualize effects
+effects_lmm_model <- allEffects(lmm_model_2)
+plot(effects_lmm_model)
+plot_model(lmm_model_2)
 
 
 ###########################################################################
@@ -562,10 +553,6 @@ for (j in 1:length(HI_list)) {  # Loop through columns first
 
 # Set up data
 result_df <- readRDS("result_df.RData")
-
-## Composite Centrality
-ggplot(result_df, aes(x = Period, y = composite_centrality, fill = HI)) + 
-  geom_boxplot() 
 
 # Plot the density plots for each period
 plots_list <- list()
