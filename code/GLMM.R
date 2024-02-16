@@ -460,6 +460,65 @@ mcmc_areas(
 # Check model prediction
 loo(fit_mcmc)
 
+
+# Look into nodal regression
+## HI Behavior Combined Two Year Period ##
+fit_mcmc.c <- MCMCglmm(composite_centrality ~ BG * During + FG * During + SD * During +
+                         BG * After + FG * After + SD * After, data = result_df, random=~ID, nitt = 20000)
+summary(fit_mcmc.c)
+
+# Check for model convergence
+model <- fit_mcmc.c
+plot(model$Sol)
+plot(model$VCV)
+
+# Extract Posteriors
+posterior <- model$Sol
+
+# Plot the posterior distribution
+mcmc_intervals(posterior, pars = c("(Intercept)", "BG", "FG", "SD",
+                                   "During", "After", "BG:During", "During:FG", "During:SD",
+                                   "BG:After", "FG:After", "SD:After"))
+mcmc_areas(
+  posterior, 
+  pars = c("(Intercept)", "BG", "FG", "SD",
+           "During", "After", "BG:During", "During:FG", "During:SD",
+           "BG:After", "FG:After", "SD:After"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+)
+
+# Test if model is good for predicting data
+# Make empty list for each row's distribution
+edge_weight <- Obs.edge_weight <- vector("list", length = nrow(df_list))
+# Make an empty vector for the true and false values
+exp.obs <- NULL
+posterior <- as.data.frame(posterior)
+
+for (i in 1:nrow(df_list)) {
+  # Expected bill length
+  edge_weight[[i]] <-  posterior[,"(Intercept)"] + posterior[,"HI_differences:HAB"]*(df_list$HI_differences[i] * df_list$HAB[i]) + 
+    posterior[,"HI_differences"] * df_list$HI_differences[i] + posterior[,"HAB"] * df_list$HAB[i]
+  posterior[,"HRO"]*df_list$HRO[i] + 
+    posterior[,"age_difference"]*df_list$age_difference[i] + 
+    posterior[,"sex_similarity"]*df_list$sex_similarity[i]
+  
+  # Observed bill length
+  Obs.edge_weight[[i]] <- rnorm(n = 1700, mean = edge_weight[[i]], sd = rep(sd(edge_weight[[i]]), nrow(df_list)))
+  
+  # Calculate how often observed values fall into expected
+  exp.obs[i] <- df_list$edge_weight[i] >= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[1] & 
+    df_list$edge_weight[i] <= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[2]
+}
+
+sum(exp.obs)/length(exp.obs)
+
+
+
+
+
+
 ###########################################################################
 # PART 5: Assortivity Index Based on HI Over Time  ------------------------------------------------
 

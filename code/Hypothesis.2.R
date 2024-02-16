@@ -20,6 +20,11 @@ library(doParallel)
 library(hrbrthemes) # plot themes
 library(viridis) # plot themes
 library(patchwork) # plotting together
+library(dplyr)
+library(DescTools) #Schaff post-hoc test
+library(lme4) # lmm
+library(nlme) # unequal variance weights
+library(lmerTest) # summary output of lmm
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -109,6 +114,28 @@ ovrlap_IDs <- intersect(intersect(BG_IDs, FG_IDs), SD_IDs)
 ###########################################################################
 # PART 2: Calculate Local Metrics ---------------------------------------------
 
+## Create social network
+ig_func <- function(nxn) {
+  ig <- lapply(nxn, function (df) {
+    graph_from_adjacency_matrix(
+      df,
+      mode = "undirected",
+      weighted = TRUE,
+      diag = FALSE)})
+  return(ig)}
+
+ig <- ig_func(nxn)
+
+# Set the node names based on row names
+row_name_assign <- function(nxn, ig) {
+  row_names <- lapply(nxn, function (df) {rownames(df)})
+  for (i in seq_along(ig)) {
+    V(ig[[i]])$name <- row_names[[i]]
+  }
+}
+
+row_name_assign(nxn, ig)
+
 # Edgelist: Nodes (i & j) and edge (or link) weight
 n.cores <- detectCores()
 registerDoParallel(n.cores)
@@ -128,6 +155,23 @@ get_names <- function (matrix, metric) {
   }
   return(metric)
 }
+
+#Eigen centrality
+eigen <- lapply(ig, function (df) {eigen_centrality(df)})
+
+eigen <- lapply(eigen, function (df) {
+  eigen <- as.data.frame(df$vector)
+  eigen$ID <- rownames(eigen)
+  colnames(eigen) <- c("eigen_cent", "ID")
+  return(eigen)})
+
+compare_eigen <- merge(
+  merge(eigen[[1]], eigen[[2]], by = "ID"),
+  eigen[[3]], by = "ID"
+)
+
+colnames(compare_eigen) <- c("ID", "Before_HAB", "During_HAB", "After_HAB")
+compare_eigen[, c(2:4)] <- sapply(compare_eigen[, c(2:4)], as.numeric)
 
 # Betweenness centrality 
 between <- lapply(el_years, function (df) {betweenness_w(df, alpha = 1)})
@@ -200,7 +244,10 @@ local_metrics_HI <- data.frame(ID = compare_between$ID,
                                           compare_strength$After_HAB_degree),
                                Strength = c(compare_strength$Before_HAB_strength, 
                                             compare_strength$During_HAB_strength,
-                                            compare_strength$After_HAB_strength))
+                                            compare_strength$After_HAB_strength),
+                               Eigen = c(compare_eigen$Before_HAB, 
+                                         compare_eigen$During_HAB,
+                                         compare_eigen$After_HAB))
 
 # Add HI_type column
 local_metrics_HI_1 <- local_metrics_HI[local_metrics_HI$Period == "1-Before_HAB", ]
@@ -235,17 +282,20 @@ result_df$HI <- as.factor(result_df$HI)
 # Create weighted centrality metric
 
 ## Scale the centrality metrics
-scaled_degree <- c(scale(result_df$Degree))
-scaled_strength <- c(scale(result_df$Strength))
-scaled_between <- c(scale(result_df$Between))
+result_df$Degree <- c(scale(result_df$Degree))
+result_df$Strength <- c(scale(result_df$Strength))
+result_df$Between <- c(scale(result_df$Between))
+result_df$Eigen <- c(scale(result_df$Eigen))
 
 ## Put weights on centrality
-weighted_degree <- scaled_degree *  0.4
-weighted_strength <- scaled_strength *  0.4
-weighted_betweenness <- scaled_between *  0.2
+weighted_degree <- result_df$Degree *  0.25
+weighted_strength <- result_df$Strength *  0.25
+weighted_betweenness <- result_df$Between *  0.25
+weighted_eigen <- result_df$Eigen * 0.25
 
 ##Create the weighted metric
-result_df$composite_centrality <- weighted_degree + weighted_strength + weighted_betweenness
+result_df$composite_centrality <- weighted_degree + weighted_strength + 
+                                  weighted_betweenness + weighted_eigen
 
 # Save dataset
 saveRDS(result_df, "result_df.RData")
@@ -254,81 +304,77 @@ saveRDS(result_df, "result_df.RData")
 ###########################################################################
 # PART 3: Run Model ---------------------------------------------
 
-#Check distributions
-hist(result_df$Between) # continuous
-hist(result_df$Degree)
-hist(result_df$Strength)
-hist(result_df$composite_centrality) 
+# Read in data
+result_df <- readRDS("result_df.RData")
+
+# Check assumptions of model
+test_model <- lm(composite_centrality ~ HI * Period, data = result_df)
+summary(test_model)
+## Check distributions
+hist(result_df$composite_centrality) # normal
+## Check for variance among groups
+bartlett.test(composite_centrality ~ HI, data = result_df) # not equal
+## Independent
+durbinWatsonTest(test_model) # not independent
 
 # Make dummy variables
 result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
 result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
 result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
 
-# Look into nodal regression
-## HI Behavior Combined Two Year Period ##
-fit_mcmc.b <- MCMCglmm(Between ~ BG * During + FG * During + SD * During +
-                       BG * After + FG * After + SD * After, data = result_df, nitt = 10000, family = "poisson")
-summary(fit_mcmc.b) # Might need to use a negative binomial dist
+# Make ID numeric
+result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
-fit_mcmc.s <- MCMCglmm(Strength ~ BG * During + FG * During + SD * During +
-                       BG * After + FG * After + SD * After, data = result_df, nitt = 10000)
-summary(fit_mcmc.s)
+# Fit the LMM
+lmm_model_0 <- lme(composite_centrality ~  1, random = ~1 | numeric_ID,
+                   weights = varIdent(form = ~1 | HI), data = result_df)
+lmm_model_0 <- lme(composite_centrality ~  1, random = ~1 | numeric_ID,
+                   weights = varIdent(form = ~1 | HI), data = result_df)
+lmm_model_2 <- lmer(composite_centrality ~ BG + During + BG * After +
+                    FG * During + FG * After + 
+                    SD * During + SD * After + (1 | numeric_ID), data = result_df)
 
-fit_mcmc.d <- MCMCglmm(Degree ~ BG * During + FG * During + SD * During +
-                       BG * After + FG * After + SD * After, data = result_df, nitt = 10000)
-summary(fit_mcmc.d)
+# Model Selection
+AIC(lmm_model_0, lmm_model_1, lmm_model_2)
 
-fit_mcmc.c <- MCMCglmm(composite_centrality ~ BG * During + FG * During + SD * During +
-                         BG * After + FG * After + SD * After, data = result_df, nitt = 10000)
-summary(fit_mcmc.c)
+# Print the summary of the model
+summary(lmm_model_0)
 
-# Check for model convergence
-model <- fit_mcmc.c
-plot(model$Sol)
-plot(model$VCV)
+# Create the linear model with contrasts
+model <- oneway.test(composite_centrality ~ HI * Period, data = result_df, var.equal = FALSE)
+ScheffeTest(model, "HI")
 
-# Extract Posteriors
-posterior <- model$Sol
+# Calculate the mean composite_cent for each ID and Period
+means <- aggregate(composite_centrality ~ ID + Period, data = result_df, FUN = mean)
+# Calculate the average composite_cent from each of the three periods for each ID
+average_means <- aggregate(composite_centrality ~ ID, data = means, FUN = mean)
+# Add this to new dataframe
+result_df$combined_centrality <- ifelse(result_df$ID %in% average_means$ID, average_means$composite_centrality, NA)
 
-# Plot the posterior distribution
-mcmc_intervals(posterior, pars = c("(Intercept)", "BG", "FG", "SD",
-                                   "During", "After", "BG:During", "During:FG", "During:SD",
-                                   "BG:After", "FG:After", "SD:After"))
-mcmc_areas(
-  posterior, 
-  pars = c("(Intercept)", "BG", "FG", "SD",
-           "During", "After", "BG:During", "During:FG", "During:SD",
-           "BG:After", "FG:After", "SD:After"),
-  prob = 0.8, # 80% intervals
-  prob_outer = 0.99, # 99%
-  point_est = "mean"
-)
+# Create the linear model with contrasts
+model_2 <- aov(combined_centrality ~ HI, data = result_df)
+summary(model_2)
+ScheffeTest(model_2, "HI")
 
-# Test if model is good for predicting data
-# Make empty list for each row's distribution
-edge_weight <- Obs.edge_weight <- vector("list", length = nrow(df_list))
-# Make an empty vector for the true and false values
-exp.obs <- NULL
-posterior <- as.data.frame(posterior)
+##----- Look at only HI IDs -----##
+result_df_HI <- subset(result_df, subset = result_df$HI != "NF")
 
-for (i in 1:nrow(df_list)) {
-  # Expected bill length
-  edge_weight[[i]] <-  posterior[,"(Intercept)"] + posterior[,"HI_differences:HAB"]*(df_list$HI_differences[i] * df_list$HAB[i]) + 
-    posterior[,"HI_differences"] * df_list$HI_differences[i] + posterior[,"HAB"] * df_list$HAB[i]
-  posterior[,"HRO"]*df_list$HRO[i] + 
-    posterior[,"age_difference"]*df_list$age_difference[i] + 
-    posterior[,"sex_similarity"]*df_list$sex_similarity[i]
-  
-  # Observed bill length
-  Obs.edge_weight[[i]] <- rnorm(n = 1700, mean = edge_weight[[i]], sd = rep(sd(edge_weight[[i]]), nrow(df_list)))
-  
-  # Calculate how often observed values fall into expected
-  exp.obs[i] <- df_list$edge_weight[i] >= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[1] & 
-    df_list$edge_weight[i] <= quantile(Obs.edge_weight[[i]], c(0.025, 0.975))[2]
-}
+# Check assumptions of model
+test_model <- lm(composite_centrality ~ HI * Period, data = result_df_HI)
+summary(test_model)
+## Check distributions
+hist(result_df_HI$composite_centrality)
+## Check for variance among groups
+bartlett.test(composite_centrality ~ HI, data = result_df_HI)
+## Independent
+durbinWatsonTest(test_model) # not independent
 
-sum(exp.obs)/length(exp.obs)
+# Create the linear model with just HI
+lmm_model <- lmer(composite_centrality ~ BG + FG + SD + During + After + 
+                      (1 | numeric_ID), data = result_df_HI)
+# Print the summary of the model
+summary(lmm_model)
+
 
 ###########################################################################
 # PART 4: Circular heat map ---------------------------------------------
@@ -388,28 +434,6 @@ heatmap_list[[3]] # SD
 
 ###########################################################################
 # PART 5: Multinetwork ---------------------------------------------
-
-## Create social network
-ig_func <- function(nxn) {
-  ig <- lapply(nxn, function (df) {
-    graph_from_adjacency_matrix(
-      df,
-      mode = "undirected",
-      weighted = TRUE,
-      diag = FALSE)})
-  return(ig)}
-
-ig <- ig_func(nxn)
-
-# Set the node names based on row names
-row_name_assign <- function(nxn, ig) {
-  row_names <- lapply(nxn, function (df) {rownames(df)})
-  for (i in seq_along(ig)) {
-    V(ig[[i]])$name <- row_names[[i]]
-  }
-}
-
-row_name_assign(nxn, ig)
 
 # Only show IDs of HI dolphins
 HI_list <- readRDS("HI_list.RData")
@@ -495,7 +519,7 @@ for (i in 1:length(ig)) {
 # Set up the plotting layout
 layout.matrix <- matrix(c(1:9), nrow = 3, ncol = 3)
 layout(mat = layout.matrix)    
-par(mar = c(0.8, 0.8, 0.8, 0.8))
+par(mar = c(0.6, 0.6, 0.6, 0.6))
 
 # Loop through the list of graphs and plot them side by side
 for (j in 1:length(HI_list)) {  # Loop through columns first
@@ -553,15 +577,18 @@ for (i in 1:length(unique(result_df$Period))) {
   
   mean_nf <- mean(filtered_df$composite_centrality[filtered_df$HI == "NF"], na.rm = TRUE) # Calculate mean for HI=="NF"
   
-  plot <- ggplot(filtered_df[filtered_df$HI != "NF", ], aes(x = composite_centrality, group = HI, fill = HI)) +
-    geom_density(adjust = 1.5, alpha = 0.4) +
-    geom_vline(xintercept = mean_nf, linetype = "dashed", color = "black", size = 1.5) + # Add vertical line
+  plot <- ggplot(filtered_df[filtered_df$HI != "NF", ], aes(x = HI, y = composite_centrality, fill = HI)) +
+    geom_violin(trim = FALSE, alpha = 0.4) + # Create violin plot
+    geom_boxplot(width=0.1, color="black", alpha=0.2) +
+    geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
+    geom_hline(yintercept = mean_nf, linetype = "dashed", color = "black", linewidth = 1.5) + # Add horizontal line
     theme_ipsum() +
     theme(axis.text.y = element_blank(),
           axis.title.y = element_blank()) 
   
   plots_list[[i]] <- plot
 }
+
 
 # Output plots
 plots_list[[1]]
@@ -570,18 +597,25 @@ plots_list[[3]]
 
 
 # Plot the density plots for each HI
+# Define shades of red
+red_shades <- c("#FFCCCC", "#FF0000", "#FF6666")
+
 plots_list_HI <- list()
 
 for (i in 1:(length(unique(result_df$HI))-1)) {
   
-  HI_to_plot <- unique(result_df$HI)[i] # each period
+  HI_to_plot <- unique(result_df$HI)[i] # each HI category
   filtered_df <- subset(result_df, HI == HI_to_plot) # Separate data
   
-  plot <- ggplot(filtered_df, aes(x = composite_centrality, group = Period, fill = Period)) +
-    geom_density(adjust = 1.5, alpha = 0.4) +
+  plot <- ggplot(filtered_df, aes(x = Period, y = composite_centrality, fill = as.factor(Period))) +
+    geom_violin(trim = FALSE, alpha = 0.4) + # Create violin plot
+    geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
+    geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
+    scale_fill_manual(values = red_shades) + # Use manual scale for shades of red
     theme_ipsum() +
     theme(axis.text.y = element_blank(),
-          axis.title.y = element_blank()) 
+          axis.title.y = element_blank()) +
+    guides(fill = guide_legend(title = "Period")) # Add legend for Period
   
   plots_list_HI[[i]] <- plot
 }
