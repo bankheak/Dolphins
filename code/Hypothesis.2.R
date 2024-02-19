@@ -139,6 +139,9 @@ row_name_assign <- function(nxn, ig) {
 
 row_name_assign(nxn, ig)
 
+# Save ig object
+saveRDS(ig, "ig.RData")
+
 # Edgelist: Nodes (i & j) and edge (or link) weight
 n.cores <- detectCores()
 registerDoParallel(n.cores)
@@ -351,6 +354,22 @@ lmm_model_3 <- lme(composite_centrality ~  BG * During + BG * After +
                    random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
                    data = result_df)
 
+# Fit the MCMC
+fit_mcmc_0 <- MCMCglmm(composite_centrality ~ 1, random=~ numeric_ID, rcov = ~ HI,
+                       data = result_df, nitt = 20000) 
+fit_mcmc_1 <- MCMCglmm(composite_centrality ~ BG + FG + SD, 
+                       random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
+fit_mcmc_2 <- MCMCglmm(composite_centrality ~ BG + FG + SD + During + After, 
+                        random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
+fit_mcmc_3 <- MCMCglmm(composite_centrality ~ BG * During + BG * After + 
+                         FG * During + FG * After + SD * During + SD * After, 
+                       random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
+
+summary(fit_mcmc_0)
+summary(fit_mcmc_1) 
+summary(fit_mcmc_2) # Lowest DIC
+summary(fit_mcmc_3)
+
 # Model Selection
 AIC(lmm_model_0, lmm_model_1, lmm_model_2, lmm_model_3)
 
@@ -430,72 +449,8 @@ heatmap_list[[3]] # SD
 HI_list <- readRDS("HI_list.RData")
 HI_list <- HI_list[-4] # Get rid of natural foragers
 
-# Read in centrality data
-result_df <- readRDS("result_df.RData")
-centrality_matrix <- matrix(c(mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "BG" & result_df$Period == "3-After_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "FG" & result_df$Period == "3-After_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "2-During_HAB"]),
-                              mean(result_df$composite_centrality[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])),
-                            nrow = 3, ncol = 3)
-centrality_matrix <- round(centrality_matrix)
-
-#----Modularity---
-# igraph format with weight
-el_years <- readRDS("el_years.RData")
-
-n.cores <- detectCores()
-registerDoParallel(n.cores)
-dolphin_ig <- list()
-for (j in seq_along(list_years)) {
-    dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
-                                       mode="undirected",
-                                       weighted=TRUE, diag=FALSE)
-  }  
-
-
-# Modularity by the WalkTrap algorithm 
-dolphin_walk <- list()
-for (k in seq_along(list_years)) {
-    dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], weights = E(dolphin_ig[[k]])$weight, 
-                                          steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
-  } 
-
-# Create an unweighted network
-dolp_ig <- list()
-for (l in seq_along(list_years)) {
-    dolp_ig[[l]] <- graph.edgelist(el_years[[l]][,1:2])
-    # Add the edge weights to this network
-    E(dolp_ig[[l]])$weight <- as.numeric(el_years[[l]][,3])
-    # Create undirected network
-    dolp_ig[[l]] <- as.undirected(dolp_ig[[l]])
-  }   
-### End parallel processing
-stopImplicitCluster()
-
-# Newman's Q modularity
-newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
-                                                               start = NULL, options = arpack_defaults, callback = NULL, 
-                                                               extra = NULL, env = parent.frame())})
-
-# Generate a vector of colors based on the number of unique memberships
-for (i in seq_along(dolp_ig)) {
-  # Generate a vector of colors based on the number of unique memberships
-  col <- rainbow(max(newman[[i]]$membership))
-  
-  # Initialize the color attribute with NA
-  V(dolp_ig[[i]])$color <- NA
-  
-  # Loop through each membership value and assign colors to corresponding vertices
-  for (j in 1:max(newman[[i]]$membership)){
-    V(dolp_ig[[i]])$color[newman[[i]]$membership == j] <- rep(col[j], sum(newman[[i]]$membership == j))
-  }
-}
-
+# Read in ig object
+ig <- readRDS("ig.RData")
 
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
@@ -535,17 +490,14 @@ for (j in 1:length(HI_list)) {  # Loop through columns first
          vertex.frame.color = NA,
          vertex.label.family = "Helvetica",
          vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
-         vertex.label.color = V(dolp_ig[[i]])$color,
+         vertex.label.color = "black",
          vertex.label.cex = 0.8,
          vertex.label.dist = 2,
          vertex.frame.width = 0.01,
-         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "black"))
+         vertex.color = "black")
     
     # Add the plot with a box around it
     box()
-    
-    # Add a number in the right corner
-    #text(1, 1, centrality_matrix[i, j], pos = 4, cex = 1.2, col = "black")
     
   }
 }

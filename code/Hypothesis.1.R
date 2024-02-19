@@ -19,7 +19,6 @@ library(bayesplot) # plot parameters
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
-library(rgdal) # Overlap
 source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
@@ -156,14 +155,8 @@ order_cols <- colnames(nxn[[1]])
 # Apply the order to each matrix in the list
 nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 
-# Only use limited data
-pedigree_subset <- readRDS("pedigree_subset.RData")
-nxn_limit <- lapply(nxn, function(mat) mat[rownames(mat) %in% pedigree_subset$Alias, colnames(mat) %in% pedigree_subset$Alias])
-
 # Save nxn lists
 saveRDS(nxn, file = "nxn.RData")
-saveRDS(nxn_limit, file = "nxn_limit.RData")
-
 
 ###########################################################################
 # PART 3: Create ILV and HI Predictors ---------------------------------------------
@@ -182,12 +175,6 @@ ILV_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Sex", "BirthYear")]
 ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
-
-# Only use limited data
-pedigree_subset <- readRDS("pedigree_subset.RData")
-ILV_limit <- subset(ILV_df, subset = ILV_df$Code %in% pedigree_subset$Alias)
-ILV_df <- ILV_limit
-nxn <- readRDS("nxn_limit.RData")
 
 # Make sim and diff matrices
 sim_dif_mat <- function(nxn) {
@@ -230,7 +217,6 @@ ILV_mat[[2]] <-  1-(ILV_mat[[2]] / max(ILV_mat[[2]]))
 
 # Save ILV matrices
 saveRDS(ILV_mat, "ILV_mat.RData")
-saveRDS(ILV_mat, "ILV_mat_limit.RData")
 
 # HRO Matrix ------------------------------------------------------
 
@@ -272,14 +258,8 @@ order_cols <- colnames(nxn[[1]])
 # Apply the order to each matrix in the list
 kov <- lapply(kov, function(mat) mat[order_rows, order_cols])
 
-# Only use limited data
-pedigree_subset <- readRDS("pedigree_subset.RData")
-kov_limit <- lapply(kov, function(mat) mat[rownames(mat) %in% pedigree_subset$Alias, colnames(mat) %in% pedigree_subset$Alias])
-
 # Save HRO
 saveRDS(kov, "kov.RDS")
-saveRDS(kov_limit, "kov_limit.RDS")
-
 
 # GR Matrix ------------------------------------------------------
 
@@ -435,12 +415,6 @@ ggplot(aes(x = Year), data = HAB_HI_data) +
                     name = "Variables", 
                     labels = c("ConfHI", "HAB"))
 
-# Read in limited data
-nxn <- readRDS("nxn_limit.RData")
-pedigree_subset <- readRDS("pedigree_subset.RData")
-list_years_limit <- lapply(list_years, function (df) subset(df, subset = df$Code %in% pedigree_subset$Alias))
-list_years <- list_years_limit
-
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
   aux <- lapply(list_years, function(df) {
@@ -463,11 +437,12 @@ aux <- aux_data(list_years)
 # Categorize ID to Sightings
 ID_sight <- function(aux_data) {
   IDbehav <- lapply(aux_data, function(df) {
-    df <- data.frame(
-      Code = unique(df$Code),
-      Sightings = tapply(df$Code, df$Code, length)
+    ID_by_sightings <- as.data.frame(tapply(df$Code, df$Code, length))
+    result <- data.frame(
+      Code = rownames(ID_by_sightings),
+      Sightings = ID_by_sightings[,1]
     )
-    df
+    return(result)
   })
   return(IDbehav)
 }
@@ -512,7 +487,7 @@ clump_behav <- function(aux_data) {
 rawHI <- clump_behav(aux)
 
 # Get total number of HI individuals
-total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$ConfHI > 0]))))
+total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$DiffHI > 0]))))
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
@@ -574,7 +549,6 @@ sim_HI <- lapply(dist_HI, function (df) {
 })
 
 saveRDS(sim_HI, "sim_HI.RData")
-saveRDS(sim_HI, "sim_HI_limit.RData")
 
 
 ###########################################################################
@@ -585,14 +559,7 @@ sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
-gr <- readRDS("kinship_matrix.RData")
-
-# Read in limited social association matrix and listed data
-sim_HI <- readRDS("sim_HI_limit.RData") # HI Sim Matrix
-ILV_mat <-readRDS("ILV_mat_limit.RData") # Age and Sex Matrices
-kov <- readRDS("kov_limit.RDS")  # Home range overlap
-nxn <- readRDS("nxn_limit.RData") # Association Matrix
-gr <- readRDS("kinship_matrix_limit.RData")
+# gr <- readRDS("kinship_matrix.RData")
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -603,16 +570,24 @@ node_ids_i <- lapply(num_nodes, function(df) matrix(rep(1:df, each = df), nrow =
 node_ids_j <- lapply(node_ids_i, function(df) t(df))
 
 # Format data
-upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = FALSE))
-edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = FALSE)]), along = 2)
+upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
+edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
+
+# Transform SRI data to fit a guassian
+transform_columns <- function(x) {
+  log(x / (1 - x))
+}
+transformed_edge_nxn <- apply(edge_nxn, 2, transform_columns)
 
 ## Split by 3 for int data
-HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), rep(3, nrow(edge_nxn)))))
+HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), 
+                                c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), 
+                                  rep(3, nrow(edge_nxn)))))
 colnames(HAB_data) <- c("SRI", "HAB")
 HAB_data$During <- ifelse(HAB_data$HAB == 2, 1, 0)
 HAB_data$After <- ifelse(HAB_data$HAB == 3, 1, 0)
 
-HI <- abind(lapply(sim_HI, function(mat) mat[upper.tri(mat, diag = FALSE)]), along = 2)
+HI <- abind(lapply(sim_HI, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 one <- lapply(seq_along(node_ids_i), function(i) factor(as.vector(node_names[[i]][node_ids_i[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]][node_ids_j[[i]][upper_tri[[i]]]]), levels = node_names[[i]]))
 
@@ -620,27 +595,32 @@ two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]
 df_list = data.frame(edge_weight = HAB_data[, 1],
                      HAB_During = HAB_data[, 3],
                      HAB_After = HAB_data[, 4],
-                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = FALSE)])),
-                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = FALSE)], 3),
-                     age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = FALSE)], 3),
-                     GR = rep(gr[upper.tri(gr, diag = FALSE)], 3),
+                     HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
+                     sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], 3),
+                     age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], 3),
+                     #GR = rep(gr[upper.tri(gr, diag = TRUE)], 3),
                      HI_similarity = c(HI[,c(1:3)]),
                      node_id_1 = unlist(one),
                      node_id_2 = unlist(two))
 
-# Check for gr
-fit_mcmc.gr <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity + GR, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-summary(fit_mcmc.gr)
-
 # Multimembership models in MCMCglmm
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
+fit_mcmc.0 <- MCMCglmm(edge_weight ~ 1, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+fit_mcmc.1 <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_similarity + HAB_During + HAB_After + 
                          HRO + age_similarity + sex_similarity, 
                        random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-summary(fit_mcmc.1)
+fit_mcmc.3 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
+                         HRO + age_similarity + sex_similarity, 
+                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+
+c(fit_mcmc.0$DIC, fit_mcmc.1$DIC, fit_mcmc.2$DIC, fit_mcmc.3$DIC)
+
+summary(fit_mcmc.3)
 
 # Check for model convergence
-model <- fit_mcmc.gr
+model <- fit_mcmc.3
 plot(model$Sol)
 plot(model$VCV)
 
@@ -670,3 +650,118 @@ mcmc_areas(
   point_est = "mean"
 )
 
+
+###########################################################################
+# PART 5: Display Networks ---------------------------------------------
+
+# Read in ig object
+ig <- readRDS("ig.RData")
+
+# Only show IDs of HI dolphins
+HI_list <- readRDS("HI_list.RData")
+HI_list <- HI_list[-4] # Get rid of natural foragers
+HI_IDs <- unique(as.vector(unlist(HI_list))) # Put them all together
+
+#----Modularity---
+# igraph format with weight
+el_years <- readRDS("el_years.RData")
+
+n.cores <- detectCores()
+registerDoParallel(n.cores)
+dolphin_ig <- list()
+for (j in seq_along(list_years)) {
+  dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
+                                     mode="undirected",
+                                     weighted=TRUE, diag=FALSE)
+}  
+
+
+# Modularity by the WalkTrap algorithm 
+dolphin_walk <- list()
+for (k in seq_along(list_years)) {
+  dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], weights = E(dolphin_ig[[k]])$weight, 
+                                        steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
+} 
+
+# Create an unweighted network
+dolp_ig <- list()
+for (l in seq_along(list_years)) {
+  dolp_ig[[l]] <- graph.edgelist(el_years[[l]][,1:2])
+  # Add the edge weights to this network
+  E(dolp_ig[[l]])$weight <- as.numeric(el_years[[l]][,3])
+  # Create undirected network
+  dolp_ig[[l]] <- as.undirected(dolp_ig[[l]])
+}   
+### End parallel processing
+stopImplicitCluster()
+
+# Newman's Q modularity
+newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
+                                                               start = NULL, options = arpack_defaults, callback = NULL, 
+                                                               extra = NULL, env = parent.frame())})
+
+# Generate a vector of colors based on the number of unique memberships
+for (i in seq_along(dolp_ig)) {
+  # Generate a vector of colors based on the number of unique memberships
+  col <- rainbow(max(newman[[i]]$membership))
+  
+  # Initialize the color attribute with NA
+  V(dolp_ig[[i]])$color <- NA
+  
+  # Loop through each membership value and assign colors to corresponding vertices
+  for (j in 1:max(newman[[i]]$membership)){
+    V(dolp_ig[[i]])$color[newman[[i]]$membership == j] <- rep(col[j], sum(newman[[i]]$membership == j))
+  }
+}
+
+
+# ---Plot network---
+# Set up the plotting area with 1 row and 2 columns for side-by-side plots
+# Initialize a list to store layout information for each graph
+layout_list <- list()
+
+# Loop through the list of graphs and save layout information
+for (i in 1:length(ig)) {
+  layout_list[[i]] <- layout_with_fr(ig[[i]])
+}
+
+# Set up the plotting layout
+layout.matrix <- matrix(c(1:3), nrow = 1, ncol = 3)
+layout(mat = layout.matrix)    
+par(mar = c(0.6, 0.6, 0.6, 0.6))
+
+# Extract layout for this graph
+combined_layout <- layout_list[[1]]
+counter <- 0
+  
+for (i in 1:length(ig)) {  # Loop through periods
+    
+    counter <- counter + 1
+    
+    # Get nodes for each behavior
+    labeled_nodes <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
+    
+    # Create the plot
+    plot(ig[[i]],
+         layout = combined_layout,
+         edge.width = E(ig[[i]])$weight * 4, # edge thickness
+         edge.color = adjustcolor("grey", alpha.f = 0.2),
+         vertex.size = ifelse(labeled_nodes, 10, 3), #sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individual's strength (centrality)
+         vertex.frame.color = NA,
+         vertex.label.family = "Helvetica",
+         vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
+         vertex.label.color = V(dolp_ig[[i]])$color,
+         vertex.label.cex = 0.8,
+         vertex.label.dist = 2,
+         vertex.frame.width = 0.01,
+         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "black"))
+    
+    # Add the plot with a box around it
+    box()
+  
+  }
+
+# What's the number of memberships
+length(unique(newman[[1]]$membership))
+length(unique(newman[[2]]$membership))
+length(unique(newman[[3]]$membership))

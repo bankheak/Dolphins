@@ -12,8 +12,6 @@ library(foreach)
 library(doParallel)
 library(tcltk)
 library(survival)
-library(combinat)
-library(rgeos)
 library(raster)
 
 
