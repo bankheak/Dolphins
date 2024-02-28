@@ -13,21 +13,16 @@ library(grid)
 library(assortnet) # associative indices
 library(ggplot2) # Visualization
 library(abind) # array
-library(MCMCglmm) # MCMC models
-library(coda)
+library(brms) # For brm modellibrary(coda)
 library(bayesplot) # plot parameters
 library(doParallel)
 library(hrbrthemes) # plot themes
 library(viridis) # plot themes
+library(ggpattern) # heatmap hatches
 library(patchwork) # plotting together
 library(car) # durbinWatsonTest
-library(DescTools) #Schaff post-hoc test
-library(lme4) # lmm
-library(nlme) # unequal variance weights
-library(lmerTest) # summary output of lmm
-library(emmeans) # post-hoc test
-library(effects) # visualize effects
-library(sjPlot) # Confidence intervals
+library(rstan) # To make STAN run faster
+library(tidybayes) # get_variables
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -312,23 +307,43 @@ saveRDS(result_df, "result_df.RData")
 
 # Read in data
 result_df <- readRDS("result_df.RData")
+prob_BG <- readRDS("prob_BG.RData")
+prob_FG <- readRDS("prob_FG.RData")
+prob_SD <- readRDS("prob_SD.RData")
 
-# First Visualize data
-ggplot(result_df, aes(x = Period, y = composite_centrality, fill = HI)) + 
-  geom_boxplot() 
+# Order data
+order_HI_data <- function(prob_HI) {
+
+order_rows <- result_df$ID[result_df$Period == "1-Before_HAB"]
+
+# Now reorder the dataframe
+prob_HI <- lapply(prob_HI, function (df) {
+  
+  df <- data.frame(Code = order_rows,
+                   PropHI = df$PropHI[match(order_rows, df$Code)])
+  return(df)
+  
+})
+  return(prob_HI)
+}
+
+prob_BG <- order_HI_data(prob_BG)
+prob_FG <- order_HI_data(prob_FG)
+prob_SD <- order_HI_data(prob_SD)
+
+# Add proportions to results_df
+result_df$Prop_BG <- unlist(prob_BG$HIProp)
 
 # Make dummy variables
 result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
 result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
 result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
-# Make factor variables
-result_df$HI <- as.factor(result_df$HI)
-result_df$Period <- as.factor(result_df$Period)
+
+# Make ID numeric
+result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
 # Check assumptions of model
-test_model <- lm(composite_centrality ~ BG * During + BG * After +
-                   FG * During + FG * After + 
-                   SD * During + SD * After, data = result_df)
+test_model <- lm(composite_centrality ~ BG + FG + SD, data = result_df)
 summary(test_model)
 ## Check distributions
 hist(result_df$composite_centrality) # normal
@@ -337,110 +352,232 @@ bartlett.test(composite_centrality ~ HI, data = result_df) # not equal
 ## Independent
 durbinWatsonTest(test_model) # not independent
 
-# Make ID numeric
-result_df$numeric_ID <- as.numeric(factor(result_df$ID))
+# Help STAN run faster
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
 
-# Fit the LMM
-lmm_model_0 <- lme(composite_centrality ~  1, random = ~1 | numeric_ID,
-                   weights = varIdent(form = ~1 | HI), data = result_df)
-lmm_model_1 <- lme(composite_centrality ~  BG + FG + SD, 
-                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
-                   data = result_df)
-lmm_model_2 <- lme(composite_centrality ~  BG + FG + SD + During + After, 
-                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
-                   data = result_df)
-lmm_model_3 <- lme(composite_centrality ~  BG * During + BG * After + 
-                     FG * During + FG * After + SD * During + SD *After, 
-                   random = ~1 | numeric_ID, weights = varIdent(form = ~1 | HI), 
-                   data = result_df)
+# Models in brms
+fit_brm.0 <- brm(composite_centrality ~ 1 + (1 | numeric_ID),
+                 chains = 3, data = result_df)
+fit_brm.1 <- brm(composite_centrality ~ BG + FG + SD + 
+                   (1 | numeric_ID), 
+                 chains = 3, data = result_df)
+fit_brm.2 <- brm(composite_centrality ~ BG + FG + SD + After + During + 
+                   (1 | numeric_ID), 
+                 chains = 3, data = result_df)
+fit_brm.3 <- brm(composite_centrality ~ 
+                   BG * During + BG * After + 
+                   FG * During + FG * After + 
+                   SD * During + SD * After + 
+                   (1 | numeric_ID), 
+                 chains = 3, data = result_df)
 
-# Fit the MCMC
-fit_mcmc_0 <- MCMCglmm(composite_centrality ~ 1, random=~ numeric_ID, rcov = ~ HI,
-                       data = result_df, nitt = 20000) 
-fit_mcmc_1 <- MCMCglmm(composite_centrality ~ BG + FG + SD, 
-                       random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
-fit_mcmc_2 <- MCMCglmm(composite_centrality ~ BG + FG + SD + During + After, 
-                        random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
-fit_mcmc_3 <- MCMCglmm(composite_centrality ~ BG * During + BG * After + 
-                         FG * During + FG * After + SD * During + SD * After, 
-                       random=~ numeric_ID, rcov = ~ HI, data = result_df, nitt = 20000) 
+loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
+loo(fit_brm.1)
+saveRDS(fit_brm.2, "fit_brm.2.RData")
+fit_brm.2 <- readRDS("fit_brm.2.RData")
+summary(fit_brm.2)
 
-summary(fit_mcmc_0)
-summary(fit_mcmc_1) 
-summary(fit_mcmc_2) # Lowest DIC
-summary(fit_mcmc_3)
+# Check for model convergence
+model <- fit_brm.2
+plot(model)
+pp_check(model) # check to make sure they line up
+# Search how to fix this
 
-# Model Selection
-AIC(lmm_model_0, lmm_model_1, lmm_model_2, lmm_model_3)
+# Plot the posterior distribution
+get_variables(model) # Get the names of the parameters
 
-# Print the summary of the model
-summary(lmm_model_2)
+theme_update(text = element_text(family = "sans"))
 
-# Run post-hoc test
-emm_pairs <- emmeans(lmm_model_2, pairwise ~ BG + FG + SD + During + After, adjust = "hochberg")
-summary(emm_pairs, infer = TRUE)
+# Create mcmc_areas plot
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_FG", "b_BG", "b_SD", 
+           "b_After", "b_During"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+) + labs(
+  title = "Posterior parameter distributions",
+  subtitle = "with medians and 80% intervals"
+) + theme_update(text = element_text(family = "sans"))
 
-# Visualize effects
-effects_lmm_model <- allEffects(lmm_model_2)
-plot(effects_lmm_model)
-plot_model(lmm_model_2)
-
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_FG" = "Fixed Gear Foraging",
+    "b_BG" = "Begging/Provisioning",
+    "b_SD" = "Scavenging/Depredating",
+    "b_After" = "After HAB",
+    "b_During" = "During HAB"
+  )
+)
 
 ###########################################################################
 # PART 4: Circular heat map ---------------------------------------------
 
-# Set up data
+# Read in rank data
 result_df <- readRDS("result_df.RData")
 
-none_df <- result_df[!(result_df$Period == 1 & result_df$HI == "NF"), ]
-result_df <- none_df[!(none_df$Period == 0 & !(none_df$ID %in% none_df$ID[none_df$Period == 1]) & none_df$HI == "NF"), ]
-ID_1 <- unique(result_df$ID[result_df$Period==0])
-ID_2 <- unique(result_df$ID[result_df$Period==1])
-ID_length <- rep(c(ID_1, ID_2), 3)
-Period <- c("Pre-HAB", "Post_HAB")
+# Make sure there is only one ID in each period
+unique_ids <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
-# Filter data for Between and unique IDs
-unique_data_b <- result_df[!duplicated(result_df[, c('ID', 'Period')]), ]
+# Use the aggregate function to sum the Eigen values by ID
+sum_by_id <- aggregate(composite_centrality ~ ID, data = result_df, FUN = sum)
 
-# Combine the sets of data
-B_data <- data.frame(ID = ID_length, 
-                     Period = rep(c(rep(Period[1], length(ID_1)), 
-                                rep(Period[2], length(ID_2))), 3),
-                     HI = rep(unique_data_b$HI, 3),
-                     Value = c(c(scale(c(unique_data_b$Between[unique_data_b$Period == 0], 
-                                            unique_data_b$Between[unique_data_b$Period == 1]))),
-                             c(scale(c(unique_data_b$Strength[unique_data_b$Period == 0], 
-                                          unique_data_b$Strength[unique_data_b$Period == 1]))),
-                             c(scale(c(unique_data_b$Degree[unique_data_b$Period == 0], 
-                                        unique_data_b$Degree[unique_data_b$Period == 1])))),
-                     Metric = c(rep("Betweeness", length(ID_length)),
-                                rep("Strength", length(ID_length)),
-                                rep("Degree", length(ID_length))))
+# Make HI groups
+HI_by_id <- aggregate(HI ~ ID, data = result_df, FUN = function(x) paste(unique(x), collapse = ","))
 
-# plotting the heatmap
-heatmap_list <- list()
-count <- 1
-for (j in c("BG", "FG", "SD")) {
-    HI_data <- B_data[B_data$HI == j, ]
-    matched_ids <- B_data[B_data$ID %in% 
-                            intersect(B_data$ID[B_data$Period == "Pre-HAB" & B_data$HI == "NF"], 
-                                      B_data$ID[B_data$Period == "Post_HAB" & B_data$HI == j]), ]
-    matched_ids <- matched_ids[matched_ids$HI == "NF", ]
-    subset_data <- rbind(HI_data, matched_ids)
-    
-    heatmap_list[[count]] <- ggplot(subset_data, aes(ID, Period, fill = Value)) + 
-      geom_tile() + 
-      theme_minimal() + 
-      scale_fill_gradient(low="white", high="red") + 
-      labs(title = "Heatmap of Centrality Metrics of Dolphins", 
-           x ="IDs", y ="Period")
-    count <- 1 + 1
-  }
+# Merge the two data frames
+rank_data <- merge(sum_by_id, HI_by_id, all = TRUE)
 
-# Plot heatmaps
-heatmap_list[[1]] # BG
-heatmap_list[[2]] # FG
-heatmap_list[[3]] # SD
+# Generate all combinations of BG, SD, and FG
+all_combinations <- c("BG", "SD", "FG", "NF")
+
+# Function to find the combination for each HI value
+find_combination <- function(hi_value) {
+  hi_elements <- unlist(strsplit(hi_value, ","))
+  combination <- all_combinations %in% hi_elements
+  paste(all_combinations[combination], collapse = ",")
+}
+
+# Apply the function to each HI value
+rank_data$HI_combination <- sapply(rank_data$HI, find_combination)
+
+# Make HI as a factor 
+rank_data$HI_combination <- as.factor(rank_data$HI_combination)
+
+# Split rows based on the number of HI categories each ID has
+split_data <- rank_data[rep(1:nrow(rank_data), lengths(strsplit(rank_data$HI, ","))), ]
+
+# Splitting the values in the HI column
+hi_values <- strsplit(as.character(rank_data$HI), ",")
+split_data$HI <- unlist(hi_values)
+
+# Put this back into result_df
+result_data <- data.frame(ID = split_data$ID,
+                        Centrality = split_data$composite_centrality,
+                        HI = split_data$HI)
+
+# Normalize the Eigen values to fit in the circle
+unique_ids$composite_centrality <- (unique_ids$composite_centrality - 
+                                      min(unique_ids$composite_centrality)) / 
+                                      (max(unique_ids$composite_centrality) - 
+                                         min(unique_ids$composite_centrality))
+
+# Convert "Period" column to a factor to ensure correct ordering
+unique_ids$Period <- factor(unique_ids$Period, levels = c("1-Before_HAB", "2-During_HAB", "3-After_HAB"))
+
+# Reshape the data from wide to long format for plotting
+df_long <- reshape2::melt(unique_ids, id.vars = c("ID", "Period"), measure.vars = c("composite_centrality"))
+
+# Create different data frames for each HI behavior
+## BG
+df_long_BG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "BG"], ]
+# Subset IDs that are not in before and/or during periods
+change_behav_BG <- result_df[result_df$HI == "BG", c("ID", "Period", "composite_centrality")]
+# Filter data for IDs where hatches should be added
+## Initialize hatch column with FALSE
+hatch_vect <- NULL
+## Loop through each unique period in change_behav_BG
+for (period in unique(change_behav_BG$Period)) {
+  # Determine if ID is found in change_behav_BG for this period
+  ids_in_period <- change_behav_BG$ID[change_behav_BG$Period == period]
+  hatch <- df_long_BG$ID[df_long_BG$Period == period] %in% ids_in_period
+  hatch_vect <- c(hatch_vect, hatch)
+}
+df_long_BG$hatch <- hatch_vect
+
+# Filter data to include only rows where hatch is TRUE
+df_hatched <- df_long_BG[df_long_BG$hatch,]
+
+# Plot with hatches for IDs found in each period
+ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
+  geom_tile() +
+  geom_tile_pattern(data = df_long_BG[!df_long_BG$hatch, ], 
+                    aes(pattern = ID), 
+                    pattern = "stripe", 
+                    pattern_fill = "black", 
+                    pattern_angle = 45, 
+                    pattern_density = 0.1, 
+                    pattern_spacing = 0.025,
+                    color = "white") +
+  scale_fill_viridis(option = "plasma") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "ID", y = "Period", fill = "Strength") +
+  coord_polar()
+
+## FG
+df_long_FG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "FG"], ]
+# Subset IDs that are not in before and/or during periods
+change_behav_FG <- result_df[result_df$HI == "FG", c("ID", "Period", "composite_centrality")]
+# Filter data for IDs where hatches should be added
+## Initialize hatch column with FALSE
+hatch_vect <- NULL
+## Loop through each unique period in change_behav_FG
+for (period in unique(change_behav_FG$Period)) {
+  # Determine if ID is found in change_behav_FG for this period
+  ids_in_period <- change_behav_FG$ID[change_behav_FG$Period == period]
+  hatch <- df_long_FG$ID[df_long_FG$Period == period] %in% ids_in_period
+  hatch_vect <- c(hatch_vect, hatch)
+}
+df_long_FG$hatch <- hatch_vect
+
+# Filter data to include only rows where hatch is TRUE
+df_hatched <- df_long_FG[df_long_FG$hatch,]
+
+# Plot with hatches for IDs found in each period
+ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
+  geom_tile() +
+  geom_tile_pattern(data = df_long_FG[!df_long_FG$hatch, ], 
+                    aes(pattern = ID), 
+                    pattern = "stripe", 
+                    pattern_fill = "black", 
+                    pattern_angle = 45, 
+                    pattern_density = 0.1, 
+                    pattern_spacing = 0.025,
+                    color = "white") +
+  scale_fill_viridis(option = "plasma") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "ID", y = "Period", fill = "Strength") +
+  coord_polar()
+
+## SD
+df_long_SD <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "SD"], ]
+# Subset IDs that are not in before and/or during periods
+change_behav_SD <- result_df[result_df$HI == "SD", c("ID", "Period", "composite_centrality")]
+# Filter data for IDs where hatches should be added
+## Initialize hatch column with FALSE
+hatch_vect <- NULL
+## Loop through each unique period in change_behav_SD
+for (period in unique(change_behav_SD$Period)) {
+  # Determine if ID is found in change_behav_BG for this period
+  ids_in_period <- change_behav_SD$ID[change_behav_SD$Period == period]
+  hatch <- df_long_SD$ID[df_long_SD$Period == period] %in% ids_in_period
+  hatch_vect <- c(hatch_vect, hatch)
+}
+df_long_SD$hatch <- hatch_vect
+
+# Filter data to include only rows where hatch is TRUE
+df_hatched <- df_long_SD[df_long_SD$hatch,]
+
+# Plot with hatches for IDs found in each period
+ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
+  geom_tile() +
+  geom_tile_pattern(data = df_long_SD[!df_long_SD$hatch, ], 
+                    aes(pattern = ID), 
+                    pattern = "stripe", 
+                    pattern_fill = "black", 
+                    pattern_angle = 45, 
+                    pattern_density = 0.1, 
+                    pattern_spacing = 0.025,
+                    color = "white") +
+  scale_fill_viridis(option = "plasma") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "ID", y = "Period", fill = "Strength") +
+  coord_polar()
 
 ###########################################################################
 # PART 5: Multinetwork ---------------------------------------------

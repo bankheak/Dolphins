@@ -13,12 +13,28 @@ library(assortnet) # associative indices
 library(kinship2) # genetic relatedness
 library(ggplot2) # Visualization
 library(abind) # array
-library(MCMCglmm) # MCMC models
+library(brms) # For brm model
 library(coda)
 library(bayesplot) # plot parameters
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
+library(magrittr) # All below is for STAN
+library(dplyr)
+library(purrr)
+library(forcats)
+library(tidyr)
+library(modelr)
+library(ggdist)
+library(tidybayes)
+library(cowplot)
+library(rstan) # To make STAN run faster
+library(ggrepel)
+library(RColorBrewer)
+library(gganimate)
+library(posterior)
+library(distributional)
+theme_set(theme_tidybayes() + panel_border())
 source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
@@ -472,6 +488,7 @@ clump_behav <- function(aux_data) {
   
   # Categorize DiffHI to IDs
   rawHI <- lapply(aux_data, function(df) {
+    
     # Sum up the frequencies of HI by code
     aggregated_df <- aggregate(DiffHI ~ Code, data = df, sum)
     unique_codes_df <- data.frame(Code = unique(df$Code))
@@ -479,6 +496,14 @@ clump_behav <- function(aux_data) {
     merged_df <- merge(unique_codes_df, aggregated_df, by = "Code", all.x = TRUE)
     # Fill missing Freq values (if any) with 0
     merged_df$DiffHI[is.na(merged_df$DiffHI)] <- 0
+    
+    # Order data
+    order_rows <- rownames(nxn[[1]])
+    
+    # Now reorder the dataframe
+    merged_df <- data.frame(Code = order_rows,
+                            DiffHI = merged_df$DiffHI[match(order_rows, merged_df$Code)])
+    
     return(merged_df)
   })
   return(rawHI)
@@ -486,8 +511,62 @@ clump_behav <- function(aux_data) {
 
 rawHI <- clump_behav(aux)
 
+# Categorize DiffHI to IDs
+diff_raw <- function(aux_data) {
+  rawHI_diff <- lapply(aux_data, function(df) {
+    table_df <- as.data.frame(table(df$Code, df$DiffHI))
+    colnames(table_df) <- c("Code", "DiffHI", "Freq")
+    # Order data
+    order_rows <- rownames(nxn[[1]])
+    
+    # Now reorder the dataframe
+    table_df <- data.frame(Code = order_rows,
+                           DiffHI = table_df$DiffHI[match(order_rows, table_df$Code)],
+                           Freq = table_df$Freq[match(order_rows, table_df$Code)])
+    
+    return(table_df)
+  })}
+
+rawHI_diff <- diff_raw(aux)
+
 # Get total number of HI individuals
 total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$DiffHI > 0]))))
+
+# Categorize ID to Sightings
+ID_sight <- function(aux_data) {
+  IDbehav <- lapply(aux_data, function(df) {
+    df <- data.frame(
+      Code = unique(df$Code),
+      Sightings = tapply(df$Code, df$Code, length)
+    )
+    # Order data
+    order_rows <- rownames(nxn[[1]])
+    
+    # Now reorder the dataframe
+    df <- data.frame(Code = order_rows,
+                     Sightings = df$Sightings[match(order_rows, df$Code)])
+    
+    df
+  })
+  return(IDbehav)
+}
+
+IDbehav <- ID_sight(aux)
+
+# Create a frequency count for each HI behavior
+get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
+  lapply(seq_along(IDbehav_data), function(i) {
+    df <- IDbehav_data[[i]]
+    HI_freq <- rawHI_diff_data[[i]]$Freq[rawHI_diff_data[[i]]$DiffHI == HI]
+    df$HI <- HI_freq[match(df$Code, rawHI_diff_data[[i]]$Code)]
+    colnames(df) <- c("Code", "Sightings", "HI")
+    df
+  })
+}
+
+IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
+IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
+IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
@@ -515,6 +594,13 @@ Prop_HI <- function(IDbehav) {
 }
 
 prob_HI <- Prop_HI(IDbehav_HI)
+prob_BG <- Prop_HI(IDbehav_BG)
+prob_SD <- Prop_HI(IDbehav_SD)
+prob_FG <- Prop_HI(IDbehav_FG)
+
+saveRDS(prob_BG, "prob_BG.RData")
+saveRDS(prob_FG, "prob_FG.RData")
+saveRDS(prob_SD, "prob_SD.RData")
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(Prop_HI, nxn) {
@@ -573,12 +659,6 @@ node_ids_j <- lapply(node_ids_i, function(df) t(df))
 upper_tri <- lapply(nxn, function(df) upper.tri(df, diag = TRUE))
 edge_nxn <- abind(lapply(nxn, function(mat) mat[upper.tri(mat, diag = TRUE)]), along = 2)
 
-# Transform SRI data to fit a guassian
-transform_columns <- function(x) {
-  log(x / (1 - x))
-}
-transformed_edge_nxn <- apply(edge_nxn, 2, transform_columns)
-
 ## Split by 3 for int data
 HAB_data <- as.data.frame(cbind(c(edge_nxn[,1], edge_nxn[,2], edge_nxn[,3]), 
                                 c(rep(1, nrow(edge_nxn)), rep(2, nrow(edge_nxn)), 
@@ -603,53 +683,82 @@ df_list = data.frame(edge_weight = HAB_data[, 1],
                      node_id_1 = unlist(one),
                      node_id_2 = unlist(two))
 
-# Multimembership models in MCMCglmm
-fit_mcmc.0 <- MCMCglmm(edge_weight ~ 1, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-fit_mcmc.1 <- MCMCglmm(edge_weight ~ HRO + age_similarity + sex_similarity, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-fit_mcmc.2 <- MCMCglmm(edge_weight ~ HI_similarity + HAB_During + HAB_After + 
-                         HRO + age_similarity + sex_similarity, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
-fit_mcmc.3 <- MCMCglmm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
-                         HRO + age_similarity + sex_similarity, 
-                       random=~mm(node_id_1 + node_id_2), data = df_list, nitt = 20000) 
+# Make sure that edge_weight is not whole numbers
+df_list$edge_weight <- ifelse(df_list$edge_weight == 0, df_list$edge_weight + 0.00001,
+                              ifelse(df_list$edge_weight == 1, df_list$edge_weight - 0.00001,
+                                     df_list$edge_weight))
 
-c(fit_mcmc.0$DIC, fit_mcmc.1$DIC, fit_mcmc.2$DIC, fit_mcmc.3$DIC)
+# Help STAN run faster
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
 
-summary(fit_mcmc.3)
+# Multimembership models in brms
+fit_brm.0 <- brm(edge_weight ~ (1 | mm(node_id_1, node_id_2)), 
+                 family = Beta(), chains = 3, data = df_list)
+fit_brm.1 <- brm(edge_weight ~ HRO + age_similarity + sex_similarity + 
+                   (1 | mm(node_id_1, node_id_2)), 
+                 family = Beta(), chains = 3, data = df_list)
+fit_brm.2 <- brm(edge_weight ~ HI_similarity + HAB_During + HAB_After + 
+                   HRO + age_similarity + sex_similarity + 
+                   (1 | mm(node_id_1, node_id_2)), 
+                 family = Beta(), chains = 3, data = df_list)
+fit_brm.3 <- brm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
+                   HRO + age_similarity + sex_similarity + 
+                   (1 | mm(node_id_1, node_id_2)), 
+                 family = Beta(), chains = 3, data = df_list)
+
+loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
+loo(fit_brm.3)
+saveRDS(fit_brm.3, "fit_brm.3.RData")
+fit_brm.3 <- readRDS("fit_brm.3.RData")
+summary(fit_brm.3)
 
 # Check for model convergence
-model <- fit_mcmc.3
-plot(model$Sol)
-plot(model$VCV)
+model <- fit_brm.3
+plot(model)
+pp_check(model) # check to make sure they line up
+# Search how to fix this
 
-# Extract Posteriors
-posterior <- model$Sol
-
-# Check what proportion is above 0
-mean(posterior[, "HI_similarity:HAB_During"] > 0)
-mean(posterior[, "HI_similarity:HAB_After"] > 0)
+# Find the significance
+posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
+coefficients <- colnames(posterior_samples)
+summary(posterior_samples)
+mean(posterior_samples$`b_HI_similarity:HAB_During` > 0)
+mean(posterior_samples$`b_HI_similarity:HAB_After` > 0)
 
 # Plot the posterior distribution
-mcmc_intervals(posterior, pars = c(#"(Intercept)", "HI_similarity", 
-                                   #"HI_similarity:HAB_During", "HI_similarity:HAB_After",
-                                   #"HAB_During", "HAB_After", 
-                                   "age_similarity", "sex_similarity", 
-                                   "HRO", "GR"))
-mcmc_areas(
-  posterior, 
-  pars = c("(Intercept)", 
-           "HI_similarity",
-           "HI_similarity:HAB_During", 
-           "HI_similarity:HAB_After",
-           "HAB_During", "HAB_After", 
-           "age_similarity", "sex_similarity", "HRO", "GR"),
+get_variables(model) # Get the names of the parameters
+
+theme_update(text = element_text(family = "sans"))
+
+# Create mcmc_areas plot
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_HI_similarity", "b_HAB_During", "b_HAB_After", 
+           "b_HRO", "b_age_similarity", "b_sex_similarity", 
+           "b_HI_similarity:HAB_During", "b_HI_similarity:HAB_After"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
-  point_est = "mean"
-)
+  point_est = "mean",
+) +
+  labs(
+    title = "Posterior parameter distributions",
+    subtitle = "with medians and 80% intervals"
+  ) +
+  theme_update(text = element_text(family = "sans"))
 
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_HAB_During" = "During HAB",
+    "b_HAB_After" = "After HAB",
+    "b_HRO" = "HRO",
+    "b_age_similarity" = "Age Similarity",
+    "b_sex_similarity" = "Sex Similarity",
+    "b_HI_similarity" = "HC Similarity",
+    "b_HI_similarity:HAB_During" = "HC Similarity:During HAB",
+    "b_HI_similarity:HAB_After" = "HC Similarity:After HAB"
+  )
+)
 
 ###########################################################################
 # PART 5: Display Networks ---------------------------------------------
