@@ -516,13 +516,6 @@ diff_raw <- function(aux_data) {
   rawHI_diff <- lapply(aux_data, function(df) {
     table_df <- as.data.frame(table(df$Code, df$DiffHI))
     colnames(table_df) <- c("Code", "DiffHI", "Freq")
-    # Order data
-    order_rows <- rownames(nxn[[1]])
-    
-    # Now reorder the dataframe
-    table_df <- data.frame(Code = order_rows,
-                           DiffHI = table_df$DiffHI[match(order_rows, table_df$Code)],
-                           Freq = table_df$Freq[match(order_rows, table_df$Code)])
     
     return(table_df)
   })}
@@ -702,7 +695,8 @@ fit_brm.2 <- brm(edge_weight ~ HI_similarity + HAB_During + HAB_After +
                    HRO + age_similarity + sex_similarity + 
                    (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)
-fit_brm.3 <- brm(edge_weight ~ HI_similarity * HAB_During + HI_similarity * HAB_After + 
+fit_brm.3 <- brm(edge_weight ~ HI_similarity * HAB_During + 
+                   HI_similarity * HAB_After + 
                    HRO + age_similarity + sex_similarity + 
                    (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)

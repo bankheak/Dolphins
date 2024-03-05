@@ -136,6 +136,7 @@ row_name_assign(nxn, ig)
 
 # Save ig object
 saveRDS(ig, "ig.RData")
+ig <- readRDS("ig.RData")
 
 # Edgelist: Nodes (i & j) and edge (or link) weight
 n.cores <- detectCores()
@@ -232,6 +233,31 @@ HI_list <- list(BG = names_BG, FG = names_FG, SD = names_SD, NF = names_NF)
 
 saveRDS(HI_list, "HI_list.RData")
 
+# Read in different HI data
+prob_BG <- readRDS("prob_BG.RData")
+prob_FG <- readRDS("prob_FG.RData")
+prob_SD <- readRDS("prob_SD.RData")
+
+# Order data
+order_HI_data <- function(prob_HI) {
+  
+  order_rows <- compare_between$ID
+  
+  # Now reorder the dataframe
+  prob_HI <- lapply(prob_HI, function (df) {
+    
+    df <- data.frame(Code = order_rows,
+                     PropHI = df$HIprop[match(order_rows, df$Code)])
+    return(df)
+    
+  })
+  return(prob_HI)
+}
+
+prob_BG <- order_HI_data(prob_BG)
+prob_FG <- order_HI_data(prob_FG)
+prob_SD <- order_HI_data(prob_SD)
+
 # Combine the data
 local_metrics_HI <- data.frame(ID = compare_between$ID,
                                Period = c(rep("1-Before_HAB", nrow(compare_between)), 
@@ -248,7 +274,13 @@ local_metrics_HI <- data.frame(ID = compare_between$ID,
                                             compare_strength$After_HAB_strength),
                                Eigen = c(compare_eigen$Before_HAB, 
                                          compare_eigen$During_HAB,
-                                         compare_eigen$After_HAB))
+                                         compare_eigen$After_HAB),
+                               Prop_BG = c(prob_BG[[1]]$PropHI, prob_BG[[2]]$PropHI,
+                                           prob_BG[[3]]$PropHI),
+                               Prop_FG = c(prob_FG[[1]]$PropHI, prob_FG[[2]]$PropHI,
+                                           prob_FG[[3]]$PropHI),
+                               Prop_SD = c(prob_SD[[1]]$PropHI, prob_SD[[2]]$PropHI,
+                                           prob_SD[[3]]$PropHI))
 
 # Add HI_type column
 local_metrics_HI_1 <- local_metrics_HI[local_metrics_HI$Period == "1-Before_HAB", ]
@@ -307,32 +339,6 @@ saveRDS(result_df, "result_df.RData")
 
 # Read in data
 result_df <- readRDS("result_df.RData")
-prob_BG <- readRDS("prob_BG.RData")
-prob_FG <- readRDS("prob_FG.RData")
-prob_SD <- readRDS("prob_SD.RData")
-
-# Order data
-order_HI_data <- function(prob_HI) {
-
-order_rows <- result_df$ID[result_df$Period == "1-Before_HAB"]
-
-# Now reorder the dataframe
-prob_HI <- lapply(prob_HI, function (df) {
-  
-  df <- data.frame(Code = order_rows,
-                   PropHI = df$PropHI[match(order_rows, df$Code)])
-  return(df)
-  
-})
-  return(prob_HI)
-}
-
-prob_BG <- order_HI_data(prob_BG)
-prob_FG <- order_HI_data(prob_FG)
-prob_SD <- order_HI_data(prob_SD)
-
-# Add proportions to results_df
-result_df$Prop_BG <- unlist(prob_BG$HIProp)
 
 # Make dummy variables
 result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
@@ -342,7 +348,11 @@ result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
+# Make sure there is only one ID in each period
+result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
+
 # Check assumptions of model
+test_model <- lm(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD, data = result_df)
 test_model <- lm(composite_centrality ~ BG + FG + SD, data = result_df)
 summary(test_model)
 ## Check distributions
@@ -357,23 +367,23 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 # Models in brms
-fit_brm.0 <- brm(composite_centrality ~ 1 + (1 | numeric_ID),
-                 chains = 3, data = result_df)
-fit_brm.1 <- brm(composite_centrality ~ BG + FG + SD + 
-                   (1 | numeric_ID), 
-                 chains = 3, data = result_df)
-fit_brm.2 <- brm(composite_centrality ~ BG + FG + SD + After + During + 
-                   (1 | numeric_ID), 
-                 chains = 3, data = result_df)
-fit_brm.3 <- brm(composite_centrality ~ 
-                   BG * During + BG * After + 
-                   FG * During + FG * After + 
-                   SD * During + SD * After + 
-                   (1 | numeric_ID), 
-                 chains = 3, data = result_df)
+fit_brm.0 <- brm(bf(composite_centrality ~ 1 + (1 | numeric_ID), 
+                    sigma ~ 0 + BG + FG + SD),
+                 chains = 3, family = gaussian, data = result_df)
+fit_brm.1 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + 
+                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD),
+                 chains = 3, family = gaussian, data = result_df)
+fit_brm.2 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + After + During + 
+                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
+                 chains = 3, family = gaussian, data = result_df)
+fit_brm.3 <- brm(bf(composite_centrality ~ 
+                   Prop_BG * During + Prop_BG * After + 
+                   Prop_FG * During + Prop_FG * After + 
+                   Prop_SD * During + Prop_SD * After + 
+                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
+                 chains = 3, family = gaussian, data = result_df)
 
 loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
-loo(fit_brm.1)
 saveRDS(fit_brm.2, "fit_brm.2.RData")
 fit_brm.2 <- readRDS("fit_brm.2.RData")
 summary(fit_brm.2)
@@ -392,7 +402,7 @@ theme_update(text = element_text(family = "sans"))
 # Create mcmc_areas plot
 mcmc_plot <- mcmc_areas(
   as.array(model), 
-  pars = c("b_FG", "b_BG", "b_SD", 
+  pars = c("b_Prop_FG", "b_Prop_BG", "b_Prop_SD", 
            "b_After", "b_During"),
   prob = 0.8, # 80% intervals
   prob_outer = 0.99, # 99%
@@ -404,9 +414,9 @@ mcmc_plot <- mcmc_areas(
 
 mcmc_plot + scale_y_discrete(
   labels = c(
-    "b_FG" = "Fixed Gear Foraging",
-    "b_BG" = "Begging/Provisioning",
-    "b_SD" = "Scavenging/Depredating",
+    "b_Prop_FG" = "Fixed Gear Foraging",
+    "b_Prop_BG" = "Begging/Provisioning",
+    "b_Prop_SD" = "Scavenging/Depredating",
     "b_After" = "After HAB",
     "b_During" = "During HAB"
   )
@@ -470,11 +480,27 @@ unique_ids$Period <- factor(unique_ids$Period, levels = c("1-Before_HAB", "2-Dur
 # Reshape the data from wide to long format for plotting
 df_long <- reshape2::melt(unique_ids, id.vars = c("ID", "Period"), measure.vars = c("composite_centrality"))
 
+# Make a Rank sum
+rank_sum <- data.frame(ID = sum_by_id$ID, Period = "Rank-Sum",
+                       variable = "composite_centrality", 
+                       value = sum_by_id$composite_centrality)
+rank_sum$value <- scale(c(rank_sum$value))
+
+df_long <- merge(df_long, rank_sum, all = T)
+
 # Create different data frames for each HI behavior
 ## BG
 df_long_BG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "BG"], ]
 # Subset IDs that are not in before and/or during periods
 change_behav_BG <- result_df[result_df$HI == "BG", c("ID", "Period", "composite_centrality")]
+# Add scaled rank sum values
+rank_sum_BG <- rank_sum[rank_sum$ID %in% unique(change_behav_BG$ID), c("ID", "Period", "value")]
+rank_sum_BG$value <- scale(c(rank_sum_BG$value))
+colnames(rank_sum_BG) <- c("ID", "Period", "composite_centrality")
+change_behav_BG <- merge(change_behav_BG, rank_sum_BG, all = T)
+# Order data by Period
+df_long_BG <- df_long_BG[order(df_long_BG$Period), ]
+
 # Filter data for IDs where hatches should be added
 ## Initialize hatch column with FALSE
 hatch_vect <- NULL
@@ -485,6 +511,7 @@ for (period in unique(change_behav_BG$Period)) {
   hatch <- df_long_BG$ID[df_long_BG$Period == period] %in% ids_in_period
   hatch_vect <- c(hatch_vect, hatch)
 }
+
 df_long_BG$hatch <- hatch_vect
 
 # Filter data to include only rows where hatch is TRUE
@@ -644,6 +671,8 @@ for (j in 1:length(HI_list)) {  # Loop through columns first
 result_df <- readRDS("result_df.RData")
 
 # Plot the density plots for each period
+my_colors <- c("#FC4E07", "#009E73", "#00AFBB")
+
 plots_list <- list()
 
 for (i in 1:length(unique(result_df$Period))) {
@@ -658,6 +687,7 @@ for (i in 1:length(unique(result_df$Period))) {
     geom_boxplot(width=0.1, color="black", alpha=0.2) +
     geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
     geom_hline(yintercept = mean_nf, linetype = "dashed", color = "black", linewidth = 1.5) + # Add horizontal line
+    scale_fill_manual(values = my_colors) + # Use custom color palette
     theme_ipsum() +
     theme(axis.text.y = element_blank(),
           axis.title.y = element_blank()) 
@@ -673,11 +703,12 @@ plots_list[[3]]
 
 
 # Plot the density plots for each HI
-# Define shades of red
-red_shades <- c("#FFCCCC", "#FF0000", "#FF6666")
+## Define colors
+grey_shades <- c("#DDDDDD", "#BBBBBB", "#999999")
 
 plots_list_HI <- list()
 
+# Loop through each HI category
 for (i in 1:(length(unique(result_df$HI))-1)) {
   
   HI_to_plot <- unique(result_df$HI)[i] # each HI category
@@ -687,7 +718,7 @@ for (i in 1:(length(unique(result_df$HI))-1)) {
     geom_violin(trim = FALSE, alpha = 0.4) + # Create violin plot
     geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
     geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
-    scale_fill_manual(values = red_shades) + # Use manual scale for shades of red
+    scale_fill_grey(start = 0, end = .9) +
     theme_ipsum() +
     theme(axis.text.y = element_blank(),
           axis.title.y = element_blank()) +
