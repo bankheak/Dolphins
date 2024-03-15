@@ -21,7 +21,7 @@ library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
 library(magrittr) # All below is for STAN
 library(dplyr)
-library(purrr)
+library(purrr) 
 library(forcats)
 library(tidyr)
 library(modelr)
@@ -34,6 +34,7 @@ library(RColorBrewer)
 library(gganimate)
 library(posterior)
 library(distributional)
+library(doParallel)
 theme_set(theme_tidybayes() + panel_border())
 source("../code/functions.R") # nxn
 
@@ -175,7 +176,97 @@ nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 saveRDS(nxn, file = "nxn.RData")
 
 ###########################################################################
-# PART 3: Create ILV and HI Predictors ---------------------------------------------
+# PART 3: Modularity ---------------------------------------------
+
+# Read in data
+el <- readRDS("el_years.RData")
+
+## igraph format with weight
+n.cores <- detectCores()
+system.time({
+  registerDoParallel(n.cores)
+  dolphin_ig <- list()
+  for (j in seq_along(list_years)) {
+    dolphin_ig[[j]] <- graph_from_adjacency_matrix(as.matrix(nxn[[j]]),
+                                       mode="undirected",
+                                       weighted=TRUE, diag=TRUE)
+  }  
+  ### End parallel processing
+  stopImplicitCluster()
+})
+
+# Dolphin walk
+system.time({
+  registerDoParallel(n.cores)
+  dolphin_walk <- list()
+  for (k in seq_along(dolphin_ig)) {
+    dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], 
+                                          weights = edge_attr(dolphin_ig[[k]], "weight"), 
+                                          steps = 4, merges = TRUE, 
+                                          modularity = TRUE, 
+                                          membership = TRUE)
+  } 
+  
+  ### End parallel processing
+  stopImplicitCluster()
+})
+
+# Run modularity permutations 1000 times for each matrix
+run_mod <- function(el, dolphin_walk_list) {
+  iter <- 1000
+  randmod <- numeric(iter)  # Initialize a numeric vector to store Q-values
+  
+  for (k in 1:3) {
+    
+    for (i in 1:iter) {
+    # Save the edgelist into a new object and permutate the link weights
+    auxrand <- el[[k]]
+    auxrand[, 3] <- sample(auxrand[, 3])
+    
+    # Save graph object
+    ig <- dolphin_ig[[k]]
+    
+    # Trim down the length
+    auxrand_trimmed <- auxrand[, 3][1:2736]
+    
+    # Create an igraph graph from the permuted edgelist
+    igrand <- graph_from_edgelist(as.matrix(auxrand[, 1:2]), directed = FALSE)
+    # Assign link weights
+    set_edge_attr(ig, name = "weight", value = auxrand[, 3])
+  
+    # Calculate modularity using walktrap community detection
+    rand_walk <- cluster_walktrap(igrand)
+    randmod[i] <- modularity(rand_walk)  # Save Q-value into the vector
+  }
+  
+  # Calculate the 95% confidence interval (two-tailed test)
+  ci <- quantile(randmod, probs = c(0.025, 0.975), type = 2)
+  
+  # Visualization of the random Q distribution
+  hist(randmod, xlim = c(0, 0.6), main = "Random Q Distribution", xlab = "Q-value", ylab = "Frequency", col = "lightblue")
+  
+  # Empirical Q-value
+  abline(v = modularity(dolphin_walk_list), col = "red")
+  
+  # 2.5% CI
+  abline(v = ci[1], col = "blue")
+  
+  # 97.5% CI
+  abline(v = ci[2], col = "blue")
+  
+  # Return a data frame with Q-value and confidence intervals
+  result <- data.frame(Q = modularity(dolphin_walk_list), LowCI = ci[1], HighCI = ci[2])
+  return(result)
+  }
+}
+
+run_mod(el = el[[1]], dolphin_walk_list = dolphin_walk[[1]])
+run_mod(el = el[[2]], dolphin_walk_list = dolphin_walk[[2]])
+run_mod(el = el[[3]], dolphin_walk_list = dolphin_walk[[3]])
+
+
+###########################################################################
+# PART 4: Create ILV and HI Predictors ---------------------------------------------
 
 # SEX and AGE Matrices ------------------------------------------------------
 
@@ -631,14 +722,17 @@ saveRDS(sim_HI, "sim_HI.RData")
 
 
 ###########################################################################
-# PART 4: Run MCMC GLMM ---------------------------------------------
+# PART 5: Run MCMC GLMM ---------------------------------------------
 
 # Read in social association matrix and listed data
 sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
-# gr <- readRDS("kinship_matrix.RData")
+gr <- readRDS("kinship_matrix.RData")
+
+# Check multicollinearity
+mantel(gr, kov[[1]]) # correlated, drop gr
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -701,9 +795,19 @@ fit_brm.3 <- brm(edge_weight ~ HI_similarity * HAB_During +
                    (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)
 
-loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
-loo(fit_brm.3)
+# Save data
+looic.h1 <- loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
+saveRDS(looic.h1, "looic.h1.RData")
 saveRDS(fit_brm.3, "fit_brm.3.RData")
+
+# LOOIC
+looic.h1 <- readRDS("looic.h1.RData")
+looic.h1$loos$fit_brm.0$looic
+looic.h1$loos$fit_brm.1$looic
+looic.h1$loos$fit_brm.2$looic
+looic.h1$loos$fit_brm.3$looic
+
+# Summary Statistics
 fit_brm.3 <- readRDS("fit_brm.3.RData")
 summary(fit_brm.3)
 
@@ -719,6 +823,8 @@ coefficients <- colnames(posterior_samples)
 summary(posterior_samples)
 mean(posterior_samples$`b_HI_similarity:HAB_During` > 0)
 mean(posterior_samples$`b_HI_similarity:HAB_After` > 0)
+mean(posterior_samples$`b_HAB_During` > 0)
+mean(posterior_samples$`b_HAB_After` > 0)
 
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters
@@ -755,7 +861,7 @@ mcmc_plot + scale_y_discrete(
 )
 
 ###########################################################################
-# PART 5: Display Networks ---------------------------------------------
+# PART 6: Display Networks ---------------------------------------------
 
 # Read in ig object
 ig <- readRDS("ig.RData")

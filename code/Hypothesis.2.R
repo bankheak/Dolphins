@@ -19,7 +19,6 @@ library(doParallel)
 library(hrbrthemes) # plot themes
 library(viridis) # plot themes
 library(ggpattern) # heatmap hatches
-library(patchwork) # plotting together
 library(car) # durbinWatsonTest
 library(rstan) # To make STAN run faster
 library(tidybayes) # get_variables
@@ -340,6 +339,41 @@ saveRDS(result_df, "result_df.RData")
 # Read in data
 result_df <- readRDS("result_df.RData")
 
+# Read in sex and age data
+ILV <- read.csv("Paternity_data.csv") 
+# Fix sex so that probable is assigned
+ILV$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
+                  ifelse(ILV$Sex == "Probable Male", "Male", ILV$Sex))
+ILV$Sex <- ifelse(is.na(ILV$Sex), "Male", ILV$Sex) 
+# Add random births for missing data
+ILV$BirthYear <- ifelse(is.na(ILV$BirthYear), floor(runif(n = nrow(ILV), min = 1970, max = 2002)), as.numeric(ILV$BirthYear)) # uniform probability for all ages
+
+# Add age and sex to model
+# Initialize an empty vector to store the assigned sexes
+result_df$Sex <- NA
+# Iterate over each unique ID in result_df
+for (id in unique(result_df$ID)) {
+  # Subset ILV to find the corresponding row(s) with matching ID
+  matching_rows <- ILV$Alias == id
+  
+  # Assign the corresponding sex to the matching rows in result_df
+  result_df$Sex[result_df$ID == id] <- ILV$Sex[matching_rows]
+}
+# Make it binary
+result_df$Sex <- ifelse(result_df$Sex == "Male", 1, 0)
+
+# Add age and sex to model
+# Initialize an empty vector to store the assigned sexes
+result_df$Age <- NA
+# Iterate over each unique ID in result_df
+for (id in unique(result_df$ID)) {
+  # Subset ILV to find the corresponding row(s) with matching ID
+  matching_rows <- ILV$Alias == id
+  
+  # Assign the corresponding sex to the matching rows in result_df
+  result_df$Age[result_df$ID == id] <- ILV$BirthYear[matching_rows]
+}
+
 # Make dummy variables
 result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
 result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
@@ -352,7 +386,8 @@ result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
 # Check assumptions of model
-test_model <- lm(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD, data = result_df)
+test_model <- lm(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD, 
+                 data = result_df)
 test_model <- lm(composite_centrality ~ BG + FG + SD, data = result_df)
 summary(test_model)
 ## Check distributions
@@ -370,18 +405,22 @@ options(mc.cores = parallel::detectCores())
 fit_brm.0 <- brm(bf(composite_centrality ~ 1 + (1 | numeric_ID), 
                     sigma ~ 0 + BG + FG + SD),
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.1 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + 
+fit_brm.1 <- brm(bf(composite_centrality ~ Sex + Age + 
+                      (1 | numeric_ID)),
+                 chains = 3, family = gaussian, data = result_df)
+fit_brm.2 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + Age +
                    (1 | numeric_ID), sigma ~ 0 + BG + FG + SD),
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.2 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + After + During + 
+fit_brm.3 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + After + During + 
                    (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.3 <- brm(bf(composite_centrality ~ 
+fit_brm.4 <- brm(bf(composite_centrality ~ 
                    Prop_BG * During + Prop_BG * After + 
                    Prop_FG * During + Prop_FG * After + 
                    Prop_SD * During + Prop_SD * After + 
                    (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
-                 chains = 3, family = gaussian, data = result_df)
+                 chains = 4, iter = 4000, warmup = 2000, 
+                 family = gaussian, data = result_df)
 
 loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
 saveRDS(fit_brm.2, "fit_brm.2.RData")
@@ -393,6 +432,15 @@ model <- fit_brm.2
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
+
+# Find the significance
+posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
+coefficients <- colnames(posterior_samples)
+summary(posterior_samples)
+mean(posterior_samples$`b_Intercept` < 0)
+mean(posterior_samples$`b_Prop_SD` > 0)
+mean(posterior_samples$`b_During` > 0)
+mean(posterior_samples$`b_After` > 0)
 
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters
@@ -420,7 +468,8 @@ mcmc_plot + scale_y_discrete(
     "b_After" = "After HAB",
     "b_During" = "During HAB"
   )
-)
+) +
+theme(panel.background = element_blank())
 
 ###########################################################################
 # PART 4: Circular heat map ---------------------------------------------
@@ -486,8 +535,6 @@ rank_sum <- data.frame(ID = sum_by_id$ID, Period = "Rank-Sum",
                        value = sum_by_id$composite_centrality)
 rank_sum$value <- scale(c(rank_sum$value))
 
-df_long <- merge(df_long, rank_sum, all = T)
-
 # Create different data frames for each HI behavior
 ## BG
 df_long_BG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "BG"], ]
@@ -495,8 +542,6 @@ df_long_BG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "BG"], ]
 change_behav_BG <- result_df[result_df$HI == "BG", c("ID", "Period", "composite_centrality")]
 # Add scaled rank sum values
 rank_sum_BG <- rank_sum[rank_sum$ID %in% unique(change_behav_BG$ID), c("ID", "Period", "value")]
-rank_sum_BG$value <- scale(c(rank_sum_BG$value))
-colnames(rank_sum_BG) <- c("ID", "Period", "composite_centrality")
 change_behav_BG <- merge(change_behav_BG, rank_sum_BG, all = T)
 # Order data by Period
 df_long_BG <- df_long_BG[order(df_long_BG$Period), ]
@@ -517,6 +562,17 @@ df_long_BG$hatch <- hatch_vect
 # Filter data to include only rows where hatch is TRUE
 df_hatched <- df_long_BG[df_long_BG$hatch,]
 
+## Graph ranked BG individuals
+ggplot(rank_sum_BG, aes(x = reorder(ID, value), y = value, fill = value)) + 
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_viridis(option = "plasma") +  # Using the plasma color palette from the viridis package
+  labs(
+    x = "ID",
+    y = "Scaled Total Centrality"
+  ) +
+  theme(panel.background = element_blank())
+
 # Plot with hatches for IDs found in each period
 ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   geom_tile() +
@@ -534,10 +590,32 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   labs(x = "ID", y = "Period", fill = "Strength") +
   coord_polar()
 
+# Map out centrality over time
+df_long_BG$HI <- ifelse(df_long_BG$hatch == T, "BG", "NF")
+ggplot(df_long_BG, aes(x = Period, y = value, group = ID, color = HI)) +
+  geom_line(color = "black") +  # Set line color to black
+  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
+  labs(title = "Parallel Coordinates Plot",
+       x = "Period",
+       y = "Values",
+       color = "HI") +
+  scale_color_manual(values = c("BG" = "#F8766D", "NF" = "#7CAE00")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+
 ## FG
 df_long_FG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "FG"], ]
 # Subset IDs that are not in before and/or during periods
 change_behav_FG <- result_df[result_df$HI == "FG", c("ID", "Period", "composite_centrality")]
+# Add scaled rank sum values
+rank_sum_FG <- rank_sum[rank_sum$ID %in% unique(change_behav_FG$ID), c("ID", "Period", "value")]
+change_behav_FG <- merge(change_behav_FG, rank_sum_FG, all = T)
+# Order data by Period
+df_long_FG <- df_long_FG[order(df_long_FG$Period), ]
+
 # Filter data for IDs where hatches should be added
 ## Initialize hatch column with FALSE
 hatch_vect <- NULL
@@ -552,6 +630,17 @@ df_long_FG$hatch <- hatch_vect
 
 # Filter data to include only rows where hatch is TRUE
 df_hatched <- df_long_FG[df_long_FG$hatch,]
+
+## Graph ranked FG individuals
+ggplot(rank_sum_FG, aes(x = reorder(ID, value), y = value, fill = value)) + 
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_viridis(option = "plasma") +  # Using the plasma color palette from the viridis package
+  labs(
+    x = "ID",
+    y = "Scaled Total Centrality"
+  ) +
+  theme(panel.background = element_blank())
 
 # Plot with hatches for IDs found in each period
 ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
@@ -570,10 +659,32 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   labs(x = "ID", y = "Period", fill = "Strength") +
   coord_polar()
 
+# Map out centrality over time
+df_long_FG$HI <- ifelse(df_long_FG$hatch == T, "FG", "NF")
+ggplot(df_long_FG, aes(x = Period, y = value, group = ID, color = HI)) +
+  geom_line(color = "black") +  # Set line color to black
+  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
+  labs(title = "Parallel Coordinates Plot",
+       x = "Period",
+       y = "Values",
+       color = "HI") +
+  scale_color_manual(values = c("FG" = "#F8766D", "NF" = "#7CAE00")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+
 ## SD
 df_long_SD <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "SD"], ]
 # Subset IDs that are not in before and/or during periods
 change_behav_SD <- result_df[result_df$HI == "SD", c("ID", "Period", "composite_centrality")]
+# Add scaled rank sum values
+rank_sum_SD <- rank_sum[rank_sum$ID %in% unique(change_behav_SD$ID), c("ID", "Period", "value")]
+change_behav_SD <- merge(change_behav_SD, rank_sum_SD, all = T)
+# Order data by Period
+df_long_SD <- df_long_SD[order(df_long_SD$Period), ]
+
 # Filter data for IDs where hatches should be added
 ## Initialize hatch column with FALSE
 hatch_vect <- NULL
@@ -588,6 +699,17 @@ df_long_SD$hatch <- hatch_vect
 
 # Filter data to include only rows where hatch is TRUE
 df_hatched <- df_long_SD[df_long_SD$hatch,]
+
+## Graph ranked SD individuals
+ggplot(rank_sum_SD, aes(x = reorder(ID, value), y = value, fill = value)) + 
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_viridis(option = "plasma") +  # Using the plasma color palette from the viridis package
+  labs(
+    x = "ID",
+    y = "Scaled Total Centrality"
+  ) +
+  theme(panel.background = element_blank())
 
 # Plot with hatches for IDs found in each period
 ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
@@ -605,6 +727,22 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "ID", y = "Period", fill = "Strength") +
   coord_polar()
+
+# Map out centrality over time
+df_long_SD$HI <- ifelse(df_long_SD$hatch == T, "SD", "NF")
+ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = HI)) +
+  geom_line(color = "black") +  # Set line color to black
+  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
+  labs(title = "Parallel Coordinates Plot",
+       x = "Period",
+       y = "Values",
+       color = "HI") +
+  scale_color_manual(values = c("SD" = "#F8766D", "NF" = "#7CAE00")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
 
 ###########################################################################
 # PART 5: Multinetwork ---------------------------------------------
@@ -722,7 +860,8 @@ for (i in 1:(length(unique(result_df$HI))-1)) {
     theme_ipsum() +
     theme(axis.text.y = element_blank(),
           axis.title.y = element_blank()) +
-    guides(fill = guide_legend(title = "Period")) # Add legend for Period
+    guides(fill = guide_legend(title = "Period")) + # Add legend for Period
+    coord_flip() 
   
   plots_list_HI[[i]] <- plot
 }
