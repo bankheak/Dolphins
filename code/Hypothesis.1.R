@@ -6,6 +6,8 @@
 setwd("../data")
 
 # Load all necessary packages
+library(igraph)
+library(tnet) # For weights
 library(asnipe) # get_group_by_individual--Damien Farine
 library(assocInd) # Could do permutatioNP
 library(vegan)
@@ -34,7 +36,8 @@ library(RColorBrewer)
 library(gganimate)
 library(posterior)
 library(distributional)
-library(doParallel)
+library(doParallel) # Faster computing
+library(NatParksPalettes) # Nature park theme
 theme_set(theme_tidybayes() + panel_border())
 source("../code/functions.R") # nxn
 
@@ -516,11 +519,12 @@ HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4)
 ggplot(aes(x = Year), data = HAB_HI_data) +
   geom_bar(aes(y = ConfHI, fill = "ConfHI"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
   geom_bar(aes(y = HAB, fill = "HAB"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
-  scale_y_continuous(name = "ConfHI", sec.axis = sec_axis(~., name = "HAB")) +
-  labs(title = "HAB and HI over Years", x = "Year") +
+  scale_y_continuous(name = "Frequency of human-centric behavior", sec.axis = sec_axis(~., name = "Number of weeks with >100,000 cells/L")) +
+  labs(x = "Year") +
   scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
                     name = "Variables", 
-                    labels = c("ConfHI", "HAB"))
+                    labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
+  theme(panel.background = element_blank())
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -879,7 +883,7 @@ n.cores <- detectCores()
 registerDoParallel(n.cores)
 dolphin_ig <- list()
 for (j in seq_along(list_years)) {
-  dolphin_ig[[j]] <- graph.adjacency(as.matrix(nxn[[j]]),
+  dolphin_ig[[j]] <- graph_from_adjacency_matrix(as.matrix(nxn[[j]]),
                                      mode="undirected",
                                      weighted=TRUE, diag=FALSE)
 }  
@@ -895,7 +899,7 @@ for (k in seq_along(list_years)) {
 # Create an unweighted network
 dolp_ig <- list()
 for (l in seq_along(list_years)) {
-  dolp_ig[[l]] <- graph.edgelist(el_years[[l]][,1:2])
+  dolp_ig[[l]] <- graph_from_edgelist(el_years[[l]][,1:2])
   # Add the edge weights to this network
   E(dolp_ig[[l]])$weight <- as.numeric(el_years[[l]][,3])
   # Create undirected network
@@ -905,9 +909,14 @@ for (l in seq_along(list_years)) {
 stopImplicitCluster()
 
 # Newman's Q modularity
-newman <- lapply(dolp_ig, function (df) {cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
-                                                               start = NULL, options = arpack_defaults, callback = NULL, 
-                                                               extra = NULL, env = parent.frame())})
+newman <- lapply(dolp_ig, function (df) {
+  cluster_leading_eigen(df, steps = -1, weights = E(df)$weight, 
+                        start = NULL, options = arpack_defaults(), 
+                        callback = NULL, extra = NULL, env = parent.frame())
+  })
+
+saveRDS(newman, "newman.RData")
+newman <- readRDS("newman.RData")
 
 # Generate a vector of colors based on the number of unique memberships
 for (i in seq_along(dolp_ig)) {
@@ -942,14 +951,15 @@ par(mar = c(0.6, 0.6, 0.6, 0.6))
 # Extract layout for this graph
 combined_layout <- layout_list[[1]]
 counter <- 0
+labeled_nodes <- list()
   
 for (i in 1:length(ig)) {  # Loop through periods
     
     counter <- counter + 1
     
     # Get nodes for each behavior
-    labeled_nodes <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
-    
+    labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
+
     # Create the plot
     plot(ig[[i]],
          layout = combined_layout,
@@ -970,7 +980,38 @@ for (i in 1:length(ig)) {  # Loop through periods
   
   }
 
-# What's the number of memberships
-length(unique(newman[[1]]$membership))
-length(unique(newman[[2]]$membership))
-length(unique(newman[[3]]$membership))
+
+# What is the cluster size for each period?
+combined_cluster_data <- list()
+
+for (i in 1:3) {
+  
+  ## Get the member data from newman and HI data from labeled_nodes
+  member_data <- data.frame(Cluster = newman[[i]]$membership, HI = labeled_nodes[[i]])
+  HI_clusters <- member_data[member_data$HI == T,]
+  HI_counts <- table(HI_clusters$Cluster)
+  membership_counts <- table(newman[[i]]$membership)
+  
+  ## Ensure both tables have the same keys
+  all_keys <- 1:(length(unique(newman[[1]]$membership)))
+  
+  ## Create a named vector for HI_counts with counts of zero for missing keys
+  HI_counts <- as.table(HI_counts)
+  HI_counts[as.character(all_keys)] <- HI_counts[as.character(all_keys)]
+  HI_counts[is.na(HI_counts)] <- 0
+  
+  ## Turn data into data frame
+  membership_counts_df <- data.frame(Cluster = as.numeric(names(membership_counts)), Total_Cluster_Count = as.numeric(membership_counts))
+  HI_counts_df <- data.frame(Cluster = as.numeric(names(HI_counts)), HI_Cluster_Count = as.numeric(HI_counts))
+  combined_cluster_data[[i]] <- merge(HI_counts_df, membership_counts_df, all = T)
+  combined_cluster_data[[i]]$perc_HI <- (combined_cluster_data[[i]]$HI_Cluster_Count/combined_cluster_data[[i]]$Total_Cluster_Count) *100
+  
+}
+
+mean(combined_cluster_data[[1]]$Total_Cluster_Count)
+mean(na.omit(combined_cluster_data[[2]]$Total_Cluster_Count))
+mean(combined_cluster_data[[3]]$Total_Cluster_Count)
+
+mean(combined_cluster_data[[1]]$perc_HI)
+mean(na.omit(combined_cluster_data[[2]]$perc_HI))
+mean(combined_cluster_data[[3]]$perc_HI)

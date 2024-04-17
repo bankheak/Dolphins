@@ -22,6 +22,7 @@ library(ggpattern) # heatmap hatches
 library(car) # durbinWatsonTest
 library(rstan) # To make STAN run faster
 library(tidybayes) # get_variables
+library(NatParksPalettes) # Nature park theme
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -157,37 +158,8 @@ get_names <- function (matrix, metric) {
   return(metric)
 }
 
-#Eigen centrality
-eigen <- lapply(ig, function (df) {eigen_centrality(df)})
-
-eigen <- lapply(eigen, function (df) {
-  eigen <- as.data.frame(df$vector)
-  eigen$ID <- rownames(eigen)
-  colnames(eigen) <- c("eigen_cent", "ID")
-  return(eigen)})
-
-compare_eigen <- merge(
-  merge(eigen[[1]], eigen[[2]], by = "ID"),
-  eigen[[3]], by = "ID"
-)
-
-colnames(compare_eigen) <- c("ID", "Before_HAB", "During_HAB", "After_HAB")
-compare_eigen[, c(2:4)] <- sapply(compare_eigen[, c(2:4)], as.numeric)
-
-# Betweenness centrality 
-between <- lapply(el_years, function (df) {betweenness_w(df, alpha = 1)})
-between_diffs <- get_names(nxn, between)
-
-compare_between <- merge(
-  merge(between_diffs[[1]], between_diffs[[2]], by = "node"),
-  between_diffs[[3]], by = "node"
-)
-
-colnames(compare_between) <- c("ID", "Before_HAB", "During_HAB", "After_HAB")
-compare_between[, c(2:4)] <- sapply(compare_between[, c(2:4)], as.numeric)
-
 # Degree and strength centrality 
-strength <- lapply(el_years, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=1)})
+strength <- lapply(el_years, function (df) {degree_w(df, measure=c("degree","output"), type="out", alpha=0.5)})
 strength_diffs <- get_names(nxn, strength)
 
 compare_strength <- merge(
@@ -240,7 +212,7 @@ prob_SD <- readRDS("prob_SD.RData")
 # Order data
 order_HI_data <- function(prob_HI) {
   
-  order_rows <- compare_between$ID
+  order_rows <- compare_strength$ID
   
   # Now reorder the dataframe
   prob_HI <- lapply(prob_HI, function (df) {
@@ -258,22 +230,16 @@ prob_FG <- order_HI_data(prob_FG)
 prob_SD <- order_HI_data(prob_SD)
 
 # Combine the data
-local_metrics_HI <- data.frame(ID = compare_between$ID,
-                               Period = c(rep("1-Before_HAB", nrow(compare_between)), 
-                                          rep("2-During_HAB", nrow(compare_between)),
-                                          rep("3-After_HAB", nrow(compare_between))),
-                               Between = c(compare_between$Before_HAB, 
-                                           compare_between$During_HAB,
-                                           compare_between$After_HAB),
+local_metrics_HI <- data.frame(ID = compare_strength$ID,
+                               Period = c(rep("1-Before_HAB", nrow(compare_strength)), 
+                                          rep("2-During_HAB", nrow(compare_strength)),
+                                          rep("3-After_HAB", nrow(compare_strength))),
                                Degree = c(compare_strength$Before_HAB_degree, 
                                           compare_strength$During_HAB_degree,
                                           compare_strength$After_HAB_degree),
                                Strength = c(compare_strength$Before_HAB_strength, 
                                             compare_strength$During_HAB_strength,
                                             compare_strength$After_HAB_strength),
-                               Eigen = c(compare_eigen$Before_HAB, 
-                                         compare_eigen$During_HAB,
-                                         compare_eigen$After_HAB),
                                Prop_BG = c(prob_BG[[1]]$PropHI, prob_BG[[2]]$PropHI,
                                            prob_BG[[3]]$PropHI),
                                Prop_FG = c(prob_FG[[1]]$PropHI, prob_FG[[2]]$PropHI,
@@ -310,24 +276,6 @@ for (p in 1:3) {
 result_df$During <- ifelse(result_df$Period == "2-During_HAB", 1, 0)
 result_df$After <- ifelse(result_df$Period == "3-After_HAB", 1, 0)
 result_df$HI <- as.factor(result_df$HI)
-
-# Create weighted centrality metric
-
-## Scale the centrality metrics
-result_df$Degree <- c(scale(result_df$Degree))
-result_df$Strength <- c(scale(result_df$Strength))
-result_df$Between <- c(scale(result_df$Between))
-result_df$Eigen <- c(scale(result_df$Eigen))
-
-## Put weights on centrality
-weighted_degree <- result_df$Degree *  0.25
-weighted_strength <- result_df$Strength *  0.25
-weighted_betweenness <- result_df$Between *  0.25
-weighted_eigen <- result_df$Eigen * 0.25
-
-##Create the weighted metric
-result_df$composite_centrality <- weighted_degree + weighted_strength + 
-                                  weighted_betweenness + weighted_eigen
 
 # Save dataset
 saveRDS(result_df, "result_df.RData")
@@ -386,14 +334,17 @@ result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
 # Check assumptions of model
-test_model <- lm(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD, 
+test_model <- lm(Strength ~ Prop_BG + Prop_FG + Prop_SD, 
                  data = result_df)
-test_model <- lm(composite_centrality ~ BG + FG + SD, data = result_df)
+test_model <- lm(Strength ~ BG + FG + SD, data = result_df)
 summary(test_model)
 ## Check distributions
-hist(result_df$composite_centrality) # normal
+hist(result_df$Strength) # normal
 ## Check for variance among groups
-bartlett.test(composite_centrality ~ HI, data = result_df) # not equal
+bartlett.test(Strength ~ HI, data = result_df) # equal
+### If I have unequal variance
+#' fit_brm.0 <- brm(bf(Strength ~ 1 + (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
+#' chains = 3, family = gaussian, data = result_df)
 ## Independent
 durbinWatsonTest(test_model) # not independent
 
@@ -402,39 +353,37 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 # Models in brms
-fit_brm.0 <- brm(bf(composite_centrality ~ 1 + (1 | numeric_ID), 
-                    sigma ~ 0 + BG + FG + SD),
+
+## HI prop & Period together
+fit_brm.0 <- brm(Strength ~ 1 + (1 | numeric_ID),
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.1 <- brm(bf(composite_centrality ~ Sex + Age + 
-                      (1 | numeric_ID)),
+fit_brm.1 <- brm(Strength ~ Sex + Age + (1 | numeric_ID),
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.2 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + Age +
-                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD),
+fit_brm.2 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Age + (1 | numeric_ID), 
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.3 <- brm(bf(composite_centrality ~ Prop_BG + Prop_FG + Prop_SD + After + During + 
-                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
+fit_brm.3 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + After + During + (1 | numeric_ID), 
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.4 <- brm(bf(composite_centrality ~ 
+fit_brm.4 <- brm(Strength ~ 
                    Prop_BG * During + Prop_BG * After + 
                    Prop_FG * During + Prop_FG * After + 
                    Prop_SD * During + Prop_SD * After + 
-                   (1 | numeric_ID), sigma ~ 0 + BG + FG + SD), 
+                   (1 | numeric_ID),
                  chains = 4, iter = 4000, warmup = 2000, 
                  family = gaussian, data = result_df)
 
-loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
-saveRDS(fit_brm.2, "fit_brm.2.RData")
-fit_brm.2 <- readRDS("fit_brm.2.RData")
-summary(fit_brm.2)
+loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, fit_brm.4, compare = T)
+saveRDS(fit_brm.4, "fit_brm.4.RData")
+fit_brm.4 <- readRDS("fit_brm.4.RData")
+summary(fit_brm.4)
 
 # Check for model convergence
-model <- fit_brm.2
+model <- fit_brm.4
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
 
 # Find the significance
-posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
+posterior_samples <- as.data.frame(as.matrix(posterior_samples(model)))
 coefficients <- colnames(posterior_samples)
 summary(posterior_samples)
 mean(posterior_samples$`b_Intercept` < 0)
@@ -471,6 +420,67 @@ mcmc_plot + scale_y_discrete(
 ) +
 theme(panel.background = element_blank())
 
+
+## HI prop separate
+fit_brm.bg <- brm(Strength ~ 
+                    Prop_BG * During + Prop_BG * After + 
+                    (1 | numeric_ID),
+                  chains = 4, iter = 4000, warmup = 2000, 
+                  family = gaussian, data = result_df)
+
+fit_brm.fg <- brm(Strength ~ 
+                    Prop_FG * During + Prop_FG * After + 
+                    (1 | numeric_ID),
+                  chains = 4, iter = 4000, warmup = 2000, 
+                  family = gaussian, data = result_df)
+
+fit_brm.sd <- brm(Strength ~ 
+                    Prop_SD * During + Prop_SD * After + 
+                    (1 | numeric_ID),
+                  chains = 4, iter = 4000, warmup = 2000, 
+                  family = gaussian, data = result_df)
+
+summary(fit_brm.bg)
+summary(fit_brm.fg)
+summary(fit_brm.sd)
+
+saveRDS(fit_brm.bg, "fit_brm.bg.RData")
+saveRDS(fit_brm.fg, "fit_brm.fg.RData")
+saveRDS(fit_brm.sd, "fit_brm.sd.RData")
+fit_brm.bg <- readRDS("fit_brm.bg.RData")
+fit_brm.fg <- readRDS("fit_brm.fg.RData")
+fit_brm.sd <- readRDS("fit_brm.sd.RData")
+
+# Check for model convergence
+model <- fit_brm.bg
+plot(model)
+pp_check(model) # check to make sure they line up
+
+# Plot the posterior distribution
+get_variables(model) # Get the names of the parameters
+
+theme_update(text = element_text(family = "sans"))
+
+# Create mcmc_areas plot
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_Prop_BG:During", "b_Prop_BG", "b_Prop_BG:After"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+) + labs(
+  title = "Posterior parameter distributions",
+  subtitle = "with medians and 80% intervals"
+) + theme_update(text = element_text(family = "sans"))
+
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_Prop_BG" = "Begging/Provisioning",
+    "b_Prop_BG:During" = "During HAB",
+    "b_Prop_BG:After" = "After HAB")
+) +
+  theme(panel.background = element_blank())
+
 ###########################################################################
 # PART 4: Circular heat map ---------------------------------------------
 
@@ -481,7 +491,7 @@ result_df <- readRDS("result_df.RData")
 unique_ids <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
 # Use the aggregate function to sum the Eigen values by ID
-sum_by_id <- aggregate(composite_centrality ~ ID, data = result_df, FUN = sum)
+sum_by_id <- aggregate(Strength ~ ID, data = result_df, FUN = sum)
 
 # Make HI groups
 HI_by_id <- aggregate(HI ~ ID, data = result_df, FUN = function(x) paste(unique(x), collapse = ","))
@@ -514,32 +524,32 @@ split_data$HI <- unlist(hi_values)
 
 # Put this back into result_df
 result_data <- data.frame(ID = split_data$ID,
-                        Centrality = split_data$composite_centrality,
+                        Centrality = split_data$Strength,
                         HI = split_data$HI)
 
 # Normalize the Eigen values to fit in the circle
-unique_ids$composite_centrality <- (unique_ids$composite_centrality - 
-                                      min(unique_ids$composite_centrality)) / 
-                                      (max(unique_ids$composite_centrality) - 
-                                         min(unique_ids$composite_centrality))
+unique_ids$Strength <- (unique_ids$Strength - 
+                                      min(unique_ids$Strength)) / 
+                                      (max(unique_ids$Strength) - 
+                                         min(unique_ids$Strength))
 
 # Convert "Period" column to a factor to ensure correct ordering
 unique_ids$Period <- factor(unique_ids$Period, levels = c("1-Before_HAB", "2-During_HAB", "3-After_HAB"))
 
 # Reshape the data from wide to long format for plotting
-df_long <- reshape2::melt(unique_ids, id.vars = c("ID", "Period"), measure.vars = c("composite_centrality"))
+df_long <- reshape2::melt(unique_ids, id.vars = c("ID", "Period"), measure.vars = c("Strength"))
 
 # Make a Rank sum
 rank_sum <- data.frame(ID = sum_by_id$ID, Period = "Rank-Sum",
-                       variable = "composite_centrality", 
-                       value = sum_by_id$composite_centrality)
+                       variable = "Strength", 
+                       value = sum_by_id$Strength)
 rank_sum$value <- scale(c(rank_sum$value))
 
 # Create different data frames for each HI behavior
 ## BG
 df_long_BG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "BG"], ]
 # Subset IDs that are not in before and/or during periods
-change_behav_BG <- result_df[result_df$HI == "BG", c("ID", "Period", "composite_centrality")]
+change_behav_BG <- result_df[result_df$HI == "BG", c("ID", "Period", "Strength")]
 # Add scaled rank sum values
 rank_sum_BG <- rank_sum[rank_sum$ID %in% unique(change_behav_BG$ID), c("ID", "Period", "value")]
 change_behav_BG <- merge(change_behav_BG, rank_sum_BG, all = T)
@@ -609,7 +619,7 @@ ggplot(df_long_BG, aes(x = Period, y = value, group = ID, color = HI)) +
 ## FG
 df_long_FG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "FG"], ]
 # Subset IDs that are not in before and/or during periods
-change_behav_FG <- result_df[result_df$HI == "FG", c("ID", "Period", "composite_centrality")]
+change_behav_FG <- result_df[result_df$HI == "FG", c("ID", "Period", "Strength")]
 # Add scaled rank sum values
 rank_sum_FG <- rank_sum[rank_sum$ID %in% unique(change_behav_FG$ID), c("ID", "Period", "value")]
 change_behav_FG <- merge(change_behav_FG, rank_sum_FG, all = T)
@@ -678,7 +688,7 @@ ggplot(df_long_FG, aes(x = Period, y = value, group = ID, color = HI)) +
 ## SD
 df_long_SD <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "SD"], ]
 # Subset IDs that are not in before and/or during periods
-change_behav_SD <- result_df[result_df$HI == "SD", c("ID", "Period", "composite_centrality")]
+change_behav_SD <- result_df[result_df$HI == "SD", c("ID", "Period", "Strength")]
 # Add scaled rank sum values
 rank_sum_SD <- rank_sum[rank_sum$ID %in% unique(change_behav_SD$ID), c("ID", "Period", "value")]
 change_behav_SD <- merge(change_behav_SD, rank_sum_SD, all = T)
@@ -745,7 +755,7 @@ ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = HI)) +
         legend.text = element_text(size = 10))
 
 ###########################################################################
-# PART 5: Multinetwork ---------------------------------------------
+# PART 5: Multinetwork Plots ---------------------------------------------
 
 # Only show IDs of HI dolphins
 HI_list <- readRDS("HI_list.RData")
@@ -870,3 +880,21 @@ for (i in 1:(length(unique(result_df$HI))-1)) {
 plots_list_HI[[1]]
 plots_list_HI[[2]]
 plots_list_HI[[3]]
+
+
+###########################################################################
+# PART 6: Alluvial Plots ---------------------------------------------
+
+# Set up data
+result_df <- readRDS("result_df.RData")
+
+# Plot
+ggplot(data = vaccinations,
+       aes(axis1 = survey, axis2 = response, y = freq)) +
+  geom_alluvium(aes(fill = response)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c("Survey", "Response"),
+                   expand = c(0.15, 0.05)) +
+  theme_void()
