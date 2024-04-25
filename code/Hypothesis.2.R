@@ -174,7 +174,7 @@ colnames(compare_strength) <- c("ID", "Before_HAB_degree", "Before_HAB_strength"
 compare_strength[, c(2:7)] <- sapply(compare_strength[, c(2:7)], as.numeric)
 
 # Look at all of the local metrics together
-HI_data <-  subset_HI(list_years)
+HI_data <- subset_HI(list_years)
 
 ## Add a column containing HI type
 names_BG <- lapply(HI_data, function (df) {
@@ -208,6 +208,7 @@ saveRDS(HI_list, "HI_list.RData")
 prob_BG <- readRDS("prob_BG.RData")
 prob_FG <- readRDS("prob_FG.RData")
 prob_SD <- readRDS("prob_SD.RData")
+prob_NF <- readRDS("prob_NF.RData")
 
 # Order data
 order_HI_data <- function(prob_HI) {
@@ -228,6 +229,7 @@ order_HI_data <- function(prob_HI) {
 prob_BG <- order_HI_data(prob_BG)
 prob_FG <- order_HI_data(prob_FG)
 prob_SD <- order_HI_data(prob_SD)
+prob_NF <- order_HI_data(prob_NF)
 
 # Combine the data
 local_metrics_HI <- data.frame(ID = compare_strength$ID,
@@ -245,7 +247,9 @@ local_metrics_HI <- data.frame(ID = compare_strength$ID,
                                Prop_FG = c(prob_FG[[1]]$PropHI, prob_FG[[2]]$PropHI,
                                            prob_FG[[3]]$PropHI),
                                Prop_SD = c(prob_SD[[1]]$PropHI, prob_SD[[2]]$PropHI,
-                                           prob_SD[[3]]$PropHI))
+                                           prob_SD[[3]]$PropHI),
+                               Prop_NF = c(prob_NF[[1]]$PropHI, prob_NF[[2]]$PropHI,
+                                           prob_NF[[3]]$PropHI))
 
 # Add HI_type column
 local_metrics_HI_1 <- local_metrics_HI[local_metrics_HI$Period == "1-Before_HAB", ]
@@ -287,45 +291,13 @@ saveRDS(result_df, "result_df.RData")
 # Read in data
 result_df <- readRDS("result_df.RData")
 
-# Read in sex and age data
-ILV <- read.csv("Paternity_data.csv") 
-# Fix sex so that probable is assigned
-ILV$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
-                  ifelse(ILV$Sex == "Probable Male", "Male", ILV$Sex))
-ILV$Sex <- ifelse(is.na(ILV$Sex), "Male", ILV$Sex) 
-# Add random births for missing data
-ILV$BirthYear <- ifelse(is.na(ILV$BirthYear), floor(runif(n = nrow(ILV), min = 1970, max = 2002)), as.numeric(ILV$BirthYear)) # uniform probability for all ages
+# Make period a factor
+result_df$Period <- as.factor(result_df$Period)
 
-# Add age and sex to model
-# Initialize an empty vector to store the assigned sexes
-result_df$Sex <- NA
-# Iterate over each unique ID in result_df
-for (id in unique(result_df$ID)) {
-  # Subset ILV to find the corresponding row(s) with matching ID
-  matching_rows <- ILV$Alias == id
-  
-  # Assign the corresponding sex to the matching rows in result_df
-  result_df$Sex[result_df$ID == id] <- ILV$Sex[matching_rows]
-}
-# Make it binary
-result_df$Sex <- ifelse(result_df$Sex == "Male", 1, 0)
-
-# Add age and sex to model
-# Initialize an empty vector to store the assigned sexes
-result_df$Age <- NA
-# Iterate over each unique ID in result_df
-for (id in unique(result_df$ID)) {
-  # Subset ILV to find the corresponding row(s) with matching ID
-  matching_rows <- ILV$Alias == id
-  
-  # Assign the corresponding sex to the matching rows in result_df
-  result_df$Age[result_df$ID == id] <- ILV$BirthYear[matching_rows]
-}
-
-# Make dummy variables
-result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
-result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
-result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
+# # Make dummy variables
+# result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
+# result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
+# result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
 
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
@@ -336,7 +308,6 @@ result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 # Check assumptions of model
 test_model <- lm(Strength ~ Prop_BG + Prop_FG + Prop_SD, 
                  data = result_df)
-test_model <- lm(Strength ~ BG + FG + SD, data = result_df)
 summary(test_model)
 ## Check distributions
 hist(result_df$Strength) # normal
@@ -354,30 +325,31 @@ options(mc.cores = parallel::detectCores())
 
 # Models in brms
 
-## HI prop & Period together
-fit_brm.0 <- brm(Strength ~ 1 + (1 | numeric_ID),
+fit_brm.1 <- brm(Strength ~ 1 + (1 | numeric_ID),
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.1 <- brm(Strength ~ Sex + Age + (1 | numeric_ID),
+fit_brm.2 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + (1 | numeric_ID), 
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.2 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Age + (1 | numeric_ID), 
+fit_brm.3 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Period + (1 | numeric_ID), 
                  chains = 3, family = gaussian, data = result_df)
-fit_brm.3 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + After + During + (1 | numeric_ID), 
-                 chains = 3, family = gaussian, data = result_df)
-fit_brm.4 <- brm(Strength ~ 
-                   Prop_BG * During + Prop_BG * After + 
-                   Prop_FG * During + Prop_FG * After + 
-                   Prop_SD * During + Prop_SD * After + 
+fit_brm.4 <- brm(Strength ~
+                   Prop_BG * Period + 
+                   Prop_FG * Period +
+                   Prop_SD * Period + 
                    (1 | numeric_ID),
                  chains = 4, iter = 4000, warmup = 2000, 
                  family = gaussian, data = result_df)
 
 loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, fit_brm.4, compare = T)
 saveRDS(fit_brm.4, "fit_brm.4.RData")
+saveRDS(fit_brm.4, "fit_brm.NF.RData")
+saveRDS(fit_brm.4, "fit_brm.new.RData")
+fit_brm.NF <- readRDS("fit_brm.NF.RData")
 fit_brm.4 <- readRDS("fit_brm.4.RData")
+fit_brm.new <- readRDS("fit_brm.new.RData")
 summary(fit_brm.4)
 
 # Check for model convergence
-model <- fit_brm.4
+model <- fit_brm.NF
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
@@ -394,92 +366,119 @@ mean(posterior_samples$`b_After` > 0)
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters
 
+## Period Centrality
 theme_update(text = element_text(family = "sans"))
 
 # Create mcmc_areas plot
 mcmc_plot <- mcmc_areas(
   as.array(model), 
-  pars = c("b_Prop_FG", "b_Prop_BG", "b_Prop_SD", 
-           "b_After", "b_During"),
-  prob = 0.8, # 80% intervals
+  pars = c("b_Period2MDuring_HAB", "b_Period3MAfter_HAB"),
+  prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
 ) + labs(
   title = "Posterior parameter distributions",
-  subtitle = "with medians and 80% intervals"
+  subtitle = "with medians and 95% intervals"
+) + theme_update(text = element_text(family = "sans"))
+
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_Period2MDuring_HAB" = "During", 
+    "b_Period3MAfter_HAB" = "After"
+  )
+) +
+  theme(panel.background = element_blank())
+
+## NF
+# Create mcmc_areas plot
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_Prop_NF:Period2MDuring_HAB", "b_Prop_NF:Period3MAfter_HAB",
+           "b_Prop_NF"),
+  prob = 0.95, # 95% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+) + labs(
+  title = "Posterior parameter distributions",
+  subtitle = "with medians and 95% intervals"
+) + theme_update(text = element_text(family = "sans"))
+
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_Prop_NF" = "Natural Foraging",
+    "b_Prop_NF:Period2MDuring_HAB" = "NF: During", 
+    "b_Prop_NF:Period3MAfter_HAB" = "NF: After"
+  )
+) +
+  theme(panel.background = element_blank())
+
+## BG
+# Create mcmc_areas plot
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_Prop_BG:Period2MDuring_HAB", "b_Prop_BG:Period3MAfter_HAB",
+           "b_Prop_BG"),
+  prob = 0.95, # 95% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+) + labs(
+  title = "Posterior parameter distributions",
+  subtitle = "with medians and 95% intervals"
+) + theme_update(text = element_text(family = "sans"))
+
+mcmc_plot + scale_y_discrete(
+  labels = c(
+    "b_Prop_BG" = "Begging/Provisioning",
+    "b_Prop_BG:Period2MDuring_HAB" = "BG: During", 
+    "b_Prop_BG:Period3MAfter_HAB" = "BG: After"
+  )
+) +
+theme(panel.background = element_blank())
+
+## FG
+mcmc_plot <- mcmc_areas(
+  as.array(model), 
+  pars = c("b_Period2MDuring_HAB:Prop_FG", "b_Period3MAfter_HAB:Prop_FG",
+           "b_Prop_FG"),
+  prob = 0.95, # 95% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+) + labs(
+  title = "Posterior parameter distributions",
+  subtitle = "with medians and 95% intervals"
 ) + theme_update(text = element_text(family = "sans"))
 
 mcmc_plot + scale_y_discrete(
   labels = c(
     "b_Prop_FG" = "Fixed Gear Foraging",
-    "b_Prop_BG" = "Begging/Provisioning",
-    "b_Prop_SD" = "Scavenging/Depredating",
-    "b_After" = "After HAB",
-    "b_During" = "During HAB"
+    "b_Period2MDuring_HAB:Prop_FG" = "FG: During", 
+    "b_Period3MAfter_HAB:Prop_FG" = "FG: After"
   )
 ) +
-theme(panel.background = element_blank())
+  theme(panel.background = element_blank())
 
-
-## HI prop separate
-fit_brm.bg <- brm(Strength ~ 
-                    Prop_BG * During + Prop_BG * After + 
-                    (1 | numeric_ID),
-                  chains = 4, iter = 4000, warmup = 2000, 
-                  family = gaussian, data = result_df)
-
-fit_brm.fg <- brm(Strength ~ 
-                    Prop_FG * During + Prop_FG * After + 
-                    (1 | numeric_ID),
-                  chains = 4, iter = 4000, warmup = 2000, 
-                  family = gaussian, data = result_df)
-
-fit_brm.sd <- brm(Strength ~ 
-                    Prop_SD * During + Prop_SD * After + 
-                    (1 | numeric_ID),
-                  chains = 4, iter = 4000, warmup = 2000, 
-                  family = gaussian, data = result_df)
-
-summary(fit_brm.bg)
-summary(fit_brm.fg)
-summary(fit_brm.sd)
-
-saveRDS(fit_brm.bg, "fit_brm.bg.RData")
-saveRDS(fit_brm.fg, "fit_brm.fg.RData")
-saveRDS(fit_brm.sd, "fit_brm.sd.RData")
-fit_brm.bg <- readRDS("fit_brm.bg.RData")
-fit_brm.fg <- readRDS("fit_brm.fg.RData")
-fit_brm.sd <- readRDS("fit_brm.sd.RData")
-
-# Check for model convergence
-model <- fit_brm.bg
-plot(model)
-pp_check(model) # check to make sure they line up
-
-# Plot the posterior distribution
-get_variables(model) # Get the names of the parameters
-
-theme_update(text = element_text(family = "sans"))
-
-# Create mcmc_areas plot
+## SD
 mcmc_plot <- mcmc_areas(
   as.array(model), 
-  pars = c("b_Prop_BG:During", "b_Prop_BG", "b_Prop_BG:After"),
-  prob = 0.8, # 80% intervals
+  pars = c("b_Period2MDuring_HAB:Prop_SD", "b_Period3MAfter_HAB:Prop_SD",
+           "b_Prop_SD"),
+  prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
 ) + labs(
   title = "Posterior parameter distributions",
-  subtitle = "with medians and 80% intervals"
+  subtitle = "with medians and 95% intervals"
 ) + theme_update(text = element_text(family = "sans"))
 
 mcmc_plot + scale_y_discrete(
   labels = c(
-    "b_Prop_BG" = "Begging/Provisioning",
-    "b_Prop_BG:During" = "During HAB",
-    "b_Prop_BG:After" = "After HAB")
+    "b_Prop_SD" = "Scavenging/Depredating",
+    "b_Period2MDuring_HAB:Prop_SD" = "SD: During", 
+    "b_Period3MAfter_HAB:Prop_SD" = "SD: After"
+    )
 ) +
   theme(panel.background = element_blank())
+
 
 ###########################################################################
 # PART 4: Circular heat map ---------------------------------------------
@@ -826,11 +825,11 @@ plots_list <- list()
 for (i in 1:length(unique(result_df$Period))) {
   
   period_to_plot <- unique(result_df$Period)[i] # each period
-  filtered_df <- subset(result_df, Period == period_to_plot) # Separate data
+  filtered_df <- subset(result_df, Period == period_to_plot) # Separate data by period
   
-  mean_nf <- mean(filtered_df$composite_centrality[filtered_df$HI == "NF"], na.rm = TRUE) # Calculate mean for HI=="NF"
+  mean_nf <- mean(filtered_df$Strength[filtered_df$HI == "NF"], na.rm = TRUE) # Calculate mean for HI=="NF"
   
-  plot <- ggplot(filtered_df[filtered_df$HI != "NF", ], aes(x = HI, y = composite_centrality, fill = HI)) +
+  plot <- ggplot(filtered_df[filtered_df$HI != "NF", ], aes(x = HI, y = Strength, fill = HI)) +
     geom_violin(trim = FALSE, alpha = 0.4) + # Create violin plot
     geom_boxplot(width=0.1, color="black", alpha=0.2) +
     geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
@@ -845,9 +844,9 @@ for (i in 1:length(unique(result_df$Period))) {
 
 
 # Output plots
-plots_list[[1]]
-plots_list[[2]]
-plots_list[[3]]
+plots_list[[1]] # Before
+plots_list[[2]] # During
+plots_list[[3]] # After
 
 
 # Plot the density plots for each HI
@@ -862,7 +861,13 @@ for (i in 1:(length(unique(result_df$HI))-1)) {
   HI_to_plot <- unique(result_df$HI)[i] # each HI category
   filtered_df <- subset(result_df, HI == HI_to_plot) # Separate data
   
-  plot <- ggplot(filtered_df, aes(x = Period, y = composite_centrality, fill = as.factor(Period))) +
+  # Reorder the data
+  filtered_df$Period <- factor(filtered_df$Period,
+                         levels = c('3-After_HAB', '2-During_HAB', '1-Before_HAB'),
+                         ordered = TRUE)
+  
+  # Plot the graphs
+  plot <- ggplot(filtered_df, aes(x = Period, y = Strength, fill = as.factor(Period))) +
     geom_violin(trim = FALSE, alpha = 0.4) + # Create violin plot
     geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
     geom_jitter(width = 0.1, alpha = 0.6) + # Add jittered points for visibility
@@ -877,9 +882,9 @@ for (i in 1:(length(unique(result_df$HI))-1)) {
 }
 
 # Output plots
-plots_list_HI[[1]]
-plots_list_HI[[2]]
-plots_list_HI[[3]]
+plots_list_HI[[1]] # BG
+plots_list_HI[[2]] # FG
+plots_list_HI[[3]] # SD
 
 
 ###########################################################################

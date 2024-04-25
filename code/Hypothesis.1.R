@@ -6,7 +6,13 @@
 setwd("../data")
 
 # Load all necessary packages
-library(igraph)
+library(intergraph) # To use igraph network in ggnet
+library(sna) # For network
+library(GGally) # For mapping networks in ggplot
+library(network) # Creating networks
+library(igraph) # graphing networks
+library(ggmap) # For network plotting on map
+library(ggraph) # For network plotting on map
 library(tnet) # For weights
 library(asnipe) # get_group_by_individual--Damien Farine
 library(assocInd) # Could do permutatioNP
@@ -357,6 +363,7 @@ dolph.sp <- create_coord_data(list_years)
 
 # Use the calculated extent in kernelUD
 kernel <- lapply(dolph.sp, function(df) kernelUD(df, h = 1000))
+saveRDS(kernel, "kernel.RData")
 
 # Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)
 kov <- lapply(kernel, function(df) kerneloverlaphr(df, method = "HR", lev = 95))
@@ -561,15 +568,17 @@ ID_sight <- function(aux_data) {
 IDbehav <- ID_sight(aux)
 
 # Separate HI Behaviors
-#' BG = Beg: F, G
+#' BG = Beg: F, G, H
 #' SD = Scavenge and Depredation: A, B, C, D, E
 #' FG = Fixed Gear Interaction: P
 # Change the code using ifelse statements
 subset_HI <- function(aux_data) {
   for (i in seq_along(aux_data)) {
-    aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
+    aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G", "H"), "BG",
                                    ifelse(aux_data[[i]]$ConfHI %in% c("A", "B", "C", "D", "E"), "SD",
-                                          ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
+                                          ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", 
+                                                 ifelse(aux_data[[i]]$Foraging %in% c("Feed")
+                                                        & aux_data[[i]]$ConfHI %in% c("0"), "NF", "None"))))
   }
   return(aux_data)  # Return the modified list of data frames
 }
@@ -623,18 +632,15 @@ total_HI_IDs <- unique(unlist(lapply(rawHI, function (df) unique(df$Code[df$Diff
 # Categorize ID to Sightings
 ID_sight <- function(aux_data) {
   IDbehav <- lapply(aux_data, function(df) {
-    df <- data.frame(
-      Code = unique(df$Code),
-      Sightings = tapply(df$Code, df$Code, length)
-    )
+    data <- as.data.frame(table(df$Code))
+    colnames(data) <- c("Code", "Sightings")
     # Order data
     order_rows <- rownames(nxn[[1]])
     
     # Now reorder the dataframe
-    df <- data.frame(Code = order_rows,
-                     Sightings = df$Sightings[match(order_rows, df$Code)])
+    data <- data %>%
+      arrange(match(Code, order_rows))
     
-    df
   })
   return(IDbehav)
 }
@@ -646,22 +652,23 @@ get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
   lapply(seq_along(IDbehav_data), function(i) {
     df <- IDbehav_data[[i]]
     HI_freq <- rawHI_diff_data[[i]]$Freq[rawHI_diff_data[[i]]$DiffHI == HI]
-    df$HI <- HI_freq[match(df$Code, rawHI_diff_data[[i]]$Code)]
-    colnames(df) <- c("Code", "Sightings", "HI")
-    df
+    df$Behav <- HI_freq[match(df$Code, rawHI_diff_data[[i]]$Code)]
+    colnames(df) <- c("Code", "Sightings", "Behav")
+    return(df)
   })
 }
 
 IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
+IDbehav_NF <- get_IDHI("NF", IDbehav, rawHI_diff)
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){
   IDbehav_HI <- lapply(seq_along(IDbehav_data), function(i) {
     df <- IDbehav_data[[i]]
-    df$HI <- rawHI_data[[i]]$DiffHI
-    colnames(df) <- c("Code", "Sightings", "HI")
+    df$Behav <- rawHI_data[[i]]$DiffHI
+    colnames(df) <- c("Code", "Sightings", "Behav")
     df
   })
   return(IDbehav_HI)
@@ -673,7 +680,7 @@ IDbehav_HI <- create_IDbehav_HI(IDbehav, rawHI)
 Prop_HI <- function(IDbehav) {
   lapply(seq_along(IDbehav), function(i) {
     df <- IDbehav[[i]]
-    df$HIprop <- as.numeric(df$HI) / as.numeric(df$Sightings)
+    df$HIprop <- as.numeric(df$Behav) / as.numeric(df$Sightings)
     df$HIprop[is.na(df$HIprop)] <- 0
     # Keep only 'Code' and 'HIprop' columns
     df <- df[, c('Code', 'HIprop')]
@@ -685,10 +692,12 @@ prob_HI <- Prop_HI(IDbehav_HI)
 prob_BG <- Prop_HI(IDbehav_BG)
 prob_SD <- Prop_HI(IDbehav_SD)
 prob_FG <- Prop_HI(IDbehav_FG)
+prob_NF <- Prop_HI(IDbehav_NF)
 
 saveRDS(prob_BG, "prob_BG.RData")
 saveRDS(prob_FG, "prob_FG.RData")
 saveRDS(prob_SD, "prob_SD.RData")
+saveRDS(prob_NF, "prob_NF.RData")
 
 # Dissimilarity of HI proportion among individual dolphins, using Euclidean distance
 dis_matr <- function(Prop_HI, nxn) {
@@ -932,24 +941,69 @@ for (i in seq_along(dolp_ig)) {
   }
 }
 
+# Read in homerange for individuals
+kernel <- readRDS("kernel.RData")
+
+# Create a for loop to store each period's average coordinates
+centroid_list <- list()
+
+for (k in 1:3) {
+  
+  # Create an empty data frame to store centroid coordinates
+  centroid_coords <- data.frame(dolphin = character(),
+                                avg_lat = numeric(),
+                                avg_lon = numeric())
+  
+  # Take out each period's home range
+  home_range <- kernel[[k]]
+  
+  # Loop through each dolphin's home range
+  for (i in 1:length(home_range)) {
+    # Extract the spatial points representing the home range
+    points <- coordinates(home_range[[i]])
+    
+    # Calculate the average latitude and longitude
+    avg_lat <- mean(points[, 2])  
+    avg_lon <- mean(points[, 1])
+    
+    # Add the centroid coordinates to the data frame
+    centroid_coords <- rbind(centroid_coords, data.frame(dolphin = names(home_range)[i],
+                                                         avg_lat = avg_lat,
+                                                         avg_lon = avg_lon))
+  }
+  
+  centroid_list[[k]] <- centroid_coords
+  
+}
+
+# Order data
+order_rows <- rownames(nxn[[1]])
+
+centroid_list <- lapply(centroid_list, function(df) { 
+  df <- df[df$dolphin %in% order_rows, , drop = FALSE]  # Subsetting rows based on order_rows
+  df <- df[match(order_rows, df$dolphin), ]  # Reorder rows based on order_rows
+  return(df)  # Returning the modified data frame
+})
+
+# Define a function to convert UTM coordinates to longitude and latitude
+utm_to_lonlat <- function(x, y, zone = 17, northern = TRUE) {
+  proj <- sprintf("+proj=utm +zone=%d %s", zone, ifelse(northern, "+north", "+south"))
+  xy <- data.frame(x = x, y = y)
+  xy <- SpatialPoints(xy, proj4string = CRS(proj))
+  xy <- spTransform(xy, CRS("+proj=longlat +datum=WGS84"))
+  return(coordinates(xy))
+}
+
+# Convert UTM coordinates to longitude and latitude
+centroid_list <- lapply(centroid_list, function(df) {
+  lonlat <- utm_to_lonlat(df$avg_lon, df$avg_lat)
+  centroid_list <- data.frame(ID = df$dolphin, 
+                              X = lonlat[,1],
+                              Y = lonlat[,2])
+  return(centroid_list)})
 
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-# Initialize a list to store layout information for each graph
-layout_list <- list()
-
-# Loop through the list of graphs and save layout information
-for (i in 1:length(ig)) {
-  layout_list[[i]] <- layout_with_fr(ig[[i]])
-}
-
-# Set up the plotting layout
-layout.matrix <- matrix(c(1:3), nrow = 1, ncol = 3)
-layout(mat = layout.matrix)    
-par(mar = c(0.6, 0.6, 0.6, 0.6))
-
-# Extract layout for this graph
-combined_layout <- layout_list[[1]]
 counter <- 0
 labeled_nodes <- list()
   
@@ -957,28 +1011,56 @@ for (i in 1:length(ig)) {  # Loop through periods
     
     counter <- counter + 1
     
+    # Adjust the layout using home range coordinates
+    layout_coords <- as.matrix(centroid_list[[i]][, c("X", "Y")])
+    adjusted_layout <- layout_coords[order(V(ig[[i]])$name), ]
+    
     # Get nodes for each behavior
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
-    # Create the plot
+    # Get map of Sarasota, Florida
+    register_stadiamaps(key = "fe423a00-aef9-45c1-b781-4d1156b54ad5")
+    
+    sarasota_map <- get_stadiamap(
+      bbox = c(left = -82.7, bottom = 27.25, right = -82.52, top = 27.5),
+      maptype = "stamen_terrain",
+      zoom = 12
+    )
+    
+    # Graph network
+    ggnet2(ig[[i]],
+           color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
+           shape = "phono", 
+           size =  ifelse(labeled_nodes[[i]], 3, 0.5), 
+           edge.size = E(ig[[i]])$weight * 4, # edge thickness
+           edge.color = adjustcolor("grey", alpha.f = 0.2),
+           edge.alpha = 0.5,
+           mode = adjusted_layout,
+           label = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, FALSE),
+           label.size = 0.8,
+           legend.position = "none",
+           legend.size = "none"
+    ) + theme(axis.line = element_blank())
+    
     plot(ig[[i]],
-         layout = combined_layout,
+         layout = adjusted_layout,
          edge.width = E(ig[[i]])$weight * 4, # edge thickness
          edge.color = adjustcolor("grey", alpha.f = 0.2),
-         vertex.size = ifelse(labeled_nodes, 10, 3), #sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individual's strength (centrality)
+         vertex.size = ifelse(labeled_nodes[[i]], 8, 2), 
          vertex.frame.color = NA,
          vertex.label.family = "Helvetica",
-         vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
+         vertex.label = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, NA),
          vertex.label.color = V(dolp_ig[[i]])$color,
          vertex.label.cex = 0.8,
          vertex.label.dist = 2,
          vertex.frame.width = 0.01,
-         vertex.color = ifelse(labeled_nodes, V(dolp_ig[[i]])$color, "black"))
+         vertex.color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"))
     
     # Add the plot with a box around it
     box()
   
   }
+
 
 
 # What is the cluster size for each period?
