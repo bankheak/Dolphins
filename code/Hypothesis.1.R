@@ -43,7 +43,6 @@ library(gganimate)
 library(posterior)
 library(distributional)
 library(doParallel) # Faster computing
-library(NatParksPalettes) # Nature park theme
 theme_set(theme_tidybayes() + panel_border())
 source("../code/functions.R") # nxn
 
@@ -155,6 +154,64 @@ create_gbi <- function(list_years) {
 }
 
 gbi <- create_gbi(list_years)
+
+# Get the average group size for each ID
+group_list <- lapply(gbi, function(group_matrix) {
+  
+  # Calculate group size for each group
+  individual_group_size <- rowSums(group_matrix)
+  
+  # Create empty vectors to store results
+  ids <- character()
+  avg_group_sizes <- numeric()
+  
+  # Iterate through each individual in the group
+  for (i in 1:ncol(group_matrix)) {
+    
+    # Get the individual ID
+    individual_id <- colnames(group_matrix)[i]
+    
+    # Calculate the group size for the individual
+    group_size <- ifelse(group_matrix[, individual_id] == 1, 
+                         individual_group_size, 0)
+    
+    # Calculate the average group size for the individual
+    avg_group_size <- mean(group_size)
+    
+    # Append the results to vectors
+    ids <- c(ids, individual_id)
+    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
+  }
+  
+  # Create a data frame for the current group
+  group_data <- data.frame(ID = ids,
+                           Average_Group_Size = avg_group_sizes)
+  
+  return(group_data)
+})
+
+# Add HI list
+result_df <- readRDS("result_df.RData")
+result_df$group <- ifelse(result_df$Period == "1-Before_HAB", 
+                          group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
+                          ifelse(result_df$Period == "2-During_HAB",
+                                 group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
+                                 group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
+
+# Plot the HI behaviors for every year
+ggplot(result_df, aes(x = HI, y = group, fill = HI)) +
+  geom_boxplot() +
+  facet_wrap(~ Period) +
+  labs(x = "Human-centric Behavior", y = "Average Group Size") +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.grid = element_blank())
+
+# Get group sizes
+avg_group_sizes <- lapply(gbi, function (mtx) {
+  row_sum <- rowSums(mtx)
+  avg_group_sizes <- mean(row_sum)
+  return(avg_group_sizes)})
 
 # Create association matrix
 create_nxn <- function(gbi) {
@@ -584,6 +641,8 @@ subset_HI <- function(aux_data) {
 }
 
 aux <- subset_HI(aux)
+saveRDS(aux, "aux.RData")
+aux <- readRDS("aux.RData")
 
 # Clump all the HI behaviors together
 clump_behav <- function(aux_data) {
@@ -876,7 +935,18 @@ mcmc_plot + scale_y_discrete(
 ###########################################################################
 # PART 6: Display Networks ---------------------------------------------
 
+## Create social network
+net <- lapply(nxn, function (df) {
+  as.network(df, matrix.type='adjacency',
+             directed = F,
+             ignore.eval=FALSE,
+             names.eval='weight')
+})
+
+saveRDS(net, "net.RData")           
+
 # Read in ig object
+net <- readRDS("net.RData")
 ig <- readRDS("ig.RData")
 
 # Only show IDs of HI dolphins
@@ -951,8 +1021,8 @@ for (k in 1:3) {
   
   # Create an empty data frame to store centroid coordinates
   centroid_coords <- data.frame(dolphin = character(),
-                                avg_lat = numeric(),
-                                avg_lon = numeric())
+                                cent_lat = numeric(),
+                                cent_lon = numeric())
   
   # Take out each period's home range
   home_range <- kernel[[k]]
@@ -962,14 +1032,22 @@ for (k in 1:3) {
     # Extract the spatial points representing the home range
     points <- coordinates(home_range[[i]])
     
-    # Calculate the average latitude and longitude
-    avg_lat <- mean(points[, 2])  
-    avg_lon <- mean(points[, 1])
+    # Make grid data
+    coordinates_data <- cbind(kernel[[k]][[i]]@coords, 
+                         kernel[[k]][[i]]@grid.index)
+    
+    # Extract the row with the maximum value in the third column 
+    max_index <- which.max(coordinates_data[, 3]) 
+    row_with_max <- coordinates_data[max_index, ]
+    
+    # Find the center point
+    cent_lat <- row_with_max[2]
+    cent_lon <- row_with_max[1]
     
     # Add the centroid coordinates to the data frame
     centroid_coords <- rbind(centroid_coords, data.frame(dolphin = names(home_range)[i],
-                                                         avg_lat = avg_lat,
-                                                         avg_lon = avg_lon))
+                                                         cent_lat = cent_lat,
+                                                         cent_lon = cent_lon))
   }
   
   centroid_list[[k]] <- centroid_coords
@@ -996,7 +1074,7 @@ utm_to_lonlat <- function(x, y, zone = 17, northern = TRUE) {
 
 # Convert UTM coordinates to longitude and latitude
 centroid_list <- lapply(centroid_list, function(df) {
-  lonlat <- utm_to_lonlat(df$avg_lon, df$avg_lat)
+  lonlat <- utm_to_lonlat(df$cent_lon, df$cent_lat)
   centroid_list <- data.frame(ID = df$dolphin, 
                               X = lonlat[,1],
                               Y = lonlat[,2])
@@ -1021,14 +1099,21 @@ for (i in 1:length(ig)) {  # Loop through periods
     # Get map of Sarasota, Florida
     register_stadiamaps(key = "fe423a00-aef9-45c1-b781-4d1156b54ad5")
     
-    sarasota_map <- get_stadiamap(
+    sarasota <- get_stadiamap(
       bbox = c(left = -82.7, bottom = 27.25, right = -82.52, top = 27.5),
       maptype = "stamen_terrain",
       zoom = 12
     )
+    sarasota_map <- ggmap(sarasota)
+    
+    # add geographic coordinates
+    net[[i]] %v% "lat" <- layout_coords[,"Y"]
+    net[[i]] %v% "lon" <- layout_coords[,"X"]
     
     # Graph network
-    ggnet2(ig[[i]],
+    ggnetworkmap(sarasota_map, net[[i]])
+    
+    ggnet(net[[i]],
            color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
            shape = "phono", 
            size =  ifelse(labeled_nodes[[i]], 3, 0.5), 
@@ -1041,20 +1126,6 @@ for (i in 1:length(ig)) {  # Loop through periods
            legend.position = "none",
            legend.size = "none"
     ) + theme(axis.line = element_blank())
-    
-    plot(ig[[i]],
-         layout = adjusted_layout,
-         edge.width = E(ig[[i]])$weight * 4, # edge thickness
-         edge.color = adjustcolor("grey", alpha.f = 0.2),
-         vertex.size = ifelse(labeled_nodes[[i]], 8, 2), 
-         vertex.frame.color = NA,
-         vertex.label.family = "Helvetica",
-         vertex.label = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, NA),
-         vertex.label.color = V(dolp_ig[[i]])$color,
-         vertex.label.cex = 0.8,
-         vertex.label.dist = 2,
-         vertex.frame.width = 0.01,
-         vertex.color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"))
     
     # Add the plot with a box around it
     box()

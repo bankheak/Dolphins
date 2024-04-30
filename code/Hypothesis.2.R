@@ -6,6 +6,7 @@
 setwd("../data")
 
 # Load all necessary packages
+library(bayesboot) # bootstraping
 library(tnet) # For weights
 library(igraph) # Measure centrality here
 library(ggraph)
@@ -13,6 +14,7 @@ library(grid)
 library(assortnet) # associative indices
 library(ggplot2) # Visualization
 library(abind) # array
+library(nlme)
 library(brms) # For brm modellibrary(coda)
 library(bayesplot) # plot parameters
 library(doParallel)
@@ -174,7 +176,7 @@ colnames(compare_strength) <- c("ID", "Before_HAB_degree", "Before_HAB_strength"
 compare_strength[, c(2:7)] <- sapply(compare_strength[, c(2:7)], as.numeric)
 
 # Look at all of the local metrics together
-HI_data <- subset_HI(list_years)
+HI_data <- readRDS("aux.RData")
 
 ## Add a column containing HI type
 names_BG <- lapply(HI_data, function (df) {
@@ -203,6 +205,7 @@ names_NF[[i]] <- unique_codes[!(unique_codes %in% names_BG[[i]] |
 HI_list <- list(BG = names_BG, FG = names_FG, SD = names_SD, NF = names_NF)
 
 saveRDS(HI_list, "HI_list.RData")
+HI_list <- readRDS("HI_list.RData")
 
 # Read in different HI data
 prob_BG <- readRDS("prob_BG.RData")
@@ -295,22 +298,28 @@ result_df <- readRDS("result_df.RData")
 result_df$Period <- as.factor(result_df$Period)
 
 # # Make dummy variables
-# result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
-# result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
-# result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
+result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
+result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
+result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
 
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
 # Make sure there is only one ID in each period
-result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
+#result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
 # Check assumptions of model
-test_model <- lm(Strength ~ Prop_BG + Prop_FG + Prop_SD, 
-                 data = result_df)
-summary(test_model)
+plot(result_df$Strength ~ result_df$Prop_BG)
+plot(result_df$Strength ~ result_df$Prop_FG)
+plot(result_df$Strength ~ result_df$Prop_SD)
+
 ## Check distributions
 hist(result_df$Strength) # normal
+## Fit the linear mixed-effects model with the specified variance structure
+test_model <- lm(Strength ~ Prop_BG * Period + Prop_FG * Period + Prop_SD * Period,
+                  data = result_df)
+summary(test_model)
+plot(fitted(test_model, resid(test_model)))
 ## Check for variance among groups
 bartlett.test(Strength ~ HI, data = result_df) # equal
 ### If I have unequal variance
@@ -319,12 +328,26 @@ bartlett.test(Strength ~ HI, data = result_df) # equal
 ## Independent
 durbinWatsonTest(test_model) # not independent
 
+# Bootstrap
+bb_loess <- bayesboot(result_df, weights, use.weights = TRUE)
+
+# Plotting the data
+plot(result_df$Prop_BG, result_df$Strength, pch = 20, col = "tomato4", xlab = "Proportion BG", 
+     ylab = "Strength")
+
+# Plotting a scatter of Bootstrapped LOESS lines to represent the uncertainty.
+for(i in sample(nrow(bb_loess), 20)) {
+  lines(result_df$Prop_BG, bb_loess[i,], col = "gray")
+}
+# Finally plotting the posterior mean LOESS line
+lines(result_df$Prop_BG, colMeans(bb_loess, na.rm = TRUE), type ="l",
+      col = "tomato", lwd = 4)
+
 # Help STAN run faster
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 # Models in brms
-
 fit_brm.1 <- brm(Strength ~ 1 + (1 | numeric_ID),
                  chains = 3, family = gaussian, data = result_df)
 fit_brm.2 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + (1 | numeric_ID), 
@@ -349,7 +372,7 @@ fit_brm.new <- readRDS("fit_brm.new.RData")
 summary(fit_brm.4)
 
 # Check for model convergence
-model <- fit_brm.NF
+model <- fit_brm.new
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
@@ -385,29 +408,6 @@ mcmc_plot + scale_y_discrete(
   labels = c(
     "b_Period2MDuring_HAB" = "During", 
     "b_Period3MAfter_HAB" = "After"
-  )
-) +
-  theme(panel.background = element_blank())
-
-## NF
-# Create mcmc_areas plot
-mcmc_plot <- mcmc_areas(
-  as.array(model), 
-  pars = c("b_Prop_NF:Period2MDuring_HAB", "b_Prop_NF:Period3MAfter_HAB",
-           "b_Prop_NF"),
-  prob = 0.95, # 95% intervals
-  prob_outer = 0.99, # 99%
-  point_est = "mean"
-) + labs(
-  title = "Posterior parameter distributions",
-  subtitle = "with medians and 95% intervals"
-) + theme_update(text = element_text(family = "sans"))
-
-mcmc_plot + scale_y_discrete(
-  labels = c(
-    "b_Prop_NF" = "Natural Foraging",
-    "b_Prop_NF:Period2MDuring_HAB" = "NF: During", 
-    "b_Prop_NF:Period3MAfter_HAB" = "NF: After"
   )
 ) +
   theme(panel.background = element_blank())
