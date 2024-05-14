@@ -19,11 +19,15 @@ library(ggmap) # Download tiles using ggmap
 library(viridis) # Color pallette
 library(gridExtra) # grid.arrange function
 library(ggplot2)
-library(rgdal) # Overlap
 library(patchwork) # align different plots
+library(dplyr)
+library(adehabitatHR)
+library(ggplot2)
+library(magrittr)
+library(leaflet)
 
 # Read in file
-list_years <- readRDS("list_years_ovrlap.RData")
+list_years <- readRDS("list_years.RData")
 
 # Aggregate list into one homerange overlap matrix
 list_years_df <- merge(list_years[[1]], list_years[[2]], all = T)
@@ -94,6 +98,54 @@ saveRDS(kov, "kov.RDS")
 ###########################################################################
 # PART 3: Plot HRO for HI Dolphins ------------------------------------------------------------
 
+# Make coordinate data
+dolph.data <- lapply(list_years, function (df) {
+  # Read in only ID, x, and y
+  df <- df[, c("Code", "StartLon", "StartLat")]
+  # Create a SpatialPointsDataFrame by defining the coordinates
+  coordinates(df) <- c("StartLon", "StartLat")
+  # Set the coordinate reference system (CRS) 
+  # More information on CRS here: 
+  # https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/OverviewCoordinateReferenceSystems.pdf 
+  proj4string(df) <- CRS( "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs" )
+  
+  df
+  })
+
+write.csv(dolph.data[[1]], "dolph.data.csv")
+
+# Calculate MCPs for each dolphin
+dolph.mcp <- lapply(dolph.data, function (df) mcp(df, percent = 100))
+plot(dolph.data[[1]], col = as.factor(dolph.data[[1]]@data$id), pch = 16) 
+plot(dolph.mcp[[1]], col = alpha(1:5, 0.5), add = TRUE)
+
+# Transform the point and MCP objects. 
+dolph.spgeo <- lapply(dolph.data, function (df) spTransform(df, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs")))
+dolph.mcpgeo <- lapply(dolph.mcp, function (df) spTransform(df, CRS("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs")))
+
+# Google tiles (requires a key first)
+## Guide on getting a key: https://www.r-bloggers.com/geocoding-with-ggmap-and-the-google-api/
+register_google(key = "AIzaSyAgFfxIJmkL8LAWE7kHCqSqKBQDvqa9umI")
+mybasemap <- get_map(location = c(lon = mean(dolph.spgeo[[1]]@coords[,1]),
+                                  lat = mean(dolph.spgeo[[1]]@coords[,2])),
+                     source = "google",
+                     zoom = 10,
+                    maptype = 'satellite')
+
+# Turn the spatial data frame of points into just a dataframe for plotting in ggmap
+dolph.geo <- data.frame(dolph.spgeo[[1]]@coords, 
+                          id = dolph.spgeo[[1]]@data$Code )
+
+mymap.hr <- ggmap(mybasemap) + 
+  geom_polygon(data = fortify(dolph.mcpgeo[[1]]),  
+               # Polygon layer needs to be "fortified" to add geometry to the dataframe
+               aes(long, lat, colour = id, fill = id),
+               alpha = 0.3) + # alpha sets the transparency
+  geom_point(data = dolph.geo, 
+             aes(x = coords.x1, y = coords.x2, colour = id))  +
+  labs(x = "Longitude", y = "Latitude") + theme(legend.position = "none")
+mymap.hr
+
 # Find HI events among individuals
 ID_HI <- lapply(list_years, function(df) {
   subset_df <- subset(df, subset = c(df$ConfHI != 0))
@@ -114,7 +166,7 @@ ID_HI <- lapply(list_years, function(df) {
   
   return(subset_df)
 })
-dolph.sp_HI <- create_coord_data(ID_HI)
+dolph.sp_HI <- lapply(ID_HI, function (df) create_coord_data(df))
 
 # Calculate MCPs for each HI dolphin
 HI.mcp <- lapply(dolph.sp_HI, function (df) mcp(df, percent = 95))

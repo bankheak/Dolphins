@@ -154,64 +154,7 @@ create_gbi <- function(list_years) {
 }
 
 gbi <- create_gbi(list_years)
-
-# Get the average group size for each ID
-group_list <- lapply(gbi, function(group_matrix) {
-  
-  # Calculate group size for each group
-  individual_group_size <- rowSums(group_matrix)
-  
-  # Create empty vectors to store results
-  ids <- character()
-  avg_group_sizes <- numeric()
-  
-  # Iterate through each individual in the group
-  for (i in 1:ncol(group_matrix)) {
-    
-    # Get the individual ID
-    individual_id <- colnames(group_matrix)[i]
-    
-    # Calculate the group size for the individual
-    group_size <- ifelse(group_matrix[, individual_id] == 1, 
-                         individual_group_size, 0)
-    
-    # Calculate the average group size for the individual
-    avg_group_size <- mean(group_size)
-    
-    # Append the results to vectors
-    ids <- c(ids, individual_id)
-    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
-  }
-  
-  # Create a data frame for the current group
-  group_data <- data.frame(ID = ids,
-                           Average_Group_Size = avg_group_sizes)
-  
-  return(group_data)
-})
-
-# Add HI list
-result_df <- readRDS("result_df.RData")
-result_df$group <- ifelse(result_df$Period == "1-Before_HAB", 
-                          group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
-                          ifelse(result_df$Period == "2-During_HAB",
-                                 group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
-                                 group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
-
-# Plot the HI behaviors for every year
-ggplot(result_df, aes(x = HI, y = group, fill = HI)) +
-  geom_boxplot() +
-  facet_wrap(~ Period) +
-  labs(x = "Human-centric Behavior", y = "Average Group Size") +
-  theme(strip.background = element_blank(),
-        strip.text = element_text(size = 12, face = "bold"),
-        panel.grid = element_blank())
-
-# Get group sizes
-avg_group_sizes <- lapply(gbi, function (mtx) {
-  row_sum <- rowSums(mtx)
-  avg_group_sizes <- mean(row_sum)
-  return(avg_group_sizes)})
+saveRDS(gbi, "gbi.RData")
 
 # Create association matrix
 create_nxn <- function(gbi) {
@@ -349,6 +292,12 @@ ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0,
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
 
+# Find the demographics of the population
+ILV_dem <- ILV[ILV$Alias %in% rownames(nxn[[1]]),]
+sum(ILV_dem$Sex == "Female")
+sum(ILV_dem$Sex == "Male")
+write.csv(ILV_dem, "ILV_dem.csv")
+
 # Make sim and diff matrices
 sim_dif_mat <- function(nxn) {
 # Order data
@@ -421,6 +370,7 @@ dolph.sp <- create_coord_data(list_years)
 # Use the calculated extent in kernelUD
 kernel <- lapply(dolph.sp, function(df) kernelUD(df, h = 1000))
 saveRDS(kernel, "kernel.RData")
+kernel <- readRDS("kernel.RData")
 
 # Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)
 kov <- lapply(kernel, function(df) kerneloverlaphr(df, method = "HR", lev = 95))
@@ -721,6 +671,11 @@ IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
 IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
 IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
 IDbehav_NF <- get_IDHI("NF", IDbehav, rawHI_diff)
+
+saveRDS(IDbehav_BG, "IDbehav_BG.RData")
+saveRDS(IDbehav_FG, "IDbehav_BG.RData")
+saveRDS(IDbehav_SD, "IDbehav_BG.RData")
+saveRDS(IDbehav_NF, "IDbehav_BG.RData")
 
 # Get HI Freq
 create_IDbehav_HI <- function(IDbehav_data, rawHI_data){

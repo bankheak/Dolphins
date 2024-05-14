@@ -6,25 +6,28 @@
 setwd("../data")
 
 # Load all necessary packages
+library(ggalluvial) # For alluvial plot
+library(rstatix) # for post-hoc test
 library(bayesboot) # bootstraping
 library(tnet) # For weights
 library(igraph) # Measure centrality here
 library(ggraph)
+library(ggpattern) # geom_tile_pattern
 library(grid)
 library(assortnet) # associative indices
 library(ggplot2) # Visualization
 library(abind) # array
-library(nlme)
+library(boot) # bootstrapping
 library(brms) # For brm modellibrary(coda)
 library(bayesplot) # plot parameters
-library(doParallel)
+library(doParallel) # Run parallel processing
 library(hrbrthemes) # plot themes
 library(viridis) # plot themes
 library(ggpattern) # heatmap hatches
 library(car) # durbinWatsonTest
 library(rstan) # To make STAN run faster
 library(tidybayes) # get_variables
-library(NatParksPalettes) # Nature park theme
+library(dplyr)
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -34,44 +37,8 @@ nxn <- readRDS("nxn.RData") # association matrix of list_years
 ###########################################################################
 # PART 1: Wrangle Data ---------------------------------------------
 
-# Read in full datasheet and list
-list_years <- readRDS("list_years.RData") # (1995-2000)/(2001-2006)/(2007-20012)
-nxn <- readRDS("nxn.RData") # association matrix of list_years
-
-# Extract specific columns from each data frame in list_years
-aux_data <- function(list_years) {
-  aux <- lapply(list_years, function(df) {
-    data.frame(Code = df$Code,
-               Behaviors = df$Behaviors,
-               HumanInteraction = df$HumanInteraction,
-               ConfHI = df$ConfHI)})
-  
-  # Add the 'Foraging' variable to each data frame in the 'aux' list
-  aux <- lapply(aux, function(df) {
-    df$Foraging <- "Other"
-    df$Foraging[grepl(pattern = 'Feed', x = df$Behaviors, ignore.case = FALSE)] <- "Feed"
-    df
-  })
-  return(aux)
-}
-
-aux <- aux_data(list_years)
-
-# Separate HI Behaviors
-#' BG = Beg: F, G
-#' SD = Scavenge and Depredation: A, B, C, D, E
-#' FG = Fixed Gear Interaction: P
-# Change the code using ifelse statements
-subset_HI <- function(aux_data) {
-  for (i in seq_along(aux_data)) {
-    aux_data[[i]]$DiffHI <- ifelse(aux_data[[i]]$ConfHI %in% c("F", "G"), "BG",
-                                   ifelse(aux_data[[i]]$ConfHI %in% c("A", "B", "C", "D", "E"), "SD",
-                                          ifelse(aux_data[[i]]$ConfHI %in% c("P"), "FG", "None")))
-  }
-  return(aux_data)  # Return the modified list of data frames
-}
-
-aux <- subset_HI(aux)
+# Read in aux data
+aux <- readRDS("aux.RData")
 
 # Look at how many individuals have HI
 HI_1 <- unique(aux[[1]]$Code[aux[[1]]$DiffHI != "None"])
@@ -79,36 +46,16 @@ HI_2 <- unique(aux[[2]]$Code[aux[[2]]$DiffHI != "None"])
 HI_3 <- unique(aux[[3]]$Code[aux[[3]]$DiffHI != "None"])
 length(unique(c(HI_1, HI_2, HI_3)))
 
-# Categorize DiffHI to IDs
-diff_raw <- function(aux_data) {
-  rawHI_diff <- lapply(aux_data, function(df) {
-    table_df <- as.data.frame(table(df$Code, df$DiffHI))
-    colnames(table_df) <- c("Code", "DiffHI", "Freq")
-    return(table_df)
-  })}
-
-rawHI_diff <- diff_raw(aux)
-
-# Create a frequency count for each HI behavior
-get_IDHI <- function(HI, IDbehav_data, rawHI_diff_data) {
-  lapply(seq_along(IDbehav_data), function(i) {
-    df <- IDbehav_data[[i]]
-    HI_freq <- rawHI_diff_data[[i]]$Freq[rawHI_diff_data[[i]]$DiffHI == HI]
-    df$HI <- HI_freq[match(df$Code, rawHI_diff_data[[i]]$Code)]
-    colnames(df) <- c("Code", "Foraging", "HI")
-    df
-  })
-}
-
-IDbehav_BG <- get_IDHI("BG", IDbehav, rawHI_diff)
-IDbehav_FG <- get_IDHI("FG", IDbehav, rawHI_diff)
-IDbehav_SD <- get_IDHI("SD", IDbehav, rawHI_diff)
+# Read in IDbehav data
+IDbehav_BG <- readRDS("IDbehav_BG.RData")
+IDbehav_FG <- readRDS("IDbehav_FG.RData")
+IDbehav_SD <- readRDS("IDbehav_SD.RData")
 
 # Get total number of HI individuals
-BG_IDs <- unique(unlist(lapply(IDbehav_BG, function (df) unique(df$Code[df$HI > 0]))))
-FG_IDs <- unique(unlist(lapply(IDbehav_FG, function (df) unique(df$Code[df$HI > 0]))))
-SD_IDs <- unique(unlist(lapply(IDbehav_SD, function (df) unique(df$Code[df$HI > 0]))))
-ovrlap_IDs <- intersect(intersect(BG_IDs, FG_IDs), SD_IDs)
+BG_IDs <- lapply(IDbehav_BG, function (df) df$Code[df$Behav != 0])
+FG_IDs <- lapply(IDbehav_FG, function (df) df$Code[df$Behav != 0])
+SD_IDs <- lapply(IDbehav_SD, function (df) df$Code[df$Behav != 0])
+ovrlap_IDs <- intersect(intersect(unlist(BG_IDs), unlist(FG_IDs)), unlist(SD_IDs))
 
 
 ###########################################################################
@@ -287,6 +234,36 @@ result_df$HI <- as.factor(result_df$HI)
 # Save dataset
 saveRDS(result_df, "result_df.RData")
 
+# Look at demographics of HI dolphins
+ILV_dem <- read.csv("ILV_dem.csv") # Read in demographics
+ILV_dem <- ILV_dem[, c("Alias", "Sex", "BirthYear")]
+colnames(ILV_dem) <- c("ID", "Sex", "Age")
+
+result_df <- readRDS("result_df.RData")
+result_df <- merge(result_df, ILV_dem[, c("ID", "Sex", "Age")], by = "ID", all.x = TRUE)
+
+
+## Sex
+length(result_df$ID[result_df$HI == "BG" & result_df$Sex == "Female"])
+length(result_df$ID[result_df$HI == "BG" & result_df$Sex == "Male"])
+length(result_df$ID[result_df$HI == "FG" & result_df$Sex == "Female"])
+length(result_df$ID[result_df$HI == "FG" & result_df$Sex == "Male"])
+length(result_df$ID[result_df$HI == "SD" & result_df$Sex == "Female"])
+length(result_df$ID[result_df$HI == "SD" & result_df$Sex == "Male"])
+length(result_df$ID[result_df$HI == "NF" & result_df$Sex == "Female"])
+length(result_df$ID[result_df$HI == "NF" & result_df$Sex == "Male"])
+
+## Period
+length(result_df$ID[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"])
+length(result_df$ID[result_df$HI == "BG" & result_df$Period == "2-During_HAB"])
+length(result_df$ID[result_df$HI == "BG" & result_df$Period == "3-After_HAB"])
+length(result_df$ID[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"])
+length(result_df$ID[result_df$HI == "FG" & result_df$Period == "2-During_HAB"])
+length(result_df$ID[result_df$HI == "FG" & result_df$Period == "3-After_HAB"])
+length(result_df$ID[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"])
+length(result_df$ID[result_df$HI == "SD" & result_df$Period == "2-During_HAB"])
+length(result_df$ID[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])
+
 
 ###########################################################################
 # PART 3: Run Model ---------------------------------------------
@@ -297,18 +274,14 @@ result_df <- readRDS("result_df.RData")
 # Make period a factor
 result_df$Period <- as.factor(result_df$Period)
 
-# # Make dummy variables
-result_df$BG <- ifelse(result_df$HI == "BG", 1, 0)
-result_df$FG <- ifelse(result_df$HI == "FG", 1, 0)
-result_df$SD <- ifelse(result_df$HI == "SD", 1, 0)
-
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
 # Make sure there is only one ID in each period
-#result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
+result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
 # Check assumptions of model
+## Visualize relationship
 plot(result_df$Strength ~ result_df$Prop_BG)
 plot(result_df$Strength ~ result_df$Prop_FG)
 plot(result_df$Strength ~ result_df$Prop_SD)
@@ -327,21 +300,6 @@ bartlett.test(Strength ~ HI, data = result_df) # equal
 #' chains = 3, family = gaussian, data = result_df)
 ## Independent
 durbinWatsonTest(test_model) # not independent
-
-# Bootstrap
-bb_loess <- bayesboot(result_df, weights, use.weights = TRUE)
-
-# Plotting the data
-plot(result_df$Prop_BG, result_df$Strength, pch = 20, col = "tomato4", xlab = "Proportion BG", 
-     ylab = "Strength")
-
-# Plotting a scatter of Bootstrapped LOESS lines to represent the uncertainty.
-for(i in sample(nrow(bb_loess), 20)) {
-  lines(result_df$Prop_BG, bb_loess[i,], col = "gray")
-}
-# Finally plotting the posterior mean LOESS line
-lines(result_df$Prop_BG, colMeans(bb_loess, na.rm = TRUE), type ="l",
-      col = "tomato", lwd = 4)
 
 # Help STAN run faster
 rstan_options(auto_write = TRUE)
@@ -371,11 +329,37 @@ fit_brm.4 <- readRDS("fit_brm.4.RData")
 fit_brm.new <- readRDS("fit_brm.new.RData")
 summary(fit_brm.4)
 
+# Bootstrap
+## Define function
+bootstrap_model <- function(data, indices) {
+  # Subset the data using the indices
+  data_resampled <- data[indices, ]
+  # Fit the model on the resampled data
+  model_resampled <- brm(Strength ~
+                           Prop_BG * Period + 
+                           Prop_FG * Period +
+                           Prop_SD * Period + 
+                           (1 | numeric_ID),
+                         chains = 4, iter = 4000, warmup = 2000, 
+                         family = gaussian, data = data_resampled)
+  
+  # Debugging: Print the model summary
+  print(summary(model_resampled))
+  
+  # Return the model's R-squared value 
+  return(bayes_R2(model_resampled))
+}
+
+## Perform bootstrap
+bootstrap_result <- boot(data = result_df, statistic = bootstrap_model, R = 2)
+saveRDS(bootstrap_result, "bootstrap_result.RData")
+## Analyze bootstrap
+boot.ci(bootstrap_result, type = "bca")
+
 # Check for model convergence
-model <- fit_brm.new
+model <- fit_brm.4
 plot(model)
 pp_check(model) # check to make sure they line up
-# Search how to fix this
 
 # Find the significance
 posterior_samples <- as.data.frame(as.matrix(posterior_samples(model)))
@@ -481,7 +465,98 @@ mcmc_plot + scale_y_discrete(
 
 
 ###########################################################################
-# PART 4: Circular heat map ---------------------------------------------
+# PART 4: Look at Group Sizes ---------------------------------------------
+
+# Read in GBI
+gbi <- readRDS("gbi.RData")
+
+# Get the average group size for each ID
+group_list <- lapply(gbi, function(group_matrix) {
+  
+  # Calculate group size for each group
+  individual_group_size <- rowSums(group_matrix)
+  
+  # Create empty vectors to store results
+  ids <- character()
+  avg_group_sizes <- numeric()
+  
+  # Iterate through each individual in the group
+  for (i in 1:ncol(group_matrix)) {
+    
+    # Get the individual ID
+    individual_id <- colnames(group_matrix)[i]
+    
+    # Calculate the group size for the individual
+    group_size <- ifelse(group_matrix[, individual_id] == 1, 
+                         individual_group_size, 0)
+    
+    # Calculate the average group size for the individual
+    avg_group_size <- mean(group_size)
+    
+    # Append the results to vectors
+    ids <- c(ids, individual_id)
+    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
+  }
+  
+  # Create a data frame for the current group
+  group_data <- data.frame(ID = ids,
+                           Average_Group_Size = avg_group_sizes)
+  
+  return(group_data)
+})
+
+# Add HI list
+result_df <- readRDS("result_df.RData")
+result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB", 
+                          group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
+                          ifelse(result_df$Period == "2-During_HAB",
+                                 group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
+                                 group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
+
+# Change the factor levels and add factor for Period
+result_df$HI <- factor(result_df$HI, levels = c("NF", "BG", "FG", "SD"))
+result_df$Period <- as.factor(result_df$Period)
+
+# Plot the HI behaviors for every year
+ggplot(result_df, aes(x = HI, y = Group_size, fill = HI)) +
+  geom_boxplot() +
+  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
+                                                      "2-During_HAB" = "During", 
+                                                      "3-After_HAB" = "After"))) +
+  labs(x = "Human-centric Behavior", y = "Average Group Size") +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.grid = element_blank())
+# Unequal variance
+
+# Create different data frames based on period
+before <- result_df[result_df$Period == "1-Before_HAB", ]
+during <- result_df[result_df$Period == "2-During_HAB", ]
+after <- result_df[result_df$Period == "3-After_HAB", ]
+
+# Look at the difference in HI groups
+## Check assumptions of anova
+hist(result_df$Group_size) # not normal
+
+## Run post-hoc test
+kruskal.test(Group_size ~ HI, data = result_df)
+kruskal.test(Group_size ~ HI, data = before)
+kruskal.test(Group_size ~ HI, data = during)
+kruskal.test(Group_size ~ HI, data = after)
+
+f.model <- dunn_test(Group_size ~ HI, data = result_df, detailed = T)
+b.model <- dunn_test(Group_size ~ HI, data = before, detailed = T)
+d.model <- dunn_test(Group_size ~ HI, data = during, detailed = T)
+a.model <- dunn_test(Group_size ~ HI, data = after, detailed = T)
+
+# Get group sizes
+avg_group_sizes <- lapply(gbi, function (mtx) {
+  row_sum <- rowSums(mtx)
+  avg_group_sizes <- mean(row_sum)
+  return(avg_group_sizes)})
+
+###########################################################################
+# PART 5: Circular heat map ---------------------------------------------
 
 # Read in rank data
 result_df <- readRDS("result_df.RData")
@@ -526,7 +601,7 @@ result_data <- data.frame(ID = split_data$ID,
                         Centrality = split_data$Strength,
                         HI = split_data$HI)
 
-# Normalize the Eigen values to fit in the circle
+# Normalize the centrality values to fit in the circle
 unique_ids$Strength <- (unique_ids$Strength - 
                                       min(unique_ids$Strength)) / 
                                       (max(unique_ids$Strength) - 
@@ -568,10 +643,10 @@ for (period in unique(change_behav_BG$Period)) {
 
 df_long_BG$hatch <- hatch_vect
 
-# Filter data to include only rows where hatch is TRUE
+## Filter data to include only rows where hatch is TRUE
 df_hatched <- df_long_BG[df_long_BG$hatch,]
 
-## Graph ranked BG individuals
+# Graph ranked BG individuals
 ggplot(rank_sum_BG, aes(x = reorder(ID, value), y = value, fill = value)) + 
   geom_bar(stat = "identity") +
   coord_flip() +
@@ -600,20 +675,35 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   coord_polar()
 
 # Map out centrality over time
-df_long_BG$HI <- ifelse(df_long_BG$hatch == T, "BG", "NF")
-ggplot(df_long_BG, aes(x = Period, y = value, group = ID, color = HI)) +
-  geom_line(color = "black") +  # Set line color to black
-  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
-  labs(title = "Parallel Coordinates Plot",
-       x = "Period",
-       y = "Values",
-       color = "HI") +
-  scale_color_manual(values = c("BG" = "#F8766D", "NF" = "#7CAE00")) +
+## Add proportion data
+df_long_BG <- merge(df_long_BG, result_df[,c("ID", "Period", "Prop_BG")], 
+                    by = c("ID", "Period"), all.x = TRUE)
+## Calculate rank of Prop_BG
+df_long_BG$Prop_BG_Rank <- rank(df_long_BG$Prop_BG)
+## Plot
+ggplot(df_long_BG, aes(x = Period, y = value, group = ID, color = Prop_BG_Rank)) +
+  geom_line(color = "black") +  
+  geom_point(size = 3) +  
+  labs(x = "Period",
+       y = "Social Centrality",
+       color = "BG Engagement") +
+  scale_color_viridis_c(name = "Prop_BG Rank") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         legend.text = element_text(size = 10))
+
+df_long_BG$Rank <- ifelse(df_long_BG$Prop_BG_Rank == 1, "None", 
+                          ifelse(df_long_BG$Prop_BG_Rank < 6, "Low", "High"))
+ggplot(df_long_BG,
+       aes(x = Period, stratum = Rank, alluvium = ID,
+           fill = Rank, label = Rank)) +
+  scale_fill_brewer(type = "qual", palette = "Set2") +
+  geom_flow(stat = "alluvium", lode.guidance = "frontback",
+            color = "darkgray") +
+  geom_stratum() +
+  theme(legend.position = "bottom")
 
 ## FG
 df_long_FG <- df_long[df_long$ID %in% result_data$ID[result_data$HI == "FG"], ]
@@ -669,15 +759,19 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   coord_polar()
 
 # Map out centrality over time
-df_long_FG$HI <- ifelse(df_long_FG$hatch == T, "FG", "NF")
-ggplot(df_long_FG, aes(x = Period, y = value, group = ID, color = HI)) +
-  geom_line(color = "black") +  # Set line color to black
-  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
-  labs(title = "Parallel Coordinates Plot",
-       x = "Period",
-       y = "Values",
-       color = "HI") +
-  scale_color_manual(values = c("FG" = "#F8766D", "NF" = "#7CAE00")) +
+## Add proportion data
+df_long_FG <- merge(df_long_FG, result_df[,c("ID", "Period", "Prop_FG")], 
+                    by = c("ID", "Period"), all.x = TRUE)
+## Calculate rank of Prop_BG
+df_long_FG$Prop_FG_Rank <- rank(df_long_FG$Prop_FG)
+## Plot
+ggplot(df_long_FG, aes(x = Period, y = value, group = ID, color = Prop_FG_Rank)) +
+  geom_line(color = "black") +  
+  geom_point(size = 3) +  
+  labs(x = "Period",
+       y = "Social Centrality",
+       color = "FG Engagement") +
+  scale_color_viridis_c(name = "Prop_FG Rank") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
@@ -738,15 +832,19 @@ ggplot(df_hatched, aes(x = ID, y = Period, fill = value)) +
   coord_polar()
 
 # Map out centrality over time
-df_long_SD$HI <- ifelse(df_long_SD$hatch == T, "SD", "NF")
-ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = HI)) +
-  geom_line(color = "black") +  # Set line color to black
-  geom_point(aes(color = HI), size = 3) +  # Set color aesthetic for points
-  labs(title = "Parallel Coordinates Plot",
-       x = "Period",
-       y = "Values",
-       color = "HI") +
-  scale_color_manual(values = c("SD" = "#F8766D", "NF" = "#7CAE00")) +
+## Add proportion data
+df_long_SD <- merge(df_long_SD, result_df[,c("ID", "Period", "Prop_SD")], 
+                    by = c("ID", "Period"), all.x = TRUE)
+## Calculate rank of Prop_BG
+df_long_SD$Prop_SD_Rank <- rank(df_long_SD$Prop_SD)
+## Plot
+ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = Prop_SD_Rank)) +
+  geom_line(color = "black") +  
+  geom_point(size = 3) +  
+  labs(x = "Period",
+       y = "Social Centrality",
+       color = "SD Engagement") +
+  scale_color_viridis_c(name = "Prop_SD Rank") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
@@ -754,7 +852,7 @@ ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = HI)) +
         legend.text = element_text(size = 10))
 
 ###########################################################################
-# PART 5: Multinetwork Plots ---------------------------------------------
+# PART 6: Multinetwork Plots ---------------------------------------------
 
 # Only show IDs of HI dolphins
 HI_list <- readRDS("HI_list.RData")
@@ -886,20 +984,3 @@ plots_list_HI[[1]] # BG
 plots_list_HI[[2]] # FG
 plots_list_HI[[3]] # SD
 
-
-###########################################################################
-# PART 6: Alluvial Plots ---------------------------------------------
-
-# Set up data
-result_df <- readRDS("result_df.RData")
-
-# Plot
-ggplot(data = vaccinations,
-       aes(axis1 = survey, axis2 = response, y = freq)) +
-  geom_alluvium(aes(fill = response)) +
-  geom_stratum() +
-  geom_text(stat = "stratum",
-            aes(label = after_stat(stratum))) +
-  scale_x_discrete(limits = c("Survey", "Response"),
-                   expand = c(0.15, 0.05)) +
-  theme_void()
