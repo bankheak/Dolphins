@@ -7,11 +7,12 @@ setwd("../data")
 
 # Load all necessary packages
 library(intergraph) # To use igraph network in ggnet
+library(gridExtra) # plot all of the plots on one graph
 library(sna) # For network
 library(GGally) # For mapping networks in ggplot
-library(network) # Creating networks
-library(igraph) # graphing networks
-library(ggmap) # For network plotting on map
+library(network) # For assigning coordinates to nodes %v%
+library(igraph) # graph_from_adjacency_matrix version = '1.6.0'
+library(ggmap) # register API key version = '3.0.0'
 library(ggraph) # For network plotting on map
 library(tnet) # For weights
 library(asnipe) # get_group_by_individual--Damien Farine
@@ -23,12 +24,12 @@ library(ggplot2) # Visualization
 library(abind) # array
 library(brms) # For brm model
 library(coda)
-library(bayesplot) # plot parameters
+library(bayesplot) # plot parameters in mcmc_area
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
 library(magrittr) # All below is for STAN
-library(dplyr)
+library(dplyr) # for organizing code
 library(purrr) 
 library(forcats)
 library(tidyr)
@@ -43,7 +44,6 @@ library(gganimate)
 library(posterior)
 library(distributional)
 library(doParallel) # Faster computing
-theme_set(theme_tidybayes() + panel_border())
 source("../code/functions.R") # nxn
 
 # Read in full datasheet and list (after wrangling steps)
@@ -185,8 +185,47 @@ nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 saveRDS(nxn, file = "nxn.RData")
 
 ###########################################################################
-# PART 3: Modularity ---------------------------------------------
+# PART 3: CV and Modularity ---------------------------------------------
 
+## Coefficient of Variantion ##
+# Read in null cv values for one year
+cv_null <- readRDS("cv_years.RData")
+## Remove NAs, if any
+# cv_null = cv_null[!is.na(cv_null)]
+
+# Calculate the CV of the observation association data
+# CV = (SD/mean)*100
+cv_obs <- lapply(nxn, function (df) {(sd(df) / mean(df)) * 100})  # Very high CV = unexpectedly 
+# high or low association indices in the empirical distribution
+
+# Calculate 95% confidence interval, in a two-tailed test
+cv_ci = lapply(cv_null, function (df) {quantile(df, probs=c(0.025, 0.975), type=2)})
+
+# Check whether pattern of connections is non-random
+par(mfrow=c(3, 1))
+
+# Create a list to store the histograms
+hist_cvs <- list()
+
+# Create histograms for each element in cv_null
+for (i in seq_along(cv_null)) {
+  hist_cvs[[i]] <- hist(cv_null[[i]], 
+                        breaks=50,
+                        xlim = c(min(cv_null[[i]]), max(cv_obs[[i]] + 10)),
+                        col='grey70',
+                        main = NULL,
+                        xlab="Null CV SRI")
+  
+  # Add lines for empirical CV, 2.5% CI, and 97.5% CI
+  abline(v= cv_obs[[i]], col="red")
+  abline(v= cv_ci[[i]], col="blue")
+  abline(v= cv_ci[[i]], col="blue")
+}
+
+#' This shows whether there are more preferred/avoided 
+#' relationships than we would expect at random
+
+## Modularity ##
 # Read in data
 el <- readRDS("el_years.RData")
 
@@ -224,54 +263,48 @@ system.time({
 run_mod <- function(el, dolphin_walk_list) {
   iter <- 1000
   randmod <- numeric(iter)  # Initialize a numeric vector to store Q-values
+  result <- list()
   
   for (k in 1:3) {
     
     for (i in 1:iter) {
     # Save the edgelist into a new object and permutate the link weights
     auxrand <- el[[k]]
-    auxrand[, 3] <- sample(auxrand[, 3])
-    
-    # Save graph object
-    ig <- dolphin_ig[[k]]
-    
-    # Trim down the length
-    auxrand_trimmed <- auxrand[, 3][1:2736]
-    
-    # Create an igraph graph from the permuted edgelist
-    igrand <- graph_from_edgelist(as.matrix(auxrand[, 1:2]), directed = FALSE)
-    # Assign link weights
-    set_edge_attr(ig, name = "weight", value = auxrand[, 3])
-  
-    # Calculate modularity using walktrap community detection
+    # transform it into igraph format
+    igrand <- graph_from_edgelist(auxrand[,1:2]) 
+    E(igrand)$weight <- auxrand[,3]
+    igrand <- as.undirected(igrand)
+    # Now we can permutate the link weights
+    E(igrand)$weight <- sample(E(igrand)$weight)
+    # calculate the modularity for the permutate copy
     rand_walk <- cluster_walktrap(igrand)
-    randmod[i] <- modularity(rand_walk)  # Save Q-value into the vector
+    # and finally save the modularity Q-value into the empty vector
+    randmod[i] <- modularity(rand_walk)
   }
   
   # Calculate the 95% confidence interval (two-tailed test)
   ci <- quantile(randmod, probs = c(0.025, 0.975), type = 2)
   
   # Visualization of the random Q distribution
-  hist(randmod, xlim = c(0, 0.6), main = "Random Q Distribution", xlab = "Q-value", ylab = "Frequency", col = "lightblue")
+  #hist(randmod, xlim = c(0, 0.6), main = "Random Q Distribution", xlab = "Q-value", ylab = "Frequency", col = "lightblue")
   
   # Empirical Q-value
-  abline(v = modularity(dolphin_walk_list), col = "red")
+  #abline(v = modularity(dolphin_walk_list[[k]]), col = "red")
   
   # 2.5% CI
-  abline(v = ci[1], col = "blue")
+  #abline(v = ci[1], col = "blue")
   
   # 97.5% CI
-  abline(v = ci[2], col = "blue")
+  #abline(v = ci[2], col = "blue")
   
   # Return a data frame with Q-value and confidence intervals
-  result <- data.frame(Q = modularity(dolphin_walk_list), LowCI = ci[1], HighCI = ci[2])
-  return(result)
+  result[[k]] <- data.frame(Q = modularity(dolphin_walk_list[[k]]), LowCI = ci[1], HighCI = ci[2])
+  
   }
+  return(result)
 }
 
-run_mod(el = el[[1]], dolphin_walk_list = dolphin_walk[[1]])
-run_mod(el = el[[2]], dolphin_walk_list = dolphin_walk[[2]])
-run_mod(el = el[[3]], dolphin_walk_list = dolphin_walk[[3]])
+model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
 
 
 ###########################################################################
@@ -366,6 +399,8 @@ create_coord_data <- function(list, period) {
 }
 
 dolph.sp <- create_coord_data(list_years)
+
+write.csv(dolph.sp[[1]], "dolph_sp.csv")
 
 # Use the calculated extent in kernelUD
 kernel <- lapply(dolph.sp, function(df) kernelUD(df, h = 1000))
@@ -521,6 +556,12 @@ saveRDS(kinship_matrix, "kinship_matrix.RData")
 kinship_matrix <- kinship_matrix[1:57, 1:57]
 saveRDS(kinship_matrix, "kinship_matrix_limit.RData")
 
+# Test correlation to homerange
+kinship_matrix <- readRDS("kinship_matrix.RData")
+kov <- readRDS("kov.RDS")
+mantel(kov[[1]], kinship_matrix)
+mantel(kov[[2]], kinship_matrix)
+mantel(kov[[3]], kinship_matrix)
 
 # HI Matrices ------------------------------------------------------
 
@@ -538,7 +579,8 @@ ggplot(aes(x = Year), data = HAB_HI_data) +
   scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
                     name = "Variables", 
                     labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
-  theme(panel.background = element_blank())
+  theme(panel.background = element_blank()) + 
+  geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
@@ -789,6 +831,7 @@ two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]
 df_list = data.frame(edge_weight = HAB_data[, 1],
                      HAB_During = HAB_data[, 3],
                      HAB_After = HAB_data[, 4],
+                     Period = as.factor(HAB_data[, 2]),
                      HRO = unlist(lapply(kov, function (df) df[upper.tri(df, diag = TRUE)])),
                      sex_similarity = rep(ILV_mat[[1]][upper.tri(ILV_mat[[1]], diag = TRUE)], 3),
                      age_similarity = rep(ILV_mat[[2]][upper.tri(ILV_mat[[2]], diag = TRUE)], 3),
@@ -807,36 +850,29 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 # Multimembership models in brms
-fit_brm.0 <- brm(edge_weight ~ (1 | mm(node_id_1, node_id_2)), 
+fit_sri.0 <- brm(edge_weight ~ (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)
-fit_brm.1 <- brm(edge_weight ~ HRO + age_similarity + sex_similarity + 
-                   (1 | mm(node_id_1, node_id_2)), 
-                 family = Beta(), chains = 3, data = df_list)
-fit_brm.2 <- brm(edge_weight ~ HI_similarity + HAB_During + HAB_After + 
+fit_sri.1 <- brm(edge_weight ~ HI_similarity + Period + 
                    HRO + age_similarity + sex_similarity + 
                    (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)
-fit_brm.3 <- brm(edge_weight ~ HI_similarity * HAB_During + 
-                   HI_similarity * HAB_After + 
+fit_sri.2 <- brm(edge_weight ~ HI_similarity * Period +
                    HRO + age_similarity + sex_similarity + 
                    (1 | mm(node_id_1, node_id_2)), 
                  family = Beta(), chains = 3, data = df_list)
 
 # Save data
-looic.h1 <- loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, compare = T)
+looic.h1 <- loo(fit_sri.0, fit_sri.1, fit_sri.2, compare = T)
 saveRDS(looic.h1, "looic.h1.RData")
-saveRDS(fit_brm.3, "fit_brm.3.RData")
-
-# LOOIC
-looic.h1 <- readRDS("looic.h1.RData")
-looic.h1$loos$fit_brm.0$looic
-looic.h1$loos$fit_brm.1$looic
-looic.h1$loos$fit_brm.2$looic
-looic.h1$loos$fit_brm.3$looic
+saveRDS(fit_sri.0, "fit_sri.0.RData")
+saveRDS(fit_sri.1, "fit_sri.1.RData")
+saveRDS(fit_sri.2, "fit_sri.2.RData")
 
 # Summary Statistics
-fit_brm.3 <- readRDS("fit_brm.3.RData")
-summary(fit_brm.3)
+fit_sri.0 <- readRDS("fit_sri.0.RData")
+fit_sri.1 <- readRDS("fit_sri.1.RData")
+fit_sri.2 <- readRDS("fit_sri.2.RData")
+summary(fit_sri.2)
 
 # Check for model convergence
 model <- fit_brm.3
@@ -848,42 +884,46 @@ pp_check(model) # check to make sure they line up
 posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
 coefficients <- colnames(posterior_samples)
 summary(posterior_samples)
-mean(posterior_samples$`b_HI_similarity:HAB_During` > 0)
-mean(posterior_samples$`b_HI_similarity:HAB_After` > 0)
+mean(posterior_samples$`b_HI_similarity:Period3` < 0)
 mean(posterior_samples$`b_HAB_During` > 0)
 mean(posterior_samples$`b_HAB_After` > 0)
 
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters
 
-theme_update(text = element_text(family = "sans"))
-
 # Create mcmc_areas plot
 mcmc_plot <- mcmc_areas(
   as.array(model), 
-  pars = c("b_HI_similarity", "b_HAB_During", "b_HAB_After", 
+  pars = c("b_HI_similarity", "b_Period2", "b_Period3", 
            "b_HRO", "b_age_similarity", "b_sex_similarity", 
-           "b_HI_similarity:HAB_During", "b_HI_similarity:HAB_After"),
-  prob = 0.8, # 80% intervals
+           "b_HI_similarity:Period2", "b_HI_similarity:Period3"),
+  prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
-  point_est = "mean",
+  point_est = "mean"
 ) +
   labs(
     title = "Posterior parameter distributions",
-    subtitle = "with medians and 80% intervals"
+    subtitle = "with medians and 95% intervals"
   ) +
-  theme_update(text = element_text(family = "sans"))
+  theme_minimal() + # Use a minimal theme
+  theme(
+    text = element_text(family = "sans"), # Set text family
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    panel.background = element_blank(), # Remove panel background
+    axis.line = element_line(color = "black") # Add axis lines
+  )
 
 mcmc_plot + scale_y_discrete(
   labels = c(
-    "b_HAB_During" = "During HAB",
-    "b_HAB_After" = "After HAB",
-    "b_HRO" = "HRO",
+    "b_Period2" = "During HAB",
+    "b_Period3" = "After HAB",
+    "b_HRO" = "Home-range Overlap",
     "b_age_similarity" = "Age Similarity",
     "b_sex_similarity" = "Sex Similarity",
-    "b_HI_similarity" = "HC Similarity",
-    "b_HI_similarity:HAB_During" = "HC Similarity:During HAB",
-    "b_HI_similarity:HAB_After" = "HC Similarity:After HAB"
+    "b_HI_similarity" = "Human-centric Similarity",
+    "b_HI_similarity:Period2" = "Human-centric Similarity:During HAB",
+    "b_HI_similarity:Period3" = "Human-centric Similarity:After HAB"
   )
 )
 
@@ -913,34 +953,27 @@ HI_IDs <- unique(as.vector(unlist(HI_list))) # Put them all together
 # igraph format with weight
 el_years <- readRDS("el_years.RData")
 
-n.cores <- detectCores()
-registerDoParallel(n.cores)
-dolphin_ig <- list()
-for (j in seq_along(list_years)) {
-  dolphin_ig[[j]] <- graph_from_adjacency_matrix(as.matrix(nxn[[j]]),
-                                     mode="undirected",
-                                     weighted=TRUE, diag=FALSE)
-}  
-
+dolphin_ig <- lapply(nxn, function (mtx) 
+  graph_from_adjacency_matrix(as.matrix(mtx),
+                              mode="undirected",
+                              weighted=TRUE, diag=FALSE))
 
 # Modularity by the WalkTrap algorithm 
-dolphin_walk <- list()
-for (k in seq_along(list_years)) {
-  dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], weights = E(dolphin_ig[[k]])$weight, 
-                                        steps = 4, merges = TRUE, modularity = TRUE, membership = TRUE)
-} 
+dolphin_walk <- lapply(dolphin_ig, function (df)
+  cluster_walktrap(df, weights = E(df)$weight,
+                   steps = 4, merges = TRUE, 
+                   modularity = TRUE, membership = TRUE))
 
 # Create an unweighted network
-dolp_ig <- list()
-for (l in seq_along(list_years)) {
-  dolp_ig[[l]] <- graph_from_edgelist(el_years[[l]][,1:2])
+dolp_ig <- lapply(el_years, function (el) {
+  ig <- graph_from_edgelist(el[,1:2])
   # Add the edge weights to this network
-  E(dolp_ig[[l]])$weight <- as.numeric(el_years[[l]][,3])
+  E(ig)$weight <- as.numeric(el[,3])
   # Create undirected network
-  dolp_ig[[l]] <- as.undirected(dolp_ig[[l]])
-}   
-### End parallel processing
-stopImplicitCluster()
+  ig <- as.undirected(ig)
+  return(ig)
+  }
+)
 
 # Newman's Q modularity
 newman <- lapply(dolp_ig, function (df) {
@@ -970,53 +1003,44 @@ for (i in seq_along(dolp_ig)) {
 kernel <- readRDS("kernel.RData")
 
 # Create a for loop to store each period's average coordinates
+# Extract 50% home range polygons
+homerange50 <- lapply(kernel, function (kud) getverticeshr(kud, percent = 50))
+
+# Initialize an empty list to store individual IDs and their centroids
 centroid_list <- list()
 
-for (k in 1:3) {
+# Loop through each individual's home range polygons
+for(i in seq_along(homerange50)) {
   
-  # Create an empty data frame to store centroid coordinates
-  centroid_coords <- data.frame(dolphin = character(),
-                                cent_lat = numeric(),
-                                cent_lon = numeric())
+  # Initialize an empty data frame to store individual IDs and their centroids
+  centroids_df <- data.frame(ID = character(), Latitude = numeric(), Longitude = numeric())
   
-  # Take out each period's home range
-  home_range <- kernel[[k]]
-  
-  # Loop through each dolphin's home range
-  for (i in 1:length(home_range)) {
-    # Extract the spatial points representing the home range
-    points <- coordinates(home_range[[i]])
+  for (id in names(kernel[[1]])) {
+    # Convert to sf object for further analysis or export
+    homerange50_sf <- st_as_sf(homerange50[[i]], coords = c("X", "Y"), crs = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
     
-    # Make grid data
-    coordinates_data <- cbind(kernel[[k]][[i]]@coords, 
-                         kernel[[k]][[i]]@grid.index)
+    # Get the centroid of the geometry
+    centroid <- st_centroid(homerange50_sf$geometry[homerange50_sf$id == id])
     
-    # Extract the row with the maximum value in the third column 
-    max_index <- which.max(coordinates_data[, 3]) 
-    row_with_max <- coordinates_data[max_index, ]
-    
-    # Find the center point
-    cent_lat <- row_with_max[2]
-    cent_lon <- row_with_max[1]
-    
-    # Add the centroid coordinates to the data frame
-    centroid_coords <- rbind(centroid_coords, data.frame(dolphin = names(home_range)[i],
-                                                         cent_lat = cent_lat,
-                                                         cent_lon = cent_lon))
+    # Add the individual ID and centroid coordinates to the data frame
+    centroids_df <- rbind(centroids_df, data.frame(ID = id, Latitude = centroid[[1]][2], Longitude = centroid[[1]][1]))
   }
   
-  centroid_list[[k]] <- centroid_coords
-  
+  # Put this into a list
+  centroid_list[[i]] <- centroids_df
 }
 
 # Order data
 order_rows <- rownames(nxn[[1]])
 
 centroid_list <- lapply(centroid_list, function(df) { 
-  df <- df[df$dolphin %in% order_rows, , drop = FALSE]  # Subsetting rows based on order_rows
-  df <- df[match(order_rows, df$dolphin), ]  # Reorder rows based on order_rows
+  df <- df[df$ID %in% order_rows, , drop = FALSE]  # Subsetting rows based on order_rows
+  df <- df[match(order_rows, df$ID), ]  # Reorder rows based on order_rows
   return(df)  # Returning the modified data frame
 })
+
+saveRDS(centroid_list, "centroid_list.RData")
+centroid_list <- readRDS("centroid_list.RData")
 
 # Define a function to convert UTM coordinates to longitude and latitude
 utm_to_lonlat <- function(x, y, zone = 17, northern = TRUE) {
@@ -1029,8 +1053,8 @@ utm_to_lonlat <- function(x, y, zone = 17, northern = TRUE) {
 
 # Convert UTM coordinates to longitude and latitude
 centroid_list <- lapply(centroid_list, function(df) {
-  lonlat <- utm_to_lonlat(df$cent_lon, df$cent_lat)
-  centroid_list <- data.frame(ID = df$dolphin, 
+  lonlat <- utm_to_lonlat(df$Longitude, df$Latitude)
+  centroid_list <- data.frame(ID = df$ID, 
                               X = lonlat[,1],
                               Y = lonlat[,2])
   return(centroid_list)})
@@ -1039,6 +1063,8 @@ centroid_list <- lapply(centroid_list, function(df) {
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 counter <- 0
 labeled_nodes <- list()
+plot_list <- list()
+register_google(key = "AIzaSyAgFfxIJmkL8LAWE7kHCqSqKBQDvqa9umI")
   
 for (i in 1:length(ig)) {  # Loop through periods
     
@@ -1052,42 +1078,41 @@ for (i in 1:length(ig)) {  # Loop through periods
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
     # Get map of Sarasota, Florida
-    register_stadiamaps(key = "fe423a00-aef9-45c1-b781-4d1156b54ad5")
-    
-    sarasota <- get_stadiamap(
-      bbox = c(left = -82.7, bottom = 27.25, right = -82.52, top = 27.5),
-      maptype = "stamen_terrain",
-      zoom = 12
-    )
-    sarasota_map <- ggmap(sarasota)
+    mybasemap <- get_map(location = c(left = -82.7, bottom = 27.25, right = -82.52, top = 27.5),
+                         zoom = 10, 
+                         source = "google",
+                         maptype = 'satellite',
+                         color = 'bw')
+    sarasota_map <- ggmap(mybasemap)
     
     # add geographic coordinates
     net[[i]] %v% "lat" <- layout_coords[,"Y"]
     net[[i]] %v% "lon" <- layout_coords[,"X"]
     
     # Graph network
-    ggnetworkmap(sarasota_map, net[[i]])
+    plot <- ggnetworkmap(
+      sarasota_map, # Load in map
+      net[[i]], # Load in network
+      size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
+      alpha = 0.5, # transparency of nodes
+      node.color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
+      segment.alpha = 0.2, # transparency of edges
+      segment.size = edge_attr(ig[[i]])$weight * 4, # edge thickness
+      label.nodes = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, FALSE),
+      label.size = 0.8) + 
+      theme(axis.line = element_blank())
     
-    ggnet(net[[i]],
-           color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
-           shape = "phono", 
-           size =  ifelse(labeled_nodes[[i]], 3, 0.5), 
-           edge.size = E(ig[[i]])$weight * 4, # edge thickness
-           edge.color = adjustcolor("grey", alpha.f = 0.2),
-           edge.alpha = 0.5,
-           mode = adjusted_layout,
-           label = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, FALSE),
-           label.size = 0.8,
-           legend.position = "none",
-           legend.size = "none"
-    ) + theme(axis.line = element_blank())
-    
-    # Add the plot with a box around it
-    box()
+    plot_list[[i]] <- plot
   
   }
 
+# Plot one at a time
+plot_list[[1]]
+plot_list[[2]]
+plot_list[[3]]
 
+# Arrange all plots in a single grid
+grid.arrange(grobs = plot_list, ncol = 3) # Adjust ncol as needed
 
 # What is the cluster size for each period?
 combined_cluster_data <- list()

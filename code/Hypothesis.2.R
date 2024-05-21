@@ -8,7 +8,6 @@ setwd("../data")
 # Load all necessary packages
 library(ggalluvial) # For alluvial plot
 library(rstatix) # for post-hoc test
-library(bayesboot) # bootstraping
 library(tnet) # For weights
 library(igraph) # Measure centrality here
 library(ggraph)
@@ -235,6 +234,7 @@ result_df$HI <- as.factor(result_df$HI)
 saveRDS(result_df, "result_df.RData")
 
 # Look at demographics of HI dolphins
+result_df <- readRDS("result_df.RData")
 ILV_dem <- read.csv("ILV_dem.csv") # Read in demographics
 ILV_dem <- ILV_dem[, c("Alias", "Sex", "BirthYear")]
 colnames(ILV_dem) <- c("ID", "Sex", "Age")
@@ -280,6 +280,11 @@ result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 # Make sure there is only one ID in each period
 result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
+# How many HI dolphins in each period?
+length(result_df$ID[result_df$HI != "NF" & result_df$Period == "1-Before_HAB"])
+length(result_df$ID[result_df$HI != "NF" & result_df$Period == "2-During_HAB"])
+length(result_df$ID[result_df$HI != "NF" & result_df$Period == "3-After_HAB"])
+
 # Check assumptions of model
 ## Visualize relationship
 plot(result_df$Strength ~ result_df$Prop_BG)
@@ -305,29 +310,35 @@ durbinWatsonTest(test_model) # not independent
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
+# Set priors
+full_priors <- c(
+  # Prior for Prop_BG
+  set_prior("normal(0, 1)", class = "b", coef = "Prop_BG"),
+  # Prior for Prop_FG
+  set_prior("normal(0, 1)", class = "b", coef = "Prop_FG"),
+  # Prior for Prop_SD
+  set_prior("normal(0, 1)", class = "b", coef = "Prop_SD")
+  )
+
 # Models in brms
-fit_brm.1 <- brm(Strength ~ 1 + (1 | numeric_ID),
-                 chains = 3, family = gaussian, data = result_df)
-fit_brm.2 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + (1 | numeric_ID), 
-                 chains = 3, family = gaussian, data = result_df)
-fit_brm.3 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Period + (1 | numeric_ID), 
-                 chains = 3, family = gaussian, data = result_df)
-fit_brm.4 <- brm(Strength ~
+fit_sc.0 <- brm(Strength ~ 1 + (1 | numeric_ID),
+                 chains = 4, family = gaussian, data = result_df)
+fit_sc.1 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Period + (1 | numeric_ID), 
+                 chains = 4, family = gaussian, data = result_df)
+fit_sc.2 <- brm(Strength ~
                    Prop_BG * Period + 
                    Prop_FG * Period +
                    Prop_SD * Period + 
                    (1 | numeric_ID),
                  chains = 4, iter = 4000, warmup = 2000, 
-                 family = gaussian, data = result_df)
+                 family = gaussian, data = result_df, prior = full_priors)
 
-loo(fit_brm.0, fit_brm.1, fit_brm.2, fit_brm.3, fit_brm.4, compare = T)
-saveRDS(fit_brm.4, "fit_brm.4.RData")
-saveRDS(fit_brm.4, "fit_brm.NF.RData")
-saveRDS(fit_brm.4, "fit_brm.new.RData")
-fit_brm.NF <- readRDS("fit_brm.NF.RData")
-fit_brm.4 <- readRDS("fit_brm.4.RData")
-fit_brm.new <- readRDS("fit_brm.new.RData")
-summary(fit_brm.4)
+loo(fit_sc.0, fit_sc.1, fit_sc.2, compare = T)
+saveRDS(fit_sc.0, "fit_sc.0.RData")
+saveRDS(fit_sc.1, "fit_sc.1.RData")
+saveRDS(fit_sc.2, "fit_sc.2.RData")
+fit_sc.2 <- readRDS("fit_sc.2.RData")
+summary(fit_sc.2)
 
 # Bootstrap
 ## Define function
@@ -357,18 +368,23 @@ saveRDS(bootstrap_result, "bootstrap_result.RData")
 boot.ci(bootstrap_result, type = "bca")
 
 # Check for model convergence
-model <- fit_brm.4
+model <- fit_sc.2
 plot(model)
 pp_check(model) # check to make sure they line up
 
 # Find the significance
 posterior_samples <- as.data.frame(as.matrix(posterior_samples(model)))
 coefficients <- colnames(posterior_samples)
-summary(posterior_samples)
-mean(posterior_samples$`b_Intercept` < 0)
+mean(posterior_samples$`b_Prop_BG` < 0)
+mean(posterior_samples$`b_Prop_FG` > 0)
 mean(posterior_samples$`b_Prop_SD` > 0)
-mean(posterior_samples$`b_During` > 0)
-mean(posterior_samples$`b_After` > 0)
+mean(posterior_samples$`b_Period3MAfter_HAB` > 0)
+mean(posterior_samples$`b_Prop_BG:Period2MDuring_HAB` < 0)
+mean(posterior_samples$`b_Prop_BG:Period3MAfter_HAB` < 0)
+mean(posterior_samples$`b_Period2MDuring_HAB:Prop_FG` < 0)
+mean(posterior_samples$`b_Period3MAfter_HAB:Prop_FG` < 0)
+mean(posterior_samples$`b_Period2MDuring_HAB:Prop_SD` < 0)
+mean(posterior_samples$`b_Period3MAfter_HAB:Prop_SD` < 0)
 
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters

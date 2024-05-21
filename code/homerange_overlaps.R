@@ -11,6 +11,7 @@ setwd("../data")
 # PART 1: calculate dyadic home range overlaps of individuals----------------------------
 
 ## load all necessary packages
+library(MASS)
 library(sf) # Convert degrees to meters
 library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
@@ -85,6 +86,8 @@ max(sqrt((dolph.sp[[period]]@coords[,1] - min(dolph.sp[[period]]@coords[,1]))^2 
 # Use the calculated extent in kernelUD
 kernel <- kernelUD(dolph.sp, h = 1000)
 
+# Get centroid points for individuals
+kernel <- readRDS("kernel.RData")
 
 ###########################################################################
 # PART 2: Calculate Dyadic HRO Matrix: HRO = (Rij/Ri) * (Rij/Rj)------------------------------------------------------------
