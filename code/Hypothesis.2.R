@@ -6,7 +6,10 @@
 setwd("../data")
 
 # Load all necessary packages
+library(GGally) # For mapping networks in ggplot
 library(ggalluvial) # For alluvial plot
+library(network) # For assigning coordinates to nodes %v%
+library(RColorBrewer) # For strength gradient network colors
 library(rstatix) # for post-hoc test
 library(tnet) # For weights
 library(igraph) # Measure centrality here
@@ -26,7 +29,6 @@ library(ggpattern) # heatmap hatches
 library(car) # durbinWatsonTest
 library(rstan) # To make STAN run faster
 library(tidybayes) # get_variables
-library(dplyr)
 source("../code/functions.R") # Matrix_to_edge_list
 
 # Read in full datasheet and list (after wrangling steps)
@@ -280,6 +282,22 @@ result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 # Make sure there is only one ID in each period
 result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
 
+# Check var and hists
+var(result_df$Prop_BG)
+hist(result_df$Prop_BG[result_df$Period == "1-Before_HAB"])
+hist(result_df$Prop_BG[result_df$Period == "2-During_HAB"])
+hist(result_df$Prop_BG[result_df$Period == "3-After_HAB"])
+
+var(result_df$Prop_FG)
+hist(result_df$Prop_FG[result_df$Period == "1-Before_HAB"])
+hist(result_df$Prop_FG[result_df$Period == "2-During_HAB"])
+hist(result_df$Prop_FG[result_df$Period == "3-After_HAB"])
+
+var(result_df$Prop_SD)
+hist(result_df$Prop_SD[result_df$Period == "1-Before_HAB"])
+hist(result_df$Prop_SD[result_df$Period == "2-During_HAB"])
+hist(result_df$Prop_SD[result_df$Period == "3-After_HAB"])
+
 # How many HI dolphins in each period?
 length(result_df$ID[result_df$HI != "NF" & result_df$Period == "1-Before_HAB"])
 length(result_df$ID[result_df$HI != "NF" & result_df$Period == "2-During_HAB"])
@@ -340,33 +358,6 @@ saveRDS(fit_sc.2, "fit_sc.2.RData")
 fit_sc.2 <- readRDS("fit_sc.2.RData")
 summary(fit_sc.2)
 
-# Bootstrap
-## Define function
-bootstrap_model <- function(data, indices) {
-  # Subset the data using the indices
-  data_resampled <- data[indices, ]
-  # Fit the model on the resampled data
-  model_resampled <- brm(Strength ~
-                           Prop_BG * Period + 
-                           Prop_FG * Period +
-                           Prop_SD * Period + 
-                           (1 | numeric_ID),
-                         chains = 4, iter = 4000, warmup = 2000, 
-                         family = gaussian, data = data_resampled)
-  
-  # Debugging: Print the model summary
-  print(summary(model_resampled))
-  
-  # Return the model's R-squared value 
-  return(bayes_R2(model_resampled))
-}
-
-## Perform bootstrap
-bootstrap_result <- boot(data = result_df, statistic = bootstrap_model, R = 2)
-saveRDS(bootstrap_result, "bootstrap_result.RData")
-## Analyze bootstrap
-boot.ci(bootstrap_result, type = "bca")
-
 # Check for model convergence
 model <- fit_sc.2
 plot(model)
@@ -399,18 +390,26 @@ mcmc_plot <- mcmc_areas(
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
-) + labs(
-  title = "Posterior parameter distributions",
-  subtitle = "with medians and 95% intervals"
-) + theme_update(text = element_text(family = "sans"))
+) +
+  labs(
+    title = "Posterior parameter distributions",
+    subtitle = "with medians and 95% intervals"
+  ) +
+  theme_minimal() + # Use a minimal theme
+  theme(
+    text = element_text(family = "sans"), # Set text family
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    panel.background = element_blank(), # Remove panel background
+    axis.line = element_line(color = "black") # Add axis lines
+  )
 
 mcmc_plot + scale_y_discrete(
   labels = c(
-    "b_Period2MDuring_HAB" = "During", 
-    "b_Period3MAfter_HAB" = "After"
+    "b_Period2MDuring_HAB" = "During HAB", 
+    "b_Period3MAfter_HAB" = "After HAB"
   )
-) +
-  theme(panel.background = element_blank())
+)
 
 ## BG
 # Create mcmc_areas plot
@@ -421,10 +420,19 @@ mcmc_plot <- mcmc_areas(
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
-) + labs(
-  title = "Posterior parameter distributions",
-  subtitle = "with medians and 95% intervals"
-) + theme_update(text = element_text(family = "sans"))
+) +
+  labs(
+    title = "Posterior parameter distributions",
+    subtitle = "with medians and 95% intervals"
+  ) +
+  theme_minimal() + # Use a minimal theme
+  theme(
+    text = element_text(family = "sans"), # Set text family
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    panel.background = element_blank(), # Remove panel background
+    axis.line = element_line(color = "black") # Add axis lines
+  )
 
 mcmc_plot + scale_y_discrete(
   labels = c(
@@ -432,8 +440,7 @@ mcmc_plot + scale_y_discrete(
     "b_Prop_BG:Period2MDuring_HAB" = "BG: During", 
     "b_Prop_BG:Period3MAfter_HAB" = "BG: After"
   )
-) +
-theme(panel.background = element_blank())
+)
 
 ## FG
 mcmc_plot <- mcmc_areas(
@@ -443,10 +450,19 @@ mcmc_plot <- mcmc_areas(
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
-) + labs(
-  title = "Posterior parameter distributions",
-  subtitle = "with medians and 95% intervals"
-) + theme_update(text = element_text(family = "sans"))
+) +
+  labs(
+    title = "Posterior parameter distributions",
+    subtitle = "with medians and 95% intervals"
+  ) +
+  theme_minimal() + # Use a minimal theme
+  theme(
+    text = element_text(family = "sans"), # Set text family
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    panel.background = element_blank(), # Remove panel background
+    axis.line = element_line(color = "black") # Add axis lines
+  )
 
 mcmc_plot + scale_y_discrete(
   labels = c(
@@ -454,8 +470,7 @@ mcmc_plot + scale_y_discrete(
     "b_Period2MDuring_HAB:Prop_FG" = "FG: During", 
     "b_Period3MAfter_HAB:Prop_FG" = "FG: After"
   )
-) +
-  theme(panel.background = element_blank())
+)
 
 ## SD
 mcmc_plot <- mcmc_areas(
@@ -465,23 +480,30 @@ mcmc_plot <- mcmc_areas(
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
-) + labs(
-  title = "Posterior parameter distributions",
-  subtitle = "with medians and 95% intervals"
-) + theme_update(text = element_text(family = "sans"))
+) +
+  labs(
+    title = "Posterior parameter distributions",
+    subtitle = "with medians and 95% intervals"
+  ) +
+  theme_minimal() + # Use a minimal theme
+  theme(
+    text = element_text(family = "sans"), # Set text family
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    panel.background = element_blank(), # Remove panel background
+    axis.line = element_line(color = "black") # Add axis lines
+  )
 
 mcmc_plot + scale_y_discrete(
   labels = c(
     "b_Prop_SD" = "Scavenging/Depredating",
     "b_Period2MDuring_HAB:Prop_SD" = "SD: During", 
     "b_Period3MAfter_HAB:Prop_SD" = "SD: After"
-    )
-) +
-  theme(panel.background = element_blank())
-
+  )
+)
 
 ###########################################################################
-# PART 4: Look at Group Sizes ---------------------------------------------
+# PART 4: Look at HI on Group Sizes and Centrality ---------------------------------------------
 
 # Read in GBI
 gbi <- readRDS("gbi.RData")
@@ -533,13 +555,25 @@ result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB",
 result_df$HI <- factor(result_df$HI, levels = c("NF", "BG", "FG", "SD"))
 result_df$Period <- as.factor(result_df$Period)
 
-# Plot the HI behaviors for every year
+# Plot the HI behaviors and group sizes for every year
 ggplot(result_df, aes(x = HI, y = Group_size, fill = HI)) +
   geom_boxplot() +
   facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
                                                       "2-During_HAB" = "During", 
                                                       "3-After_HAB" = "After"))) +
   labs(x = "Human-centric Behavior", y = "Average Group Size") +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.grid = element_blank())
+# Unequal variance
+
+# Plot the HI behaviors and centrality for every year
+ggplot(result_df, aes(x = HI, y = Strength, fill = HI)) +
+  geom_boxplot() +
+  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
+                                                      "2-During_HAB" = "During", 
+                                                      "3-After_HAB" = "After"))) +
+  labs(x = "Human-centric Behavior", y = "Social Centrality") +
   theme(strip.background = element_blank(),
         strip.text = element_text(size = 12, face = "bold"),
         panel.grid = element_blank())
@@ -553,8 +587,9 @@ after <- result_df[result_df$Period == "3-After_HAB", ]
 # Look at the difference in HI groups
 ## Check assumptions of anova
 hist(result_df$Group_size) # not normal
+hist(result_df$Strength) # normal
 
-## Run post-hoc test
+## Run post-hoc test for Group size
 kruskal.test(Group_size ~ HI, data = result_df)
 kruskal.test(Group_size ~ HI, data = before)
 kruskal.test(Group_size ~ HI, data = during)
@@ -570,6 +605,18 @@ avg_group_sizes <- lapply(gbi, function (mtx) {
   row_sum <- rowSums(mtx)
   avg_group_sizes <- mean(row_sum)
   return(avg_group_sizes)})
+
+## Run post-hoc test for Social centrality
+kruskal.test(Strength ~ HI, data = result_df)
+kruskal.test(Strength ~ HI, data = before)
+kruskal.test(Strength ~ HI, data = during)
+kruskal.test(Strength ~ HI, data = after)
+
+f.model <- dunn_test(Strength ~ HI, data = result_df, detailed = T)
+b.model <- dunn_test(Strength ~ HI, data = before, detailed = T)
+d.model <- dunn_test(Strength ~ HI, data = during, detailed = T)
+a.model <- dunn_test(Strength ~ HI, data = after, detailed = T)
+
 
 ###########################################################################
 # PART 5: Circular heat map ---------------------------------------------
@@ -633,7 +680,9 @@ df_long <- reshape2::melt(unique_ids, id.vars = c("ID", "Period"), measure.vars 
 rank_sum <- data.frame(ID = sum_by_id$ID, Period = "Rank-Sum",
                        variable = "Strength", 
                        value = sum_by_id$Strength)
-rank_sum$value <- scale(c(rank_sum$value))
+ 
+# Normalize strength
+rank_sum$value <- (rank_sum$value - min(rank_sum$value)) / (max(rank_sum$value) - min(rank_sum$value))
 
 # Create different data frames for each HI behavior
 ## BG
@@ -874,8 +923,15 @@ ggplot(df_long_SD, aes(x = Period, y = value, group = ID, color = Prop_SD_Rank))
 HI_list <- readRDS("HI_list.RData")
 HI_list <- HI_list[-4] # Get rid of natural foragers
 
-# Read in ig object
-ig <- readRDS("ig.RData")
+# Read in network object and strength values
+net <- readRDS("net.RData")
+result_df <- readRDS("result_df.RData")
+
+# Make sure there is only one ID in each period
+result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
+
+# Normalize strength
+result_df$Strength <- (result_df$Strength - min(result_df$Strength)) / (max(result_df$Strength) - min(result_df$Strength))
 
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
@@ -883,14 +939,20 @@ ig <- readRDS("ig.RData")
 layout_list <- list()
 
 # Loop through the list of graphs and save layout information
-for (i in 1:length(ig)) {
-  layout_list[[i]] <- layout_with_fr(ig[[i]])
+for (i in 1:length(net)) {
+  layout_list[[i]] <- network.layout.fruchtermanreingold(net[[i]], NULL)
 }
 
-# Set up the plotting layout
-layout.matrix <- matrix(c(1:9), nrow = 3, ncol = 3)
-layout(mat = layout.matrix)    
-par(mar = c(0.6, 0.6, 0.6, 0.6))
+# Generate a color palette
+result_df$colors <- viridis(length(result_df$Strength), 
+                  option = "plasma")[as.numeric(cut(result_df$Strength, 
+                                                    breaks = length(result_df$Strength)))]
+
+# Create an empty list with dimensions num_i x num_j
+plot_list <- vector("list", 3)
+for (i in seq_along(plot_list)) {
+  plot_list[[i]] <- vector("list", 3)
+}
 
 # Loop through the list of graphs and plot them side by side
 for (j in 1:length(HI_list)) {  # Loop through columns first
@@ -899,37 +961,61 @@ for (j in 1:length(HI_list)) {  # Loop through columns first
   combined_layout <- layout_list[[1]]
   counter <- 0
   
-  for (i in 1:length(ig)) {  # Loop through rows
+  for (i in 1:length(net)) {  # Loop through rows
     
     counter <- counter + 1
     
     # Get nodes for each behavior
-    labeled_nodes <- V(ig[[i]])$name %in% HI_list[[j]][[i]]  # Fixed index here
+    labeled_nodes <- HI_list[[j]][[i]]  # Fixed index here
+    
+    # Filter the dataframe for the period
+    period_val <- unique(result_df$Period)[i]
+    filtered_df <- subset(result_df, Period == period_val)
+    
+    # Match the filtered dataframe to the vertex names in the graph object
+    matched_indices <- match(net[[i]] %v% "vertex.names", filtered_df$ID)
+    filtered_df <- filtered_df[matched_indices, ]
+    
+    # Match node colors
+    node_colors <- filtered_df$colors
+    
+    # Filter the dataframe for the period and HI
+    filtered_df <- subset(filtered_df, ID %in% labeled_nodes)
+    matched_indices <- match(net[[i]] %v% "vertex.names", filtered_df$ID)
+    
+    # Handle NA values in matched_colors by assigning "black"
+    node.colors <- ifelse(is.na(matched_indices), "black", node_colors)
+    
+    # Now make node sizes vector
+    node.sizes <- ifelse(node.colors == "black", 0.1, 1)
     
     # Create the plot
-    plot(ig[[i]],
-         layout = combined_layout,
-         edge.width = E(ig[[i]])$weight * 4, # edge thickness
-         edge.color = adjustcolor("grey", alpha.f = 0.2),
-         vertex.size = ifelse(labeled_nodes, 10, 3), #sqrt(igraph::strength(ig[[i]], vids = V(ig[[i]]), mode = c("all"), loops = TRUE) * 10), # Changes node size based on an individual's strength (centrality)
-         vertex.frame.color = NA,
-         vertex.label.family = "Helvetica",
-         vertex.label = ifelse(labeled_nodes, V(ig[[i]])$name, NA),
-         vertex.label.color = "black",
-         vertex.label.cex = 0.8,
-         vertex.label.dist = 2,
-         vertex.frame.width = 0.01,
-         vertex.color = "black")
+    net_plot <- ggnet2(net[[i]],
+           mode = combined_layout,
+           edge.size = "weight", # edge thickness
+           edge.color = "grey",
+           size = node.sizes,
+           node.label = labeled_nodes,
+           label.color = "white", 
+           label.size = 2,
+           node.color = node.colors,
+           edge.alpha = 0.5
+           ) 
     
-    # Add the plot with a box around it
-    box()
+    plot_list[[j]][[i]] <- net_plot
     
   }
 }
 
-
-# Set up data
-result_df <- readRDS("result_df.RData")
+plot_list[[1]][[1]] # Before BG
+plot_list[[1]][[2]] # During BG
+plot_list[[1]][[3]] # After BG
+plot_list[[2]][[1]] # Before FG 
+plot_list[[2]][[2]] # During FG
+plot_list[[2]][[3]] # After FG
+plot_list[[3]][[1]] # Before SD
+plot_list[[3]][[2]] # During SD
+plot_list[[3]][[3]] # After SD
 
 # Plot the density plots for each period
 my_colors <- c("#FC4E07", "#009E73", "#00AFBB")

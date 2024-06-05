@@ -6,8 +6,8 @@
 setwd("../data")
 
 # Load all necessary packages
+library(ggOceanMaps) # To map florida
 library(intergraph) # To use igraph network in ggnet
-library(gridExtra) # plot all of the plots on one graph
 library(sna) # For network
 library(GGally) # For mapping networks in ggplot
 library(network) # For assigning coordinates to nodes %v%
@@ -30,18 +30,11 @@ library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
 library(adehabitatHR) # Caluculate MCPs and Kernel density 
 library(magrittr) # All below is for STAN
 library(dplyr) # for organizing code
-library(purrr) 
-library(forcats)
-library(tidyr)
-library(modelr)
-library(ggdist)
-library(tidybayes)
-library(cowplot)
 library(rstan) # To make STAN run faster
 library(ggrepel)
 library(RColorBrewer)
 library(gganimate)
-library(posterior)
+library(posterior) # Find the posterior sample names
 library(distributional)
 library(doParallel) # Faster computing
 source("../code/functions.R") # nxn
@@ -187,7 +180,7 @@ saveRDS(nxn, file = "nxn.RData")
 ###########################################################################
 # PART 3: CV and Modularity ---------------------------------------------
 
-## Coefficient of Variantion ##
+## Coefficient of Variation ##
 # Read in null cv values for one year
 cv_null <- readRDS("cv_years.RData")
 ## Remove NAs, if any
@@ -326,9 +319,10 @@ ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0,
 colnames(ILV_df) <- c("Code", "Sex", "Age")
 
 # Find the demographics of the population
-ILV_dem <- ILV[ILV$Alias %in% rownames(nxn[[1]]),]
+ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
 sum(ILV_dem$Sex == "Female")
 sum(ILV_dem$Sex == "Male")
+sum(is.na(ILV_dem$Age))
 write.csv(ILV_dem, "ILV_dem.csv")
 
 # Make sim and diff matrices
@@ -572,13 +566,16 @@ HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) su
 HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
 # Create a barplot
 ggplot(aes(x = Year), data = HAB_HI_data) +
-  geom_bar(aes(y = ConfHI, fill = "ConfHI"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
-  geom_bar(aes(y = HAB, fill = "HAB"), stat = "identity", alpha = 0.5, position = position_dodge(width = 0.8)) +
-  scale_y_continuous(name = "Frequency of human-centric behavior", sec.axis = sec_axis(~., name = "Number of weeks with >100,000 cells/L")) +
+  geom_line(aes(y = ConfHI, color = "ConfHI"), size = 1) + 
+  geom_point(aes(y = ConfHI, color = "ConfHI"), size = 2) + 
+  geom_line(aes(y = HAB, color = "HAB"), size = 1) + 
+  geom_point(aes(y = HAB, color = "HAB"), size = 2) + 
+  scale_y_continuous(name = "Frequency of human-centric behavior", 
+                     sec.axis = sec_axis(~., name = "Number of weeks with >100,000 cells/L")) +
   labs(x = "Year") +
-  scale_fill_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
-                    name = "Variables", 
-                    labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
+  scale_color_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
+                     name = "Variables", 
+                     labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
   theme(panel.background = element_blank()) + 
   geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
 
@@ -864,18 +861,18 @@ fit_sri.2 <- brm(edge_weight ~ HI_similarity * Period +
 # Save data
 looic.h1 <- loo(fit_sri.0, fit_sri.1, fit_sri.2, compare = T)
 saveRDS(looic.h1, "looic.h1.RData")
+looic.h1 <- readRDS("looic.h1.RData")
+
 saveRDS(fit_sri.0, "fit_sri.0.RData")
 saveRDS(fit_sri.1, "fit_sri.1.RData")
 saveRDS(fit_sri.2, "fit_sri.2.RData")
 
 # Summary Statistics
-fit_sri.0 <- readRDS("fit_sri.0.RData")
-fit_sri.1 <- readRDS("fit_sri.1.RData")
 fit_sri.2 <- readRDS("fit_sri.2.RData")
 summary(fit_sri.2)
 
 # Check for model convergence
-model <- fit_brm.3
+model <- fit_sri.2
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
@@ -883,10 +880,7 @@ pp_check(model) # check to make sure they line up
 # Find the significance
 posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
 coefficients <- colnames(posterior_samples)
-summary(posterior_samples)
 mean(posterior_samples$`b_HI_similarity:Period3` < 0)
-mean(posterior_samples$`b_HAB_During` > 0)
-mean(posterior_samples$`b_HAB_After` > 0)
 
 # Plot the posterior distribution
 get_variables(model) # Get the names of the parameters
@@ -895,7 +889,6 @@ get_variables(model) # Get the names of the parameters
 mcmc_plot <- mcmc_areas(
   as.array(model), 
   pars = c("b_HI_similarity", "b_Period2", "b_Period3", 
-           "b_HRO", "b_age_similarity", "b_sex_similarity", 
            "b_HI_similarity:Period2", "b_HI_similarity:Period3"),
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
@@ -918,14 +911,12 @@ mcmc_plot + scale_y_discrete(
   labels = c(
     "b_Period2" = "During HAB",
     "b_Period3" = "After HAB",
-    "b_HRO" = "Home-range Overlap",
-    "b_age_similarity" = "Age Similarity",
-    "b_sex_similarity" = "Sex Similarity",
     "b_HI_similarity" = "Human-centric Similarity",
     "b_HI_similarity:Period2" = "Human-centric Similarity:During HAB",
     "b_HI_similarity:Period3" = "Human-centric Similarity:After HAB"
   )
 )
+
 
 ###########################################################################
 # PART 6: Display Networks ---------------------------------------------
@@ -1078,12 +1069,7 @@ for (i in 1:length(ig)) {  # Loop through periods
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
     # Get map of Sarasota, Florida
-    mybasemap <- get_map(location = c(left = -82.7, bottom = 27.25, right = -82.52, top = 27.5),
-                         zoom = 10, 
-                         source = "google",
-                         maptype = 'satellite',
-                         color = 'bw')
-    sarasota_map <- ggmap(mybasemap)
+    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6))
     
     # add geographic coordinates
     net[[i]] %v% "lat" <- layout_coords[,"Y"]
@@ -1097,10 +1083,15 @@ for (i in 1:length(ig)) {  # Loop through periods
       alpha = 0.5, # transparency of nodes
       node.color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
       segment.alpha = 0.2, # transparency of edges
-      segment.size = edge_attr(ig[[i]])$weight * 4, # edge thickness
-      label.nodes = ifelse(labeled_nodes[[i]], V(ig[[i]])$name, FALSE),
+      segment.size = get.edge.attribute(net[[i]], "weight"), # edge thickness
+      label.nodes = ifelse(labeled_nodes[[i]], net[[i]] %v% "vertex.names", FALSE),
       label.size = 0.8) + 
-      theme(axis.line = element_blank())
+      theme(axis.line = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            axis.title = element_blank())
     
     plot_list[[i]] <- plot
   
