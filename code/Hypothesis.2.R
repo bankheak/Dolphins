@@ -1,6 +1,6 @@
 # Network Analysis of Anthropogenic Influences in Bottlenose dolphins
 
-# Local Network Analysis Hypothesis #2 #
+# Local Network Analysis Hypothesis 2 #
 
 # Set working directory here
 setwd("../data")
@@ -597,8 +597,11 @@ kruskal.test(Group_size ~ HI, data = after)
 
 f.model <- dunn_test(Group_size ~ HI, data = result_df, detailed = T)
 b.model <- dunn_test(Group_size ~ HI, data = before, detailed = T)
+pairw.kw(before$Group_size, before$HI, conf = .95)
 d.model <- dunn_test(Group_size ~ HI, data = during, detailed = T)
+pairw.kw(during$Group_size, during$HI, conf = .95)
 a.model <- dunn_test(Group_size ~ HI, data = after, detailed = T)
+pairw.kw(after$Group_size, after$HI, conf = .95)
 
 # Get group sizes
 avg_group_sizes <- lapply(gbi, function (mtx) {

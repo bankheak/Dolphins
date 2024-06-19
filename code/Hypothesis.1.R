@@ -204,7 +204,7 @@ hist_cvs <- list()
 for (i in seq_along(cv_null)) {
   hist_cvs[[i]] <- hist(cv_null[[i]], 
                         breaks=50,
-                        xlim = c(min(cv_null[[i]]), max(cv_obs[[i]] + 10)),
+                        xlim = c(min(cv_null[[i]]), max(cv_obs[[i]])),
                         col='grey70',
                         main = NULL,
                         xlab="Null CV SRI")
@@ -1056,7 +1056,15 @@ counter <- 0
 labeled_nodes <- list()
 plot_list <- list()
 register_google(key = "AIzaSyAgFfxIJmkL8LAWE7kHCqSqKBQDvqa9umI")
-  
+
+florida_map <- basemap(limits = c(-87.6349, -79.9743, 24.3963, 31.0006)) + 
+  theme(axis.line = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank())
+
 for (i in 1:length(ig)) {  # Loop through periods
     
     counter <- counter + 1
