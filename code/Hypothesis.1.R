@@ -6,10 +6,13 @@
 setwd("../data")
 
 # Load all necessary packages
+library(statnet)
+library(ggnetwork) # Get cluster coords
+library(ggforce) # for drawing lines around social clusters
 library(ggOceanMaps) # To map florida
 library(intergraph) # To use igraph network in ggnet
 library(sna) # For network
-library(GGally) # For mapping networks in ggplot
+library(GGally) # For mapping networks in ggplot version = '2.2.1'
 library(network) # For assigning coordinates to nodes %v%
 library(igraph) # graph_from_adjacency_matrix version = '1.6.0'
 library(ggmap) # register API key version = '3.0.0'
@@ -323,7 +326,10 @@ ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
 sum(ILV_dem$Sex == "Female")
 sum(ILV_dem$Sex == "Male")
 sum(is.na(ILV_dem$Age))
+ILV_missing_age <- ILV_dem[is.na(ILV_dem$Age), c("Code", "Age")]
+colnames(ILV_missing_age) <- c("Code", "BirthYear")
 write.csv(ILV_dem, "ILV_dem.csv")
+write.csv(ILV_missing_age, "ILV_missing_age.csv")
 
 # Make sim and diff matrices
 sim_dif_mat <- function(nxn) {
@@ -564,19 +570,29 @@ HAB_HI_data <- orig_data[, c("Year", "ConfHI")]
 HAB_HI_data$ConfHI <- ifelse(HAB_HI_data$ConfHI != "0", 1, 0)
 HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) sum(x == 1))
 HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
+
 # Create a barplot
+ylim.prim <- c(0, 150) # in this example, precipitation
+ylim.sec <- c(0, 50) # in this example, temperature
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
 ggplot(aes(x = Year), data = HAB_HI_data) +
   geom_line(aes(y = ConfHI, color = "ConfHI"), size = 1) + 
   geom_point(aes(y = ConfHI, color = "ConfHI"), size = 2) + 
-  geom_line(aes(y = HAB, color = "HAB"), size = 1) + 
-  geom_point(aes(y = HAB, color = "HAB"), size = 2) + 
-  scale_y_continuous(name = "Frequency of human-centric behavior", 
-                     sec.axis = sec_axis(~., name = "Number of weeks with >100,000 cells/L")) +
+  geom_line(aes(y = a + HAB * b, color = "HAB"), size = 1) +  # Multiply by scaling factor
+  geom_point(aes(y = a + HAB * b, color = "HAB"), size = 2) + # Multiply by scaling factor
+  scale_y_continuous(
+    name = "Number of human-centric behavior observations",  # Primary y-axis limits
+    sec.axis = sec_axis(~ (. - a)/b, name = "Number of weeks with >100,000 cells/L")  # Apply inverse transformation
+  ) +
   labs(x = "Year") +
   scale_color_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
                      name = "Variables", 
                      labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
-  theme(panel.background = element_blank()) + 
+  theme(
+    panel.background = element_blank()) + 
   geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
 
 # Extract specific columns from each data frame in list_years
@@ -883,13 +899,13 @@ coefficients <- colnames(posterior_samples)
 mean(posterior_samples$`b_HI_similarity:Period3` < 0)
 
 # Plot the posterior distribution
-get_variables(model) # Get the names of the parameters
-
 # Create mcmc_areas plot
-mcmc_plot <- mcmc_areas(
+mcmc_plot <- mcmc_intervals(
   as.array(model), 
-  pars = c("b_HI_similarity", "b_Period2", "b_Period3", 
-           "b_HI_similarity:Period2", "b_HI_similarity:Period3"),
+  pars = c("b_Period3", "b_Period2", 
+           "b_HI_similarity:Period3", "b_HI_similarity:Period2",
+           "b_HI_similarity",
+           "b_HRO", "b_age_similarity", "b_sex_similarity"),
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
@@ -909,6 +925,9 @@ mcmc_plot <- mcmc_areas(
 
 mcmc_plot + scale_y_discrete(
   labels = c(
+    "b_age_similarity" = "Age", 
+    "b_sex_similarity" = "Sex", 
+    "b_HRO" = "Home-range Overlap", 
     "b_Period2" = "During HAB",
     "b_Period3" = "After HAB",
     "b_HI_similarity" = "Human-centric Similarity",
@@ -1082,18 +1101,36 @@ for (i in 1:length(ig)) {  # Loop through periods
     # add geographic coordinates
     net[[i]] %v% "lat" <- layout_coords[,"Y"]
     net[[i]] %v% "lon" <- layout_coords[,"X"]
+    x <- net[[i]] %v% "lon"
+    y <- net[[i]] %v% "lat"
+    
+    # Set network and attributes
+    net_i <- net[[i]]
+    node_color <- V(dolp_ig[[i]])$color
+    
+    # Map the node colors to their corresponding numbers
+    color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
+    node_color_numbers <- color_mapping[node_color]
+    grp <- as.vector(node_color_numbers) 
+    set.vertex.attribute(net_i, "grp", grp)
     
     # Graph network
     plot <- ggnetworkmap(
       sarasota_map, # Load in map
-      net[[i]], # Load in network
+      net_i, # Load in network
       size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
-      alpha = 0.5, # transparency of nodes
-      node.color = ifelse(labeled_nodes[[i]], V(dolp_ig[[i]])$color, "black"), 
+      alpha = 0.8, # transparency of nodes
+      node.color = ifelse(labeled_nodes[[i]], node_color, "black"), 
       segment.alpha = 0.2, # transparency of edges
-      segment.size = get.edge.attribute(net[[i]], "weight"), # edge thickness
-      label.nodes = ifelse(labeled_nodes[[i]], net[[i]] %v% "vertex.names", FALSE),
-      label.size = 0.8) + 
+      segment.size = get.edge.attribute(net_i, "weight"), # edge thickness
+      label.nodes = ifelse(labeled_nodes[[i]], net_i %v% "vertex.names", FALSE),
+      label.size = 0.8) +
+      geom_mark_hull(
+        aes(x, y, group = as.factor(get.vertex.attribute(net_i, "grp")), fill = as.factor(get.vertex.attribute(net_i, "grp"))),
+        concavity = 4,
+        expand = unit(2, "mm"),
+        alpha = 0.25
+      ) +
       theme(axis.line = element_blank(),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),

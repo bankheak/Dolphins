@@ -340,15 +340,15 @@ full_priors <- c(
 
 # Models in brms
 fit_sc.0 <- brm(Strength ~ 1 + (1 | numeric_ID),
-                 chains = 4, family = gaussian, data = result_df)
+                 chains = 4, iter = 4000, warmup = 3000, family = gaussian, data = result_df)
 fit_sc.1 <- brm(Strength ~ Prop_BG + Prop_FG + Prop_SD + Period + (1 | numeric_ID), 
-                 chains = 4, family = gaussian, data = result_df)
+                 chains = 4, iter = 4000, warmup = 3000, family = gaussian, data = result_df)
 fit_sc.2 <- brm(Strength ~
                    Prop_BG * Period + 
                    Prop_FG * Period +
                    Prop_SD * Period + 
                    (1 | numeric_ID),
-                 chains = 4, iter = 4000, warmup = 2000, 
+                 chains = 4, iter = 4000, warmup = 3000, 
                  family = gaussian, data = result_df, prior = full_priors)
 
 loo(fit_sc.0, fit_sc.1, fit_sc.2, compare = T)
@@ -503,7 +503,7 @@ mcmc_plot + scale_y_discrete(
 )
 
 ###########################################################################
-# PART 4: Look at HI on Group Sizes and Centrality ---------------------------------------------
+# PART 4: Look at HI on Group Sizes ---------------------------------------------
 
 # Read in GBI
 gbi <- readRDS("gbi.RData")
