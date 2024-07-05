@@ -384,9 +384,9 @@ get_variables(model) # Get the names of the parameters
 theme_update(text = element_text(family = "sans"))
 
 # Create mcmc_areas plot
-mcmc_plot <- mcmc_areas(
+mcmc_plot <- mcmc_intervals(
   as.array(model), 
-  pars = c("b_Period2MDuring_HAB", "b_Period3MAfter_HAB"),
+  pars = c("b_Period3MAfter_HAB", "b_Period2MDuring_HAB"),
   prob = 0.95, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
@@ -413,7 +413,7 @@ mcmc_plot + scale_y_discrete(
 
 ## BG
 # Create mcmc_areas plot
-mcmc_plot <- mcmc_areas(
+mcmc_plot <- mcmc_intervals(
   as.array(model), 
   pars = c("b_Prop_BG:Period2MDuring_HAB", "b_Prop_BG:Period3MAfter_HAB",
            "b_Prop_BG"),
@@ -443,7 +443,7 @@ mcmc_plot + scale_y_discrete(
 )
 
 ## FG
-mcmc_plot <- mcmc_areas(
+mcmc_plot <- mcmc_intervals(
   as.array(model), 
   pars = c("b_Period2MDuring_HAB:Prop_FG", "b_Period3MAfter_HAB:Prop_FG",
            "b_Prop_FG"),
@@ -473,7 +473,7 @@ mcmc_plot + scale_y_discrete(
 )
 
 ## SD
-mcmc_plot <- mcmc_areas(
+mcmc_plot <- mcmc_intervals(
   as.array(model), 
   pars = c("b_Period2MDuring_HAB:Prop_SD", "b_Period3MAfter_HAB:Prop_SD",
            "b_Prop_SD"),
@@ -557,23 +557,12 @@ result_df$Period <- as.factor(result_df$Period)
 
 # Plot the HI behaviors and group sizes for every year
 ggplot(result_df, aes(x = HI, y = Group_size, fill = HI)) +
-  geom_boxplot() +
+  geom_boxplot(outlier.shape = NA) + # Remove outliers
+  geom_jitter(aes(color = HI), width = 0.2, alpha = 0.5) + # Set jitter points color and transparency
   facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
                                                       "2-During_HAB" = "During", 
                                                       "3-After_HAB" = "After"))) +
-  labs(x = "Human-centric Behavior", y = "Average Group Size") +
-  theme(strip.background = element_blank(),
-        strip.text = element_text(size = 12, face = "bold"),
-        panel.grid = element_blank())
-# Unequal variance
-
-# Plot the HI behaviors and centrality for every year
-ggplot(result_df, aes(x = HI, y = Strength, fill = HI)) +
-  geom_boxplot() +
-  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
-                                                      "2-During_HAB" = "During", 
-                                                      "3-After_HAB" = "After"))) +
-  labs(x = "Human-centric Behavior", y = "Social Centrality") +
+  labs(x = "Human-centric Behavior", y = "Individuals' Average Group Size") +
   theme(strip.background = element_blank(),
         strip.text = element_text(size = 12, face = "bold"),
         panel.grid = element_blank())
@@ -608,17 +597,6 @@ avg_group_sizes <- lapply(gbi, function (mtx) {
   row_sum <- rowSums(mtx)
   avg_group_sizes <- mean(row_sum)
   return(avg_group_sizes)})
-
-## Run post-hoc test for Social centrality
-kruskal.test(Strength ~ HI, data = result_df)
-kruskal.test(Strength ~ HI, data = before)
-kruskal.test(Strength ~ HI, data = during)
-kruskal.test(Strength ~ HI, data = after)
-
-f.model <- dunn_test(Strength ~ HI, data = result_df, detailed = T)
-b.model <- dunn_test(Strength ~ HI, data = before, detailed = T)
-d.model <- dunn_test(Strength ~ HI, data = during, detailed = T)
-a.model <- dunn_test(Strength ~ HI, data = after, detailed = T)
 
 
 ###########################################################################
