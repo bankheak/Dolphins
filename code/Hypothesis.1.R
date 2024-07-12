@@ -7,6 +7,7 @@ setwd("../data")
 
 # Load all necessary packages
 library(statnet)
+library(viridis)
 library(ggnetwork) # Get cluster coords
 library(ggforce) # for drawing lines around social clusters
 library(ggOceanMaps) # To map florida
@@ -14,12 +15,13 @@ library(intergraph) # To use igraph network in ggnet
 library(sna) # For network
 library(GGally) # For mapping networks in ggplot version = '2.2.1'
 library(network) # For assigning coordinates to nodes %v%
+install.packages("igraph", version = '1.6.0')
 library(igraph) # graph_from_adjacency_matrix version = '1.6.0'
 library(ggmap) # register API key version = '3.0.0'
 library(ggraph) # For network plotting on map
 library(tnet) # For weights
 library(asnipe) # get_group_by_individual--Damien Farine
-library(assocInd) # Could do permutatioNP
+library(assocInd) # Could do permutations
 library(vegan)
 library(assortnet) # associative indices
 library(kinship2) # genetic relatedness
@@ -207,8 +209,7 @@ hist_cvs <- list()
 for (i in seq_along(cv_null)) {
   hist_cvs[[i]] <- hist(cv_null[[i]], 
                         breaks=50,
-                        xlim = c(min(cv_null[[i]]), max(cv_obs[[i]])),
-                        col='grey70',
+                        col= "lightblue",
                         main = NULL,
                         xlab="Null CV SRI")
   
@@ -282,16 +283,17 @@ run_mod <- function(el, dolphin_walk_list) {
   ci <- quantile(randmod, probs = c(0.025, 0.975), type = 2)
   
   # Visualization of the random Q distribution
-  #hist(randmod, xlim = c(0, 0.6), main = "Random Q Distribution", xlab = "Q-value", ylab = "Frequency", col = "lightblue")
+  hist(randmod, xlim = c(0.05, 0.35), main = NA,
+       xlab = "Q-value", ylab = "Frequency", col = "lightblue")
   
   # Empirical Q-value
-  #abline(v = modularity(dolphin_walk_list[[k]]), col = "red")
+  abline(v = modularity(dolphin_walk_list[[k]]), col = "red")
   
   # 2.5% CI
-  #abline(v = ci[1], col = "blue")
+  abline(v = ci[1], col = "blue")
   
   # 97.5% CI
-  #abline(v = ci[2], col = "blue")
+  abline(v = ci[2], col = "blue")
   
   # Return a data frame with Q-value and confidence intervals
   result[[k]] <- data.frame(Q = modularity(dolphin_walk_list[[k]]), LowCI = ci[1], HighCI = ci[2])
@@ -299,6 +301,8 @@ run_mod <- function(el, dolphin_walk_list) {
   }
   return(result)
 }
+
+par(mfrow=c(3, 1))
 
 model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
 
@@ -998,7 +1002,7 @@ newman <- readRDS("newman.RData")
 # Generate a vector of colors based on the number of unique memberships
 for (i in seq_along(dolp_ig)) {
   # Generate a vector of colors based on the number of unique memberships
-  col <- rainbow(max(newman[[i]]$membership))
+  col <- viridis(min(max(newman[[i]]$membership), length(unique(newman[[i]]$membership))))
   
   # Initialize the color attribute with NA
   V(dolp_ig[[i]])$color <- NA
@@ -1088,6 +1092,9 @@ for (i in 1:length(ig)) {  # Loop through periods
     
     counter <- counter + 1
     
+    # Load in igraph
+    require(igraph)
+    
     # Adjust the layout using home range coordinates
     layout_coords <- as.matrix(centroid_list[[i]][, c("X", "Y")])
     adjusted_layout <- layout_coords[order(V(ig[[i]])$name), ]
@@ -1096,26 +1103,28 @@ for (i in 1:length(ig)) {  # Loop through periods
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
     # Get map of Sarasota, Florida
-    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6))
+    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6), land.col = 'white', land.border.col = 'white')
     
     # add geographic coordinates
-    net[[i]] %v% "lat" <- layout_coords[,"Y"]
-    net[[i]] %v% "lon" <- layout_coords[,"X"]
-    x <- net[[i]] %v% "lon"
-    y <- net[[i]] %v% "lat"
+    net_i <- net[[i]]
+    net_i %v% "lat" <- layout_coords[,"Y"]
+    net_i %v% "lon" <- layout_coords[,"X"]
+    x <- net_i %v% "lon"
+    y <- net_i %v% "lat"
     
     # Set network and attributes
-    net_i <- net[[i]]
     node_color <- V(dolp_ig[[i]])$color
+    
+    # Unrequire igraph
+    detach("package:igraph", unload=TRUE)
     
     # Map the node colors to their corresponding numbers
     color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
     node_color_numbers <- color_mapping[node_color]
     grp <- as.vector(node_color_numbers) 
-    set.vertex.attribute(net_i, "grp", grp)
     
     # Graph network
-    plot <- ggnetworkmap(
+    plot_2 <- ggnetworkmap(
       sarasota_map, # Load in map
       net_i, # Load in network
       size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
@@ -1125,30 +1134,37 @@ for (i in 1:length(ig)) {  # Loop through periods
       segment.size = get.edge.attribute(net_i, "weight"), # edge thickness
       label.nodes = ifelse(labeled_nodes[[i]], net_i %v% "vertex.names", FALSE),
       label.size = 0.8) +
-      geom_mark_hull(
-        aes(x, y, group = as.factor(get.vertex.attribute(net_i, "grp")), fill = as.factor(get.vertex.attribute(net_i, "grp"))),
-        concavity = 4,
-        expand = unit(2, "mm"),
-        alpha = 0.25
+      geom_encircle(
+        aes(x, y, group = as.factor(grp), fill = as.factor(grp)),
+        expand = 0.02, 
+        alpha = 0.4) +
+      theme(
+        axis.line = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()
       ) +
-      theme(axis.line = element_blank(),
-            panel.grid.major = element_blank(),
-            panel.grid.minor = element_blank(),
-            axis.text = element_blank(),
-            axis.ticks = element_blank(),
-            axis.title = element_blank())
+      guides(fill = "none")  # remove legend for fill
     
     plot_list[[i]] <- plot
   
   }
 
 # Plot one at a time
-plot_list[[1]]
-plot_list[[2]]
-plot_list[[3]]
-
-# Arrange all plots in a single grid
-grid.arrange(grobs = plot_list, ncol = 3) # Adjust ncol as needed
+plot_1 <- plot_list[[1]]
+pdf("plot_1.pdf", width = 8.5, height = 11)
+print(plot_1)
+dev.off()
+plot_2 <- plot_list[[2]]
+pdf("plot_2.pdf", width = 8.5, height = 11)
+print(plot_2)
+dev.off()
+plot_3 <- plot_list[[3]]
+pdf("plot_3.pdf", width = 8.5, height = 11)
+print(plot_3)
+dev.off()
 
 # What is the cluster size for each period?
 combined_cluster_data <- list()
