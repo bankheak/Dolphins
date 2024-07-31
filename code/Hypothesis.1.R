@@ -6,43 +6,46 @@
 setwd("../data")
 
 # Load all necessary packages
-library(statnet)
-library(viridis)
-library(ggnetwork) # Get cluster coords
-library(ggforce) # for drawing lines around social clusters
-library(ggOceanMaps) # To map florida
-library(intergraph) # To use igraph network in ggnet
-library(sna) # For network
-library(GGally) # For mapping networks in ggplot version = '2.2.1'
-library(network) # For assigning coordinates to nodes %v%
-install.packages("igraph", version = '1.6.0')
+## Predictors
+install.packages('igraph', version = '1.6.0') 
 library(igraph) # graph_from_adjacency_matrix version = '1.6.0'
-library(ggmap) # register API key version = '3.0.0'
-library(ggraph) # For network plotting on map
-library(tnet) # For weights
-library(asnipe) # get_group_by_individual--Damien Farine
-library(assocInd) # Could do permutations
-library(vegan)
-library(assortnet) # associative indices
-library(kinship2) # genetic relatedness
-library(ggplot2) # Visualization
-library(abind) # array
-library(brms) # For brm model
-library(coda)
-library(bayesplot) # plot parameters in mcmc_area
-library(sf) # Convert degrees to meters
-library(sp) # Creates a SpatialPointsDataFrame by defining the coordinates
-library(adehabitatHR) # Caluculate MCPs and Kernel density 
-library(magrittr) # All below is for STAN
-library(dplyr) # for organizing code
-library(rstan) # To make STAN run faster
-library(ggrepel)
-library(RColorBrewer)
-library(gganimate)
-library(posterior) # Find the posterior sample names
-library(distributional)
-library(doParallel) # Faster computing
+if(!require(kinship2)){install.packages('kinship2'); library(kinship2)} # genetic relatedness
+if(!require(adehabitatHR)){install.packages('adehabitatHR'); library(adehabitatHR)} # Caluculate MCPs and Kernel density 
+## Network
+if(!require(ggalt)){install.packages('ggalt'); library(ggalt)} 
+if(!require(network)){install.packages('network'); library(network)} # For assigning coordinates to nodes %v%
+if(!require(ggmap)){install.packages('ggmap'); library(ggmap)} # register API key version = '3.0.0'
+if(!require(ggraph)){install.packages('ggraph'); library(ggraph)} # For network plotting on map
+if(!require(tnet)){install.packages('tnet'); library(tnet)} # For weights
+if(!require(asnipe)){install.packages('asnipe'); library(asnipe)} # get_group_by_individual
+if(!require(assortnet)){install.packages('assortnet'); library(assortnet)} # associative indices
 source("../code/functions.R") # nxn
+## Mapping
+if(!require(statnet)){install.packages('statnet'); library(statnet)}
+if(!require(viridis)){install.packages('viridis'); library(viridis)}
+if(!require(ggnetwork)){install.packages('ggnetwork'); library(ggnetwork)} # Get cluster coords
+if(!require(ggforce)){install.packages('ggforce'); library(ggforce)} # for drawing lines around social clusters
+if(!require(ggOceanMaps)){install.packages('ggOceanMaps'); library(ggOceanMaps)} # To map florida
+if(!require(intergraph)){install.packages('intergraph'); library(intergraph)} # To use igraph network in ggnet
+if(!require(sna)){install.packages('sna'); library(sna)} # For network
+if(!require(GGally)){install.packages('GGally'); library(GGally)} # For mapping networks in ggplot version = '2.2.1'
+if(!require(ggplot2)){install.packages('ggplot2'); library(ggplot2)}
+if(!require(sf)){install.packages('sf'); library(sf)} # Convert degrees to meters
+if(!require(sp)){install.packages('sp'); library(sp)} # Convert degrees to meters
+## Bayesian
+if(!require(abind)){install.packages('abind'); library(abind)} # array
+if(!require(brms)){install.packages('brms'); library(brms)} # For brm model
+if(!require(coda)){install.packages('coda'); library(coda)}
+if(!require(bayesplot)){install.packages('bayesplot'); library(bayesplot)} # plot parameters in mcmc_area
+if(!require(magrittr)){install.packages('magrittr'); library(magrittr)} # For STAN
+if(!require(dplyr)){install.packages('dplyr'); library(dplyr)}  # for organizing code
+if(!require(rstan)){install.packages('rstan'); library(rstan)} # To make STAN run faster
+if(!require(ggrepel)){install.packages('ggrepel'); library(ggrepel)} # for function labs
+if(!require(RColorBrewer)){install.packages('RColorBrewer'); library(RColorBrewer)}
+if(!require(gganimate)){install.packages('gganimate'); library(gganimate)}
+if(!require(posterior)){install.packages('posterior'); library(posterior)} # Find the posterior sample names
+if(!require(distributional)){install.packages('distributional'); library(distributional)}
+if(!require(doParallel)){install.packages('doParallel'); library(doParallel)} # Faster computing
 
 # Read in full datasheet and list (after wrangling steps)
 orig_data <- read.csv("orig_data.csv") # original data
@@ -182,6 +185,70 @@ nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
 # Save nxn lists
 saveRDS(nxn, file = "nxn.RData")
 
+# Calculate group size differences
+# Read in GBI
+gbi <- readRDS("gbi.RData")
+
+# Get the average group size for each ID
+group_list <- lapply(gbi, function(group_matrix) {
+  
+  # Calculate group size for each group
+  individual_group_size <- rowSums(group_matrix)
+  
+  # Create empty vectors to store results
+  ids <- character()
+  avg_group_sizes <- numeric()
+  
+  # Iterate through each individual in the group
+  for (i in 1:ncol(group_matrix)) {
+    
+    # Get the individual ID
+    individual_id <- colnames(group_matrix)[i]
+    
+    # Calculate the group size for the individual
+    group_size <- ifelse(group_matrix[, individual_id] == 1, 
+                         individual_group_size, 0)
+    
+    # Calculate the average group size for the individual
+    avg_group_size <- mean(group_size)
+    
+    # Append the results to vectors
+    ids <- c(ids, individual_id)
+    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
+  }
+  
+  # Create a data frame for the current group
+  group_data <- data.frame(ID = ids,
+                           Average_Group_Size = avg_group_sizes)
+  
+  return(group_data)
+})
+
+# Add HI list
+result_df <- readRDS("result_df.RData")
+result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB", 
+                               group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
+                               ifelse(result_df$Period == "2-During_HAB",
+                                      group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
+                                      group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
+
+# Change the factor levels and add factor for Period
+result_df$Behavior <- ifelse(result_df$HI != "NF", "HI", "None")
+
+# Plot the HI behaviors and group sizes for every year
+ggplot(result_df, aes(x = Behavior, y = Group_size, fill = Behavior)) +
+  geom_boxplot(outlier.shape = NA) + # Remove outliers
+  geom_jitter(aes(color = HI), width = 0.2, alpha = 0.5) + # Set jitter points color and transparency
+  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
+                                                      "2-During_HAB" = "During", 
+                                                      "3-After_HAB" = "After"))) +
+  labs(x = "Human-centric Behavior", y = "Individuals' Average Group Size") +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.grid = element_blank())
+# Unequal variance
+
+
 ###########################################################################
 # PART 3: CV and Modularity ---------------------------------------------
 
@@ -314,6 +381,7 @@ model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
 
 # Read in sex and age data
 ILV <- read.csv("Individual_Level_Variables.csv") 
+missing_ILV <- read.csv("ILV_missing_age.csv")
 
 # Fix sex so that probable is assigned
 ILV$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
@@ -324,9 +392,9 @@ ILV_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Sex", "BirthYear")]
 ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
+ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
 
 # Find the demographics of the population
-ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
 sum(ILV_dem$Sex == "Female")
 sum(ILV_dem$Sex == "Male")
 sum(is.na(ILV_dem$Age))
@@ -334,6 +402,14 @@ ILV_missing_age <- ILV_dem[is.na(ILV_dem$Age), c("Code", "Age")]
 colnames(ILV_missing_age) <- c("Code", "BirthYear")
 write.csv(ILV_dem, "ILV_dem.csv")
 write.csv(ILV_missing_age, "ILV_missing_age.csv")
+
+# Replace missing age
+ILV_dem$Age <- ifelse(is.na(ILV_dem$Age), 
+                      missing_ILV$Estimated.Birth.Yr..minimum.age.[match(ILV_dem$Code, missing_ILV$Code)], 
+                      ILV_dem$Age)
+ILV_dem$Age <- ifelse(ILV_dem$Age == "<1988", "1988", ifelse(ILV_dem$Age == "<1997", "1997", ILV_dem$Age))
+ILV_dem$Age <- as.numeric(ILV_dem$Age)
+ILV_df <- ILV_dem
 
 # Make sim and diff matrices
 sim_dif_mat <- function(nxn) {
@@ -344,11 +420,6 @@ order_cols <- colnames(nxn[[1]])
 # Now reorder the sex and age dataframe
 ILV_df <- ILV_df[ILV_df$Code %in% order_rows, ]
 ILV_df$Code <- ILV_df$Code[match(order_rows, ILV_df$Code)]
-
-# Estimate unknowns
-ILV_df$Sex <- ifelse(is.na(ILV_df$Sex), rbinom(n = nrow(ILV_df), size = 1, prob = 0.5), ILV_df$Sex)
-ILV_df$Age <- ifelse(is.na(ILV_df$Age), floor(runif(n = nrow(ILV_df), min = 1970, max = 2002)), as.numeric(ILV_df$Age)) # uniform probability for all ages
-ILV_df$Age <- ifelse(is.na(ILV_df$Age), 1997, as.numeric(ILV_df$Age)) # uniform probability for all ages
 
 # Make sex sim and age diff matrix
 sex_sim <- matrix(0, nrow = nrow(nxn[[1]]), ncol = ncol(nxn[[1]]))
@@ -979,6 +1050,8 @@ dolphin_walk <- lapply(dolphin_ig, function (df)
                    modularity = TRUE, membership = TRUE))
 
 # Create an unweighted network
+install.packages('igraph', version = '1.6.0') 
+library(igraph)
 dolp_ig <- lapply(el_years, function (el) {
   ig <- graph_from_edgelist(el[,1:2])
   # Add the edge weights to this network
@@ -1075,7 +1148,6 @@ centroid_list <- lapply(centroid_list, function(df) {
 
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
-counter <- 0
 labeled_nodes <- list()
 plot_list <- list()
 register_google(key = "AIzaSyAgFfxIJmkL8LAWE7kHCqSqKBQDvqa9umI")
@@ -1090,8 +1162,6 @@ florida_map <- basemap(limits = c(-87.6349, -79.9743, 24.3963, 31.0006)) +
 
 for (i in 1:length(ig)) {  # Loop through periods
     
-    counter <- counter + 1
-    
     # Load in igraph
     require(igraph)
     
@@ -1103,7 +1173,7 @@ for (i in 1:length(ig)) {  # Loop through periods
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
     # Get map of Sarasota, Florida
-    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6), land.col = 'white', land.border.col = 'white')
+    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6))
     
     # add geographic coordinates
     net_i <- net[[i]]
@@ -1116,7 +1186,7 @@ for (i in 1:length(ig)) {  # Loop through periods
     node_color <- V(dolp_ig[[i]])$color
     
     # Unrequire igraph
-    detach("package:igraph", unload=TRUE)
+    #detach("package:igraph", unload=TRUE)
     
     # Map the node colors to their corresponding numbers
     color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
@@ -1124,7 +1194,7 @@ for (i in 1:length(ig)) {  # Loop through periods
     grp <- as.vector(node_color_numbers) 
     
     # Graph network
-    plot_2 <- ggnetworkmap(
+    plot <- ggnetworkmap(
       sarasota_map, # Load in map
       net_i, # Load in network
       size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
@@ -1165,6 +1235,85 @@ plot_3 <- plot_list[[3]]
 pdf("plot_3.pdf", width = 8.5, height = 11)
 print(plot_3)
 dev.off()
+
+# Create graph
+labeled_nodes <- list()
+plot_list <- list()
+layout_list <- list()
+
+# Define a custom layout function that considers groups
+custom_fr_layout <- function(net, group, repulse_rad = 0.1, attract_coeff = 0.1) {
+  layout <- network.layout.fruchtermanreingold(net, repulse.rad = repulse_rad, attract.coeff = attract_coeff)
+  # Modify layout to consider groups
+  for (grp in unique(group)) {
+    idx <- which(group == grp)
+    centroid <- colMeans(layout[idx, , drop = FALSE])
+    layout[idx, ] <- sweep(layout[idx, ], 2, centroid, "+")
+  }
+  return(layout)
+}
+
+# Define a custom layout function that considers groups
+custom_fr_layout <- function(net, group, repulse_rad = 0.1, attract_coeff = 0.1) {
+  layout <- network.layout.fruchtermanreingold(net, repulse.rad = repulse_rad, attract.coeff = attract_coeff)
+  # Modify layout to consider groups
+  for (grp in unique(group)) {
+    idx <- which(group == grp)
+    centroid <- colMeans(layout[idx, , drop = FALSE])
+    layout[idx, ] <- sweep(layout[idx, ], 2, centroid, "+")
+  }
+  return(layout)
+}
+
+# Loop through the list of graphs and save layout information
+for (i in 1:length(net)) {
+  # Create a group based on the color attribute of the igraph object
+  group <- as.numeric(as.factor(V(dolp_ig[[i]])$color))
+  layout_list[[i]] <- custom_fr_layout(net[[i]], group)
+}
+
+for (i in 1:length(ig)) {  # Loop through periods
+  # Get nodes for each behavior
+  labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
+  
+  # Set network and attributes
+  node_color <- V(dolp_ig[[i]])$color
+  
+  # Map the node colors to their corresponding numbers
+  color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
+  node_color_numbers <- color_mapping[node_color]
+  grp <- as.vector(node_color_numbers) 
+  
+  # Create the plot
+  plot <- ggnet2(net[[i]],
+                 mode = layout_list[[i]],
+                 edge.size = get.edge.attribute(net[[i]], "weight"), # edge thickness
+                 edge.color = "grey",
+                 size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
+                 node.label = ifelse(labeled_nodes[[i]], net[[i]] %v% "vertex.names", FALSE),
+                 label.color = "white", 
+                 label.size = 2,
+                 node.color = ifelse(labeled_nodes[[i]], node_color, "black"),
+                 edge.alpha = 0.5
+  ) +
+    geom_encircle(
+      aes(x, y, group = as.factor(grp), fill = as.factor(grp)),
+      expand = 0.02, 
+      alpha = 0.4) +
+    theme(
+      axis.line = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    ) +
+    guides(fill = "none")  # remove legend for fill
+  
+  plot_list[[i]] <- plot
+}
+
+plot_list[[1]]
 
 # What is the cluster size for each period?
 combined_cluster_data <- list()

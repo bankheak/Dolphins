@@ -6,30 +6,33 @@
 setwd("../data")
 
 # Load all necessary packages
-library(GGally) # For mapping networks in ggplot
-library(ggalluvial) # For alluvial plot
-library(network) # For assigning coordinates to nodes %v%
-library(RColorBrewer) # For strength gradient network colors
-library(rstatix) # for post-hoc test
-library(tnet) # For weights
-library(igraph) # Measure centrality here
-library(ggraph)
-library(ggpattern) # geom_tile_pattern
-library(grid)
-library(assortnet) # associative indices
-library(ggplot2) # Visualization
-library(abind) # array
-library(boot) # bootstrapping
-library(brms) # For brm modellibrary(coda)
-library(bayesplot) # plot parameters
-library(doParallel) # Run parallel processing
-library(hrbrthemes) # plot themes
-library(viridis) # plot themes
-library(ggpattern) # heatmap hatches
-library(car) # durbinWatsonTest
-library(rstan) # To make STAN run faster
-library(tidybayes) # get_variables
+## Mapping
+if(!require(GGally)){install.packages('GGally'); library(GGally)} # For mapping networks in ggplot
+if(!require(ggraph)){install.packages('ggraph'); library(ggraph)}
+if(!require(ggpattern)){install.packages('ggpattern'); library(ggpattern)}
+if(!require(ggpattern)){install.packages('ggpattern'); library(ggpattern)} # geom_tile_pattern
+if(!require(grid)){install.packages('grid'); library(grid)}
+if(!require(viridis)){install.packages('viridis'); library(viridis)} # plot themes
+if(!require(ggpattern)){install.packages('ggpattern'); library(ggpattern)} # heatmap hatches
+if(!require(ggplot2)){install.packages('ggplot2'); library(ggplot2)}
+if(!require(ggplot2)){install.packages('ggplot2'); library(ggplot2)}
+## Network
+if(!require(network)){install.packages('network'); library(network)} # For assigning coordinates to nodes %v%
+if(!require(RColorBrewer)){install.packages('RColorBrewer'); library(RColorBrewer)} # For strength gradient network colors
+if(!require(tnet)){install.packages('tnet'); library(tnet)} # For weights
+if(!require(igraph)){install.packages('igraph'); library(igraph)} # Measure centrality here
+if(!require(assortnet)){install.packages('assortnet'); library(assortnet)} # associative indices
 source("../code/functions.R") # Matrix_to_edge_list
+## Post-hoc Test
+if(!require(rstatix)){install.packages('rstatix'); library(rstatix)} # for post-hoc test
+if(!require(car)){install.packages('car'); library(car)} # durbinWatsonTest
+## Bayesian
+if(!require(abind)){install.packages('abind'); library(abind)} # array
+if(!require(brms)){install.packages('brms'); library(brms)} # For brm modellibrary(coda)
+if(!require(bayesplot)){install.packages('bayesplot'); library(bayesplot)} # plot parameters
+if(!require(doParallel)){install.packages('doParallel'); library(doParallel)} # Run parallel processing
+if(!require(rstan)){install.packages('rstan'); library(rstan)} # To make STAN run faster
+if(!require(tidybayes)){install.packages('tidybayes'); library(tidybayes)} # get_variables
 
 # Read in full datasheet and list (after wrangling steps)
 list_years <- readRDS("list_years.RData") # (1995-2000)/(2001-2006)/(2007-2012)
@@ -245,6 +248,23 @@ result_df <- readRDS("result_df.RData")
 result_df <- merge(result_df, ILV_dem[, c("ID", "Sex", "Age")], by = "ID", all.x = TRUE)
 
 
+## How many did two HC
+result_df <- result_df[result_df$HI != "NF",]
+# Step 1: Group by ID and count the unique HIs
+HI_counts <- result_df %>%
+  group_by(ID) %>%
+  summarise(unique_HIs = n_distinct(HI))
+
+# Step 2: Filter individuals with exactly two unique HIs
+two_HI_individuals <- HI_counts %>%
+  filter(unique_HIs == 2)
+
+# Step 3: Count these individuals
+num_two_HI_individuals <- nrow(two_HI_individuals)
+
+# Print the result
+num_two_HI_individuals
+
 ## Sex
 length(result_df$ID[result_df$HI == "BG" & result_df$Sex == "Female"])
 length(result_df$ID[result_df$HI == "BG" & result_df$Sex == "Male"])
@@ -316,6 +336,7 @@ test_model <- lm(Strength ~ Prop_BG * Period + Prop_FG * Period + Prop_SD * Peri
                   data = result_df)
 summary(test_model)
 plot(fitted(test_model, resid(test_model)))
+plot(resid(test_model))
 ## Check for variance among groups
 bartlett.test(Strength ~ HI, data = result_df) # equal
 ### If I have unequal variance
@@ -417,7 +438,7 @@ mcmc_plot <- mcmc_intervals(
   as.array(model), 
   pars = c("b_Prop_BG:Period2MDuring_HAB", "b_Prop_BG:Period3MAfter_HAB",
            "b_Prop_BG"),
-  prob = 0.95, # 95% intervals
+  prob = 0.90, # 95% intervals
   prob_outer = 0.99, # 99%
   point_est = "mean"
 ) +
@@ -529,7 +550,8 @@ group_list <- lapply(gbi, function(group_matrix) {
                          individual_group_size, 0)
     
     # Calculate the average group size for the individual
-    avg_group_size <- mean(group_size)
+    group_size_non_zero <- group_size[group_size != 0]
+    avg_group_size <- mean(group_size_non_zero)
     
     # Append the results to vectors
     ids <- c(ids, individual_id)
@@ -917,11 +939,24 @@ result_df$Strength <- (result_df$Strength - min(result_df$Strength)) / (max(resu
 # ---Plot network---
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 # Initialize a list to store layout information for each graph
-layout_list <- list()
+layout_list <- vector("list", length(net))
 
-# Loop through the list of graphs and save layout information
+# Function to generate random layout
+generate_random_layout <- function(net) {
+  num_nodes <- network.size(net)
+  layout <- matrix(runif(2 * num_nodes), ncol = 2)
+  return(layout)
+}
+
+# Generate random layouts for each network in the list
 for (i in 1:length(net)) {
-  layout_list[[i]] <- network.layout.fruchtermanreingold(net[[i]], NULL)
+  layout_list[[i]] <- generate_random_layout(net[[i]])
+}
+
+# Optionally, you can visualize the layouts to check the distribution
+par(mfrow = c(1, length(net)))
+for (i in 1:length(net)) {
+  plot.network(net[[i]], coord = layout_list[[i]], main = paste("Network", i))
 }
 
 # Generate a color palette
@@ -939,7 +974,7 @@ for (i in seq_along(plot_list)) {
 for (j in 1:length(HI_list)) {  # Loop through columns first
   
   # Extract layout for this graph
-  combined_layout <- layout_list[[1]]
+  combined_layout <- layout_list[[3]]
   counter <- 0
   
   for (i in 1:length(net)) {  # Loop through rows
