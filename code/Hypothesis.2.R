@@ -23,9 +23,10 @@ if(!require(tnet)){install.packages('tnet'); library(tnet)} # For weights
 if(!require(igraph)){install.packages('igraph'); library(igraph)} # Measure centrality here
 if(!require(assortnet)){install.packages('assortnet'); library(assortnet)} # associative indices
 source("../code/functions.R") # Matrix_to_edge_list
-## Post-hoc Test
-if(!require(rstatix)){install.packages('rstatix'); library(rstatix)} # for post-hoc test
-if(!require(car)){install.packages('car'); library(car)} # durbinWatsonTest
+## LMM Test
+if(!require(lme4)){install.packages('lme4'); library(lme4)} 
+if(!require(nlme)){install.packages('nlme'); library(nlme)} 
+if(!require(lmerTest)){install.packages('lmerTest'); library(lmerTest)} 
 ## Bayesian
 if(!require(abind)){install.packages('abind'); library(abind)} # array
 if(!require(brms)){install.packages('brms'); library(brms)} # For brm modellibrary(coda)
@@ -101,6 +102,16 @@ stopImplicitCluster()
 # Save the el_list
 saveRDS(el_years, "el_years.RData")
 el_years <- readRDS("el_years.RData")
+
+# step by step: connectance = length(which(as.dist(orca_hwi)!=0))/(N*(N-1)/2)
+# Number of nodes (number of rows in the association matrix)
+N = nrow(nxn[[1]])
+# Number of possible links: Nodes*(Nodes-1)/2: (-1 removes the node itself; /2 removes repetitions)
+total = N*(N-1)/2
+# Number of realized links: all non-zero cells in the association matrix
+real = length(which(as.dist(nxn[[1]])!=0))
+# Connectance: realized/total
+real/total # Connectance is low
 
 # Set the node names based on row names
 get_names <- function (matrix, metric) {
@@ -275,32 +286,156 @@ length(result_df$ID[result_df$HI == "SD" & result_df$Sex == "Male"])
 length(result_df$ID[result_df$HI == "NF" & result_df$Sex == "Female"])
 length(result_df$ID[result_df$HI == "NF" & result_df$Sex == "Male"])
 
-## Period
-length(result_df$ID[result_df$HI == "BG" & result_df$Period == "1-Before_HAB"])
-length(result_df$ID[result_df$HI == "BG" & result_df$Period == "2-During_HAB"])
-length(result_df$ID[result_df$HI == "BG" & result_df$Period == "3-After_HAB"])
-length(result_df$ID[result_df$HI == "FG" & result_df$Period == "1-Before_HAB"])
-length(result_df$ID[result_df$HI == "FG" & result_df$Period == "2-During_HAB"])
-length(result_df$ID[result_df$HI == "FG" & result_df$Period == "3-After_HAB"])
-length(result_df$ID[result_df$HI == "SD" & result_df$Period == "1-Before_HAB"])
-length(result_df$ID[result_df$HI == "SD" & result_df$Period == "2-During_HAB"])
-length(result_df$ID[result_df$HI == "SD" & result_df$Period == "3-After_HAB"])
 
+# Make table of demographics
+# Define the vectors for metrics
+HI <- c("BG", "FG", "SD")
+Per <- c("1-Before_HAB", "2-During_HAB", "3-After_HAB")
+sx <- c("Male", "Female")
+
+# Initialize the empty data frame
+dem.table <- data.frame(HI = character(),
+                        Period = character(),
+                        Male = integer(),
+                        Female = integer(),
+                        stringsAsFactors = FALSE)
+
+# Loop through each combination of HI and Per
+for (hi in HI) {
+  for (per in Per) {
+    male_count <- length(result_df$ID[result_df$HI == hi & result_df$Period == per & result_df$Sex == "Male"])
+    female_count <- length(result_df$ID[result_df$HI == hi & result_df$Period == per & result_df$Sex == "Female"])
+    
+    # Add a new row to the demographic table
+    dem.table <- rbind(dem.table, data.frame(HI = hi, Period = per, Male = male_count, Female = female_count))
+  }
+}
+
+# Melt the demographic table for ggplot
+library(reshape2)  # For melting the data frame
+dem.table.melted <- melt(dem.table, id.vars = c("HI", "Period"), variable.name = "Sex", value.name = "Count")
+
+# Create the plot
+ggplot(dem.table.melted, aes(x = Period, y = Count, fill = Sex)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ HI) +
+  labs(x = "Study Period",
+       y = "Number of Individual Dolphins",
+       fill = "Sex") +
+  scale_x_discrete(labels = c("1-Before_HAB" = "Before", 
+                              "2-During_HAB" = "During", 
+                              "3-After_HAB" = "After")) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank())  # Remove minor gridlines
 
 ###########################################################################
-# PART 3: Run Model ---------------------------------------------
+# PART 3: Look at HI on Group Sizes ---------------------------------------------
+
+# Read in GBI
+gbi <- readRDS("gbi.RData")
+
+# Get the average group size for each ID
+group_list <- lapply(gbi, function(group_matrix) {
+  
+  # Calculate group size for each group
+  individual_group_size <- rowSums(group_matrix)
+  
+  # Create empty vectors to store results
+  ids <- character()
+  avg_group_sizes <- numeric()
+  
+  # Iterate through each individual in the group
+  for (i in 1:ncol(group_matrix)) {
+    
+    # Get the individual ID
+    individual_id <- colnames(group_matrix)[i]
+    
+    # Calculate the group size for the individual
+    group_size <- ifelse(group_matrix[, individual_id] == 1, 
+                         individual_group_size, 0)
+    
+    # Calculate the average group size for the individual
+    group_size_non_zero <- group_size[group_size != 0]
+    avg_group_size <- mean(group_size_non_zero)
+    
+    # Append the results to vectors
+    ids <- c(ids, individual_id)
+    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
+  }
+  
+  # Create a data frame for the current group
+  group_data <- data.frame(ID = ids,
+                           Average_Group_Size = avg_group_sizes)
+  
+  return(group_data)
+})
+
+# Add HI list
+result_df <- readRDS("result_df.RData")
+result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB", 
+                               group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
+                               ifelse(result_df$Period == "2-During_HAB",
+                                      group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
+                                      group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
+
+# Change the factor levels and add factor for Period
+result_df$HI <- factor(result_df$HI, levels = c("NF", "BG", "FG", "SD"))
+result_df$Period <- as.factor(result_df$Period)
+write.csv(result_df, "result_df.csv")
+
+# Plot the HI behaviors and group sizes for every year
+ggplot(result_df, aes(x = HI, y = Group_size, fill = HI)) +
+  geom_boxplot(outlier.shape = NA) + # Remove outliers
+  geom_jitter(aes(color = HI), width = 0.2, alpha = 0.5) + # Set jitter points color and transparency
+  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
+                                                      "2-During_HAB" = "During", 
+                                                      "3-After_HAB" = "After"))) +
+  labs(x = "Human-centric Behavior", y = "Individuals' Average Group Size") +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        panel.grid = element_blank())
+# Unequal variance
+
+# Look at the difference in HI groups
+## Check assumptions of anova
+lm_model <- lm(Group_size ~ HI, data = result_df)
+### Extract Residuals
+residuals <- resid(lm_model)
+### Scale Residuals
+scaled_residuals <- scale(residuals)
+hist(scaled_residuals) # normal
+
+## Run LMM test for Group size
+# Fit the model again to use lmerTest functions
+f.model <- lmer(Group_size ~ HI * Period + (1 | ID), data = result_df)
+
+# Check residuals and random effects
+plot(f.model)
+qqnorm(resid(f.model))
+qqline(resid(f.model))
+
+# Get the summary with p-values
+summary(f.model)
+
+###########################################################################
+# PART 4: Run Model ---------------------------------------------
 
 # Read in data
-result_df <- readRDS("result_df.RData")
-
-# Make period a factor
-result_df$Period <- as.factor(result_df$Period)
+result_df <- read.csv("result_df.csv")
 
 # Make ID numeric
 result_df$numeric_ID <- as.numeric(factor(result_df$ID))
 
 # Make sure there is only one ID in each period
 result_df <- result_df[!duplicated(result_df[c("Period", "ID")]), ]
+
+# # Standardize the variables
+# result_df$Strength <- scale(result_df$Strength)
+# result_df$Group_size <- scale(result_df$Group_size)
+# 
+# # Create a composite score (simple sum of standardized variables)
+# result_df$Social_centrality <- result_df$Strength + result_df$Group_size
 
 # Check var and hists
 var(result_df$Prop_BG)
@@ -522,103 +657,6 @@ mcmc_plot + scale_y_discrete(
     "b_Period3MAfter_HAB:Prop_SD" = "SD: After"
   )
 )
-
-###########################################################################
-# PART 4: Look at HI on Group Sizes ---------------------------------------------
-
-# Read in GBI
-gbi <- readRDS("gbi.RData")
-
-# Get the average group size for each ID
-group_list <- lapply(gbi, function(group_matrix) {
-  
-  # Calculate group size for each group
-  individual_group_size <- rowSums(group_matrix)
-  
-  # Create empty vectors to store results
-  ids <- character()
-  avg_group_sizes <- numeric()
-  
-  # Iterate through each individual in the group
-  for (i in 1:ncol(group_matrix)) {
-    
-    # Get the individual ID
-    individual_id <- colnames(group_matrix)[i]
-    
-    # Calculate the group size for the individual
-    group_size <- ifelse(group_matrix[, individual_id] == 1, 
-                         individual_group_size, 0)
-    
-    # Calculate the average group size for the individual
-    group_size_non_zero <- group_size[group_size != 0]
-    avg_group_size <- mean(group_size_non_zero)
-    
-    # Append the results to vectors
-    ids <- c(ids, individual_id)
-    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
-  }
-  
-  # Create a data frame for the current group
-  group_data <- data.frame(ID = ids,
-                           Average_Group_Size = avg_group_sizes)
-  
-  return(group_data)
-})
-
-# Add HI list
-result_df <- readRDS("result_df.RData")
-result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB", 
-                          group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
-                          ifelse(result_df$Period == "2-During_HAB",
-                                 group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
-                                 group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
-
-# Change the factor levels and add factor for Period
-result_df$HI <- factor(result_df$HI, levels = c("NF", "BG", "FG", "SD"))
-result_df$Period <- as.factor(result_df$Period)
-
-# Plot the HI behaviors and group sizes for every year
-ggplot(result_df, aes(x = HI, y = Group_size, fill = HI)) +
-  geom_boxplot(outlier.shape = NA) + # Remove outliers
-  geom_jitter(aes(color = HI), width = 0.2, alpha = 0.5) + # Set jitter points color and transparency
-  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
-                                                      "2-During_HAB" = "During", 
-                                                      "3-After_HAB" = "After"))) +
-  labs(x = "Human-centric Behavior", y = "Individuals' Average Group Size") +
-  theme(strip.background = element_blank(),
-        strip.text = element_text(size = 12, face = "bold"),
-        panel.grid = element_blank())
-# Unequal variance
-
-# Create different data frames based on period
-before <- result_df[result_df$Period == "1-Before_HAB", ]
-during <- result_df[result_df$Period == "2-During_HAB", ]
-after <- result_df[result_df$Period == "3-After_HAB", ]
-
-# Look at the difference in HI groups
-## Check assumptions of anova
-hist(result_df$Group_size) # not normal
-hist(result_df$Strength) # normal
-
-## Run post-hoc test for Group size
-kruskal.test(Group_size ~ HI, data = result_df)
-kruskal.test(Group_size ~ HI, data = before)
-kruskal.test(Group_size ~ HI, data = during)
-kruskal.test(Group_size ~ HI, data = after)
-
-f.model <- dunn_test(Group_size ~ HI, data = result_df, detailed = T)
-b.model <- dunn_test(Group_size ~ HI, data = before, detailed = T)
-pairw.kw(before$Group_size, before$HI, conf = .95)
-d.model <- dunn_test(Group_size ~ HI, data = during, detailed = T)
-pairw.kw(during$Group_size, during$HI, conf = .95)
-a.model <- dunn_test(Group_size ~ HI, data = after, detailed = T)
-pairw.kw(after$Group_size, after$HI, conf = .95)
-
-# Get group sizes
-avg_group_sizes <- lapply(gbi, function (mtx) {
-  row_sum <- rowSums(mtx)
-  avg_group_sizes <- mean(row_sum)
-  return(avg_group_sizes)})
 
 
 ###########################################################################

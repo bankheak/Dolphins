@@ -15,6 +15,8 @@ if(!require(adehabitatHR)){install.packages('adehabitatHR'); library(adehabitatH
 if(!require(ggalt)){install.packages('ggalt'); library(ggalt)} 
 if(!require(network)){install.packages('network'); library(network)} # For assigning coordinates to nodes %v%
 if(!require(ggmap)){install.packages('ggmap'); library(ggmap)} # register API key version = '3.0.0'
+if(!require(graphlayouts)){install.packages('graphlayouts'); library(graphlayouts)} 
+if(!require(ggforce)){install.packages('ggforce'); library(ggforce)} # mapping clusters geom_mark_hull
 if(!require(ggraph)){install.packages('ggraph'); library(ggraph)} # For network plotting on map
 if(!require(tnet)){install.packages('tnet'); library(tnet)} # For weights
 if(!require(asnipe)){install.packages('asnipe'); library(asnipe)} # get_group_by_individual
@@ -82,6 +84,15 @@ orig_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
 
 # Now split up data 
 write.csv(orig_data, "orig_data.csv") # Save data
+
+# Find the codes that appear more than once
+repeated_codes <- orig_data$Code[duplicated(orig_data$Code) | duplicated(orig_data$Code, fromLast = TRUE)]
+
+# Get the unique values of these repeated codes
+unique_repeated_codes <- unique(repeated_codes)
+
+# Get the length of these unique codes
+length(unique_repeated_codes)
 
 ## Split data by HAB intensity
 orig_data$Group2 <- ifelse(orig_data$Year < 2001, 1, ifelse(orig_data$Year < 2007, 2, 3))
@@ -317,7 +328,7 @@ system.time({
                                           steps = 4, merges = TRUE, 
                                           modularity = TRUE, 
                                           membership = TRUE)
-  } 
+  } # cluster_edge_betweenness
   
   ### End parallel processing
   stopImplicitCluster()
@@ -393,15 +404,7 @@ ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0,
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
 ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
-
-# Find the demographics of the population
-sum(ILV_dem$Sex == "Female")
-sum(ILV_dem$Sex == "Male")
-sum(is.na(ILV_dem$Age))
-ILV_missing_age <- ILV_dem[is.na(ILV_dem$Age), c("Code", "Age")]
-colnames(ILV_missing_age) <- c("Code", "BirthYear")
 write.csv(ILV_dem, "ILV_dem.csv")
-write.csv(ILV_missing_age, "ILV_missing_age.csv")
 
 # Replace missing age
 ILV_dem$Age <- ifelse(is.na(ILV_dem$Age), 
@@ -409,9 +412,21 @@ ILV_dem$Age <- ifelse(is.na(ILV_dem$Age),
                       ILV_dem$Age)
 ILV_dem$Age <- ifelse(ILV_dem$Age == "<1988", "1988", ifelse(ILV_dem$Age == "<1997", "1997", ILV_dem$Age))
 ILV_dem$Age <- as.numeric(ILV_dem$Age)
-ILV_df <- ILV_dem
+
+# Find the demographics of the population
+## Sex
+sum(ILV_dem$Sex == "Female")
+sum(ILV_dem$Sex == "Male")
+## Age
+max(ILV_dem$Age)
+min(ILV_dem$Age)
+hist(ILV_dem$Age)
+total_ids <- nrow(ILV_dem)
+ids_above_1988 <- sum(ILV_dem$Age >= 1989 & ILV_dem$Age <= 1994)
+(ids_above_1988 / total_ids) * 100
 
 # Make sim and diff matrices
+ILV_df <- ILV_dem
 sim_dif_mat <- function(nxn) {
 # Order data
 order_rows <- rownames(nxn[[1]])
@@ -641,29 +656,41 @@ mantel(kov[[3]], kinship_matrix)
 # HI Matrices ------------------------------------------------------
 
 # Visualize data: HAB v HI
-HAB_HI_data <- orig_data[, c("Year", "ConfHI")]
-HAB_HI_data$ConfHI <- ifelse(HAB_HI_data$ConfHI != "0", 1, 0)
-HAB_HI_data <- aggregate(ConfHI ~ Year, data = HAB_HI_data, FUN = function(x) sum(x == 1))
+orig_data$Confirmed_HI <- ifelse(orig_data$ConfHI != "0", 1, 0)
+
+# Filter data where Confirmed_HI == 1
+filtered_data <- orig_data[orig_data$Confirmed_HI == 1, ]
+
+# Initialize an empty list to store the counts
+yearly_counts <- list()
+
+# Loop through each year
+for (year in unique(filtered_data$Year)) {
+  # Get the unique individuals for the current year
+  unique_ids <- unique(filtered_data$Code[filtered_data$Year == year])
+  
+  # Store the count of unique IDs in the list
+  yearly_counts[[as.character(year)]] <- length(unique_ids)
+}
+
+# Convert the list to a data frame for easier viewing
+HAB_HI_data <- data.frame(Year = names(yearly_counts), HI_IDs = unlist(yearly_counts))
+
+# Add hAB data
 HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
 
 # Create a barplot
-ylim.prim <- c(0, 150) # in this example, precipitation
-ylim.sec <- c(0, 50) # in this example, temperature
-
-b <- diff(ylim.prim)/diff(ylim.sec)
-a <- b*(ylim.prim[1] - ylim.sec[1])
-
 ggplot(aes(x = Year), data = HAB_HI_data) +
-  geom_line(aes(y = ConfHI, color = "ConfHI"), size = 1) + 
-  geom_point(aes(y = ConfHI, color = "ConfHI"), size = 2) + 
-  geom_line(aes(y = a + HAB * b, color = "HAB"), size = 1) +  # Multiply by scaling factor
-  geom_point(aes(y = a + HAB * b, color = "HAB"), size = 2) + # Multiply by scaling factor
+  geom_line(aes(y = HI_IDs, color = "HI_IDs", group = 1), size = 1) + 
+  geom_point(aes(y = HI_IDs, color = "HI_IDs"), size = 2) + 
+  geom_line(aes(y = HAB, color = "HAB", group = 1), size = 1) +  
+  geom_point(aes(y = HAB, color = "HAB"), size = 2) + 
   scale_y_continuous(
-    name = "Number of human-centric behavior observations",  # Primary y-axis limits
-    sec.axis = sec_axis(~ (. - a)/b, name = "Number of weeks with >100,000 cells/L")  # Apply inverse transformation
+    name = "Number of human-centric behavior observations",
+    sec.axis = sec_axis(~ ., name = "Number of weeks with >100,000 cells/L")
   ) +
   labs(x = "Year") +
-  scale_color_manual(values = c("ConfHI" = "blue", "HAB" = "orange"), 
+  scale_color_manual(values = c("HI_IDs" = "blue", "HAB" = "orange"), 
                      name = "Variables", 
                      labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
   theme(
@@ -1208,6 +1235,7 @@ for (i in 1:length(ig)) {  # Loop through periods
         aes(x, y, group = as.factor(grp), fill = as.factor(grp)),
         expand = 0.02, 
         alpha = 0.4) +
+      scale_fill_brewer(palette = "Set1") +
       theme(
         axis.line = element_blank(),
         panel.grid.major = element_blank(),
@@ -1236,45 +1264,18 @@ pdf("plot_3.pdf", width = 8.5, height = 11)
 print(plot_3)
 dev.off()
 
-# Create graph
+# Create non-mapped graph
 labeled_nodes <- list()
 plot_list <- list()
-layout_list <- list()
-
-# Define a custom layout function that considers groups
-custom_fr_layout <- function(net, group, repulse_rad = 0.1, attract_coeff = 0.1) {
-  layout <- network.layout.fruchtermanreingold(net, repulse.rad = repulse_rad, attract.coeff = attract_coeff)
-  # Modify layout to consider groups
-  for (grp in unique(group)) {
-    idx <- which(group == grp)
-    centroid <- colMeans(layout[idx, , drop = FALSE])
-    layout[idx, ] <- sweep(layout[idx, ], 2, centroid, "+")
-  }
-  return(layout)
-}
-
-# Define a custom layout function that considers groups
-custom_fr_layout <- function(net, group, repulse_rad = 0.1, attract_coeff = 0.1) {
-  layout <- network.layout.fruchtermanreingold(net, repulse.rad = repulse_rad, attract.coeff = attract_coeff)
-  # Modify layout to consider groups
-  for (grp in unique(group)) {
-    idx <- which(group == grp)
-    centroid <- colMeans(layout[idx, , drop = FALSE])
-    layout[idx, ] <- sweep(layout[idx, ], 2, centroid, "+")
-  }
-  return(layout)
-}
-
-# Loop through the list of graphs and save layout information
-for (i in 1:length(net)) {
-  # Create a group based on the color attribute of the igraph object
-  group <- as.numeric(as.factor(V(dolp_ig[[i]])$color))
-  layout_list[[i]] <- custom_fr_layout(net[[i]], group)
-}
 
 for (i in 1:length(ig)) {  # Loop through periods
+  
   # Get nodes for each behavior
   labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
+  
+  # Make net_i
+  net_i <- ig[[i]]
+  net_i <- simplify(net_i)
   
   # Set network and attributes
   node_color <- V(dolp_ig[[i]])$color
@@ -1282,38 +1283,58 @@ for (i in 1:length(ig)) {  # Loop through periods
   # Map the node colors to their corresponding numbers
   color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
   node_color_numbers <- color_mapping[node_color]
-  grp <- as.vector(node_color_numbers) 
+  
+  # Update vertex attributes
+  V(net_i)$grp <- as.character(node_color_numbers)
+  
+  create_group_layout <- function(graph, node_groups, layout_func = layout_with_fr, group_spacing = 5) {
+  # Get unique groups
+  unique_groups <- unique(node_groups)
+  
+  # Initialize an empty layout
+  layout <- matrix(0, nrow = vcount(graph), ncol = 2)
+  
+  # Apply the layout function to each group individually
+  for (i in seq_along(unique_groups)) {
+    group_idx <- which(node_groups == unique_groups[i])
+    subgraph <- induced_subgraph(graph, group_idx)
+    sub_layout <- layout_func(subgraph)
+    
+    # Normalize sub_layout to avoid large coordinate ranges
+    sub_layout <- sub_layout / max(abs(sub_layout))
+    
+    # Offset sub_layout
+    offset_x <- (i - 1) * group_spacing
+    offset_y <- (i - 1) * group_spacing
+    layout[group_idx, ] <- sub_layout + c(offset_x, offset_y)
+  }
+  
+  return(layout)
+}
+  
+  # Generate a layout based on the node groups
+  bb <- create_group_layout(net_i, V(net_i)$grp)
   
   # Create the plot
-  plot <- ggnet2(net[[i]],
-                 mode = layout_list[[i]],
-                 edge.size = get.edge.attribute(net[[i]], "weight"), # edge thickness
-                 edge.color = "grey",
-                 size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
-                 node.label = ifelse(labeled_nodes[[i]], net[[i]] %v% "vertex.names", FALSE),
-                 label.color = "white", 
-                 label.size = 2,
-                 node.color = ifelse(labeled_nodes[[i]], node_color, "black"),
-                 edge.alpha = 0.5
-  ) +
-    geom_encircle(
-      aes(x, y, group = as.factor(grp), fill = as.factor(grp)),
-      expand = 0.02, 
-      alpha = 0.4) +
-    theme(
-      axis.line = element_blank(),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.title = element_blank()
-    ) +
-    guides(fill = "none")  # remove legend for fill
+  plot <- ggraph(net_i, layout = "manual", x = bb[, 1], y = bb[, 2]) +
+    geom_edge_link0(aes(color = "grey80", width = E(net_i)$weight), alpha = 0.08) + 
+    geom_node_point(aes(fill = grp, size = ifelse(labeled_nodes[[i]], 1.5, 0.5)), shape = 21) +
+    geom_text(aes(x = bb[, 1], y = bb[, 2], label = ifelse(labeled_nodes[[i]], V(net_i)$name, "")), color = "black", size = 2, vjust = 1.5) +
+    geom_mark_hull(aes(x = bb[, 1], y = bb[, 2], group = grp, fill = grp), 
+                   concavity = 4, 
+                   expand = unit(2, "mm"), 
+                   alpha = 0.25) +
+    scale_fill_brewer(palette = "Set1") +
+    scale_edge_color_manual(values = c(rgb(0, 0, 0, 0.1), rgb(0, 0, 0, 0.3))) +
+    theme_graph() +
+    theme(legend.position = "none")
   
   plot_list[[i]] <- plot
 }
 
 plot_list[[1]]
+plot_list[[2]]
+plot_list[[3]]
 
 # What is the cluster size for each period?
 combined_cluster_data <- list()
@@ -1342,10 +1363,14 @@ for (i in 1:3) {
   
 }
 
-mean(combined_cluster_data[[1]]$Total_Cluster_Count)
-mean(na.omit(combined_cluster_data[[2]]$Total_Cluster_Count))
-mean(combined_cluster_data[[3]]$Total_Cluster_Count)
+mean(combined_cluster_data[[1]]$Total_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
+mean(na.omit(combined_cluster_data[[2]]$Total_Cluster_Count[combined_cluster_data[[2]]$HI_Cluster_Count != 0]))
+mean(combined_cluster_data[[3]]$Total_Cluster_Count[combined_cluster_data[[3]]$HI_Cluster_Count != 0])
 
-mean(combined_cluster_data[[1]]$perc_HI)
-mean(na.omit(combined_cluster_data[[2]]$perc_HI))
-mean(combined_cluster_data[[3]]$perc_HI)
+mean(combined_cluster_data[[1]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
+mean(na.omit(combined_cluster_data[[2]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0]))
+mean(combined_cluster_data[[3]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
+
+mean(combined_cluster_data[[1]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
+mean(na.omit(combined_cluster_data[[2]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0]))
+mean(combined_cluster_data[[3]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
