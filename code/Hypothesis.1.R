@@ -675,7 +675,7 @@ for (year in unique(filtered_data$Year)) {
 
 # Convert the list to a data frame for easier viewing
 HAB_HI_data <- data.frame(Year = names(yearly_counts), HI_IDs = unlist(yearly_counts))
-
+HAB_HI_data$Year <- as.numeric(HAB_HI_data$Year)
 # Add hAB data
 HAB_HI_data$HAB <- c(22, 13, rep(0, 2), 5, 0, 12, 8, 18, 5, 38, 19, 2, rep(0, 4), 9)
 
@@ -686,16 +686,18 @@ ggplot(aes(x = Year), data = HAB_HI_data) +
   geom_line(aes(y = HAB, color = "HAB", group = 1), size = 1) +  
   geom_point(aes(y = HAB, color = "HAB"), size = 2) + 
   scale_y_continuous(
-    name = "Number of human-centric behavior observations",
+    name = "Number of human-centric foraging individuals",
     sec.axis = sec_axis(~ ., name = "Number of weeks with >100,000 cells/L")
   ) +
+  scale_x_continuous(breaks = c(1995, 2000, 2005, 2010)) +  # Specify the years you want to display
   labs(x = "Year") +
   scale_color_manual(values = c("HI_IDs" = "blue", "HAB" = "orange"), 
                      name = "Variables", 
                      labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
   theme(
-    panel.background = element_blank()) + 
+    panel.background = element_blank()) +
   geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
+
 
 # Extract specific columns from each data frame in list_years
 aux_data <- function(list_years) {
