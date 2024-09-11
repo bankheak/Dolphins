@@ -54,7 +54,7 @@ Process model:
 $SRI_{i,j,p} ~ (u_i+u_j)+β1_{Sex_{i,j}}+β2_{Age_{i,j}}+β3_{HRO_{i,j,p}}+β4_{HC_{i,j,p}}+β5_{During HAB_{i,j,p}}+β6_{After HAB_{i,j,p}}+β7_{HC_{i,j,p}}*During HAB+β8_{HC_{i,j,p}}*After HAB$
 
 Observation model:
-$SRI_{i,j,p} ~ Beta[μ_{SRI_{i,j,p}},ϕ_{SRI_{i,j,p}}]
+$SRI_{i,j,p} ~ Beta[μ_{SRI_{i,j,p}},ϕ_{SRI_{i,j,p}}]$
 
 I then create the figures of the effect sizes of these predictors.
 
