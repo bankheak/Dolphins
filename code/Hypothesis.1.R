@@ -98,7 +98,7 @@ length(unique_repeated_codes)
 orig_data$Group2 <- ifelse(orig_data$Year < 2001, 1, ifelse(orig_data$Year < 2007, 2, 3))
 data_by_intense <- split(orig_data, orig_data$Group2) # (1995-2000), (2001-2006), (2007-20012)
 
-# Eliminate IDs with less than 5 locations
+# Eliminate IDs with less than 10 locations
 fix_list <- function(list_splityears) {
   
   list_years <- list()  # Initialize an empty list to store the updated datasets
