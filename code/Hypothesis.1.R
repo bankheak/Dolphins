@@ -1,6 +1,5 @@
 # Network Analysis of Anthropogenic Influences in Bottlenose dolphins
 
-# Global Network Analysis Hypothesis #1 #
 
 # Set working directory here
 setwd("../data")
