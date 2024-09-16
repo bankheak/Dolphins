@@ -403,7 +403,6 @@ ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0,
                      ifelse(ILV_df$Sex == "Male", 1, NA))
 colnames(ILV_df) <- c("Code", "Sex", "Age")
 ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
-write.csv(ILV_dem, "ILV_dem.csv")
 
 # Replace missing age
 ILV_dem$Age <- ifelse(is.na(ILV_dem$Age), 
@@ -411,8 +410,10 @@ ILV_dem$Age <- ifelse(is.na(ILV_dem$Age),
                       ILV_dem$Age)
 ILV_dem$Age <- ifelse(ILV_dem$Age == "<1988", "1988", ifelse(ILV_dem$Age == "<1997", "1997", ILV_dem$Age))
 ILV_dem$Age <- as.numeric(ILV_dem$Age)
+write.csv(ILV_dem, "ILV_dem.csv")
 
 # Find the demographics of the population
+ILV_dem <- read.csv("ILV_dem.csv")
 ## Sex
 sum(ILV_dem$Sex == "Female")
 sum(ILV_dem$Sex == "Male")
@@ -488,8 +489,6 @@ create_coord_data <- function(list, period) {
 }
 
 dolph.sp <- create_coord_data(list_years)
-
-write.csv(dolph.sp[[1]], "dolph_sp.csv")
 
 # Use the calculated extent in kernelUD
 kernel <- lapply(dolph.sp, function(df) kernelUD(df, h = 1000))
