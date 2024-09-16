@@ -1,6 +1,6 @@
 # Code
 
-This file contains all the code for the Dolphins repository
+This file contains all the code for the Dolphins repository. The following describes the analysis steps in the `main_code.R` file. 
 
 ## Data analysis process
 <img src="https://github.com/user-attachments/assets/910b3c00-0a76-4735-b39b-6cb383488591" align="middle" width="500px"/>
@@ -21,7 +21,7 @@ Where:
 
 ## PART 3: CV and Modularity
 
-I create permutated null models to calculate random distributions of the coefficient of variation ($CV$) and modularity ($Q$). For the $CV$ I sent the cv_null.R script to OSU's high performance cluster to run 1000 permutation of each study period's social network to get the distribution of random $CV$'s compared to each observed $CV$. For $Q$ I calculated the cluster edge betweeness of the 1000 permutations in each study period and compared them to each observed $Q$.
+I create permutated null models to calculate random distributions of the coefficient of variation ($CV$) and modularity ($Q$). For the $CV$ I sent the `cv_null.R` script to OSU's high performance cluster using the `submit.sh` file to run 1000 permutation of each study period's social network to get the distribution of random $CV$'s compared to each observed $CV$. For $Q$ I calculated the cluster edge betweeness of the 1000 permutations in each study period and compared them to each observed $Q$.
 
 ## PART 4: Create Individual-level Variables (ILV) and Human-centric Foraging Behavior Predictors
 
