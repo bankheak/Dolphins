@@ -691,10 +691,13 @@ ggplot(aes(x = Year), data = HAB_HI_data) +
   labs(x = "Year") +
   scale_color_manual(values = c("HI_IDs" = "blue", "HAB" = "orange"), 
                      name = "Variables", 
-                     labels = c("Human-centric Behaviors", "Harmful Algal Blooms")) +
+                     labels = c( "Harmful Algal Blooms", "Human-centric Behaviors")) +
   theme(
-    panel.background = element_blank()) +
-  geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
+    panel.background = element_blank(),  # Removes background gridlines
+    axis.line = element_line(colour = "black"),  # Adds axis lines
+    axis.ticks = element_line(colour = "black"),  # Adds tick marks
+    panel.grid = element_blank()  # Ensures no additional gridlines appear
+  ) + geom_vline(xintercept = c(2000.5, 2006.5), linetype = "dashed", color = "black", size = 1.5)
 
 
 # Extract specific columns from each data frame in list_years
