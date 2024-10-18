@@ -48,104 +48,12 @@ if(!require(posterior)){install.packages('posterior'); library(posterior)} # Fin
 if(!require(distributional)){install.packages('distributional'); library(distributional)}
 if(!require(doParallel)){install.packages('doParallel'); library(doParallel)} # Faster computing
 
-# Read in full datasheet and list (after wrangling steps)
+###########################################################################
+# PART 1: Social Association Matrix ---------------------------------------------
+
+# Read in wrangled datasheets
 orig_data <- read.csv("orig_data.csv") # original data
 list_years <- readRDS("list_years.RData") # (1995-2000)/(2001-2006)/(2007-2012)
-nxn <- readRDS("nxn.RData") # association matrix of list_years
-
-###########################################################################
-# PART 1: Wrangle Data ---------------------------------------------
-
-# Read in & combine files
-firstgen_data <- read.csv("firstgen_data.csv") # 1993-2004
-secondgen_data <- read.csv("secondgen_data.csv") # 2005-2014
-orig_data <- rbind(firstgen_data, secondgen_data) # Combine
-
-# Make date into a date class
-orig_data$Date <- as.Date(as.character(orig_data$Date), format="%d-%b-%y")
-orig_data$Year <- as.numeric(format(orig_data$Date, format = "%Y"))
-
-# Fix coding individuals
-orig_data$Code <- ifelse(orig_data$Code == "1312", "F222", orig_data$Code)
-
-# Limit to study period
-orig_data <- orig_data[orig_data$Year >= 1995 & orig_data$Year <= 2012,]
-
-# Get rid of data without codes
-orig_data <- subset(orig_data, subset=c(orig_data$Code != "None"))
-
-# Total Number of individuals in study period
-length(unique(orig_data$Code))
-
-# Get rid of any data with no location data
-orig_data <- orig_data[!is.na(orig_data$StartLat) & !is.na(orig_data$StartLon),]
-orig_data <- subset(orig_data, subset=c(orig_data$StartLat != 999))
-
-# Now split up data 
-write.csv(orig_data, "orig_data.csv") # Save data
-
-# Find the codes that appear more than once
-repeated_codes <- orig_data$Code[duplicated(orig_data$Code) | duplicated(orig_data$Code, fromLast = TRUE)]
-
-# Get the unique values of these repeated codes
-unique_repeated_codes <- unique(repeated_codes)
-
-# Get the length of these unique codes
-length(unique_repeated_codes)
-
-## Split data by HAB intensity
-orig_data$Group2 <- ifelse(orig_data$Year < 2001, 1, ifelse(orig_data$Year < 2007, 2, 3))
-data_by_intense <- split(orig_data, orig_data$Group2) # (1995-2000), (2001-2006), (2007-20012)
-
-# Eliminate IDs with less than 10 locations
-fix_list <- function(list_splityears) {
-  
-  list_years <- list()  # Initialize an empty list to store the updated datasets
-  
-  for (i in seq_along(list_splityears)) {
-    ID <- unique(list_splityears[[i]]$Code)
-    obs_vect <- numeric(length(ID))
-    
-    for (j in seq_along(ID)) {
-      obs_vect[j] <- sum(list_splityears[[i]]$Code == ID[j])
-    }
-    
-    sub <- data.frame(ID = ID, obs_vect = obs_vect)
-    sub <- subset(sub, subset = obs_vect > 10)
-    
-    list_years[[i]] <- subset(list_splityears[[i]], Code %in% sub$ID)
-    
-  }
-  
-  return(list_years)
-}
-
-list_years <- fix_list(data_by_intense)
-
-# Make an overlapping dataset where individuals between period match
-overlap_func <- function(list_years) {
-## Get unique codes from both lists
-codes_list <- list()
-for (i in seq_along(list_years)) {
-  codes_list[[i]] <- unique(list_years[[i]]$Code)
-}
-
-## Find the common codes
-common_codes <- Reduce(intersect, codes_list)
-## Subset the data frames based on the common codes
-list_years_ovrlap <- lapply(list_years, function(df) {
-  df[df$Code %in% common_codes, ]
-})
-return(list_years_ovrlap)
-}
-
-list_years <- overlap_func(list_years)
-
-# Save lists
-saveRDS(list_years, file = "list_years.RData")
-
-###########################################################################
-# PART 2: Social Association Matrix ---------------------------------------------
 
 # Calculate Gambit of the group
 create_gbi <- function(list_years) {
@@ -260,7 +168,7 @@ ggplot(result_df, aes(x = Behavior, y = Group_size, fill = Behavior)) +
 
 
 ###########################################################################
-# PART 3: CV and Modularity ---------------------------------------------
+# PART 2: CV and Modularity ---------------------------------------------
 
 ## Coefficient of Variation ##
 # Read in null cv values for one year
@@ -385,45 +293,12 @@ model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
 
 
 ###########################################################################
-# PART 4: Create ILV and HI Predictors ---------------------------------------------
+# PART 3: Create ILV and HI Predictors ---------------------------------------------
 
 # SEX and AGE Matrices ------------------------------------------------------
 
-# Read in sex and age data
-ILV <- read.csv("Individual_Level_Variables.csv") 
-missing_ILV <- read.csv("ILV_missing_age.csv")
-
-# Fix sex so that probable is assigned
-ILV$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
-                   ifelse(ILV$Sex == "Probable Male", "Male", ILV$Sex))
- 
-# Now make a sex and age data frame
-ILV_df <- ILV[!duplicated(ILV[, "Alias"]), c("Alias", "Sex", "BirthYear")]
-ILV_df$Sex <- ifelse(ILV_df$Sex == "Female", 0, 
-                     ifelse(ILV_df$Sex == "Male", 1, NA))
-colnames(ILV_df) <- c("Code", "Sex", "Age")
-ILV_dem <- ILV_df[ILV_df$Code %in% rownames(nxn[[1]]),]
-
-# Replace missing age
-ILV_dem$Age <- ifelse(is.na(ILV_dem$Age), 
-                      missing_ILV$Estimated.Birth.Yr..minimum.age.[match(ILV_dem$Code, missing_ILV$Code)], 
-                      ILV_dem$Age)
-ILV_dem$Age <- ifelse(ILV_dem$Age == "<1988", "1988", ifelse(ILV_dem$Age == "<1997", "1997", ILV_dem$Age))
-ILV_dem$Age <- as.numeric(ILV_dem$Age)
-write.csv(ILV_dem, "ILV_dem.csv")
-
 # Find the demographics of the population
 ILV_dem <- read.csv("ILV_dem.csv")
-## Sex
-sum(ILV_dem$Sex == "Female")
-sum(ILV_dem$Sex == "Male")
-## Age
-max(ILV_dem$Age)
-min(ILV_dem$Age)
-hist(ILV_dem$Age)
-total_ids <- nrow(ILV_dem)
-ids_above_1988 <- sum(ILV_dem$Age >= 1989 & ILV_dem$Age <= 1994)
-(ids_above_1988 / total_ids) * 100
 
 # Make sim and diff matrices
 ILV_df <- ILV_dem
@@ -909,7 +784,7 @@ saveRDS(sim_HI, "sim_HI.RData")
 
 
 ###########################################################################
-# PART 5: Run MCMC GLMM ---------------------------------------------
+# PART 4: Run MCMC GLMM ---------------------------------------------
 
 # Read in social association matrix and listed data
 sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
@@ -1043,7 +918,7 @@ mcmc_plot + scale_y_discrete(
 
 
 ###########################################################################
-# PART 6: Display Networks ---------------------------------------------
+# PART 5: Display Networks ---------------------------------------------
 
 ## Create social network
 net <- lapply(nxn, function (df) {
