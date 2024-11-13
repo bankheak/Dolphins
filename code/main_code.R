@@ -6,8 +6,7 @@ setwd("../data")
 
 # Load all necessary packages
 ## Predictors
-install.packages('igraph', version = '1.6.0') 
-library(igraph) # graph_from_adjacency_matrix version = '1.6.0'
+if(!require(igraph)){install.packages('igraph', version = '1.6.0'); library(igraph)} # graph_from_adjacency_matrix version = '1.6.0'
 if(!require(kinship2)){install.packages('kinship2'); library(kinship2)} # genetic relatedness
 if(!require(adehabitatHR)){install.packages('adehabitatHR'); library(adehabitatHR)} # Caluculate MCPs and Kernel density 
 ## Network
@@ -49,126 +48,7 @@ if(!require(distributional)){install.packages('distributional'); library(distrib
 if(!require(doParallel)){install.packages('doParallel'); library(doParallel)} # Faster computing
 
 ###########################################################################
-# PART 1: Social Association Matrix ---------------------------------------------
-
-# Read in wrangled datasheets
-orig_data <- read.csv("orig_data.csv") # original data
-list_years <- readRDS("list_years.RData") # (1995-2000)/(2001-2006)/(2007-2012)
-
-# Calculate Gambit of the group
-create_gbi <- function(list_years) {
-  gbi <- list()
-  group_data <- list()
-  for (i in seq_along(list_years)) {
-    
-    # Group each individual by date and sighting
-    group_data[[i]] <- cbind(list_years[[i]][,c("Date","Sighting","Code","Year")]) 
-    group_data[[i]]$Group <- cumsum(!duplicated(group_data[[i]][1:2])) # Create sequential group # by date
-    group_data[[i]] <- cbind(group_data[[i]][,3:5]) # Subset ID and group #
-    
-    # Gambit of the group index
-    gbi[[i]] <- get_group_by_individual(group_data[[i]][,c("Code", "Group")], data_format = "individuals")
-  }
-  return(gbi)                                      
-}
-
-gbi <- create_gbi(list_years)
-saveRDS(gbi, "gbi.RData")
-
-# Create association matrix
-create_nxn <- function(gbi) {
-  source("../code/functions.R") # SRI & null permutation
-  n.cores <- detectCores()
-  system.time({
-    registerDoParallel(n.cores)
-    nxn <- list()
-    for (i in seq_along(gbi)) {
-      nxn[[i]] <- as.matrix(SRI.func(gbi[[i]]))
-    }                                 
-    # End parallel processing
-    stopImplicitCluster()
-  })
-  return(nxn)
-}
-
-nxn <- create_nxn(gbi)
-
-# Order data
-order_rows <- rownames(nxn[[1]])
-order_cols <- colnames(nxn[[1]])
-
-# Apply the order to each matrix in the list
-nxn <- lapply(nxn, function(mat) mat[order_rows, order_cols])
-
-# Save nxn lists
-saveRDS(nxn, file = "nxn.RData")
-
-# Calculate group size differences
-# Read in GBI
-gbi <- readRDS("gbi.RData")
-
-# Get the average group size for each ID
-group_list <- lapply(gbi, function(group_matrix) {
-  
-  # Calculate group size for each group
-  individual_group_size <- rowSums(group_matrix)
-  
-  # Create empty vectors to store results
-  ids <- character()
-  avg_group_sizes <- numeric()
-  
-  # Iterate through each individual in the group
-  for (i in 1:ncol(group_matrix)) {
-    
-    # Get the individual ID
-    individual_id <- colnames(group_matrix)[i]
-    
-    # Calculate the group size for the individual
-    group_size <- ifelse(group_matrix[, individual_id] == 1, 
-                         individual_group_size, 0)
-    
-    # Calculate the average group size for the individual
-    avg_group_size <- mean(group_size)
-    
-    # Append the results to vectors
-    ids <- c(ids, individual_id)
-    avg_group_sizes <- c(avg_group_sizes, avg_group_size)
-  }
-  
-  # Create a data frame for the current group
-  group_data <- data.frame(ID = ids,
-                           Average_Group_Size = avg_group_sizes)
-  
-  return(group_data)
-})
-
-# Add HI list
-result_df <- readRDS("result_df.RData")
-result_df$Group_size <- ifelse(result_df$Period == "1-Before_HAB", 
-                               group_list[[1]]$Average_Group_Size[match(result_df$ID, group_list[[1]]$ID)], 
-                               ifelse(result_df$Period == "2-During_HAB",
-                                      group_list[[2]]$Average_Group_Size[match(result_df$ID, group_list[[2]]$ID)], 
-                                      group_list[[3]]$Average_Group_Size[match(result_df$ID, group_list[[3]]$ID)]))
-
-# Change the factor levels and add factor for Period
-result_df$Behavior <- ifelse(result_df$HI != "NF", "HI", "None")
-
-# Plot the HI behaviors and group sizes for every year
-ggplot(result_df, aes(x = Behavior, y = Group_size, fill = Behavior)) +
-  geom_boxplot(outlier.shape = NA) + # Remove outliers
-  geom_jitter(aes(color = HI), width = 0.2, alpha = 0.5) + # Set jitter points color and transparency
-  facet_wrap(~ Period, labeller = labeller(Period = c("1-Before_HAB" = "Before", 
-                                                      "2-During_HAB" = "During", 
-                                                      "3-After_HAB" = "After"))) +
-  labs(x = "Human-centric Behavior", y = "Individuals' Average Group Size") +
-  theme(strip.background = element_blank(),
-        strip.text = element_text(size = 12, face = "bold"),
-        panel.grid = element_blank())
-# Unequal variance
-
-
-###########################################################################
-# PART 2: CV and Modularity ---------------------------------------------
+# PART 1: CV and Modularity ---------------------------------------------
 
 ## Coefficient of Variation ##
 # Read in null cv values for one year
@@ -293,7 +173,7 @@ model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
 
 
 ###########################################################################
-# PART 3: Create ILV and HI Predictors ---------------------------------------------
+# PART 2: Create ILV and HI Predictors ---------------------------------------------
 
 # SEX and AGE Matrices ------------------------------------------------------
 
@@ -382,149 +262,6 @@ kov <- lapply(kov, function(mat) mat[order_rows, order_cols])
 
 # Save HRO
 saveRDS(kov, "kov.RDS")
-
-# GR Matrix ------------------------------------------------------
-
-# Read in sex and age data
-ILV_pat <- read.csv("Paternity_data.csv") 
-
-# Order data
-order_rows <- rownames(nxn[[1]])
-order_cols <- colnames(nxn[[1]])
-# Reorder rows in 'ILV' based on 'order_rows'
-ILV <- ILV_pat[ILV_pat$Alias %in% order_rows, ]
-ILV <- ILV[match(order_rows, ILV$Alias), ]
-
-# Subset paternity data
-pedigree_df <- data.frame(Alias = ILV$Alias,
-                          Mom = ILV$Mom,
-                          Dad = ILV$Dad,
-                          Sex = ILV$Sex)
-
-# Fix dad data
-pedigree_df$Dad <- ifelse(pedigree_df$Dad == "na", NA, pedigree_df$Dad)
-pedigree_df$Dad <- ifelse(pedigree_df$Dad == "FB26 or FB66", "FB26", pedigree_df$Dad)
-pedigree_df$Dad <- ifelse(pedigree_df$Dad == "FB76 or FB38", "FB76", pedigree_df$Dad)
-
-# Fix sex so that probable is assigned
-pedigree_df$Sex <- ifelse(ILV$Sex == "Probable Female", "Female",
-                  ifelse(ILV$Sex == "Probable Male", "Male", ILV$Sex))
-# Make sex numeric
-pedigree_df$Sex <- ifelse(pedigree_df$Sex == "Female", 2, 
-                     ifelse(pedigree_df$Sex == "Male", 1, NA))
-
-# Limit data to non-missing paternity IDs
-pedigree_subset <- pedigree_df[!is.na(pedigree_df$Mom) | !is.na(pedigree_df$Dad), ]
-# Reset row names to be sequential
-row.names(pedigree_subset) <- NULL
-saveRDS(pedigree_subset, "pedigree_subset.RData")
-pedigree_df <- pedigree_subset
-
-# Make id numeric
-## Moms
-pedigree_df$ID <- rownames(pedigree_df)
-for (i in 1:nrow(pedigree_df)) {
-  pedigree_df$Mom <- ifelse(pedigree_df$Mom %in% pedigree_df$Alias[i], 
-                            pedigree_df$ID[i], pedigree_df$Mom)
-}
-
-## Dads
-for (i in 1:nrow(pedigree_df)) {
-  pedigree_df$Dad <- ifelse(pedigree_df$Dad %in% pedigree_df$Alias[i], 
-                            pedigree_df$ID[i], pedigree_df$Dad)
-}
-
-# Only take the ids that aren't found in the 117 list
-missing_moms<- subset(pedigree_df, nchar(Mom) > 3)
-missing_dads<- subset(pedigree_df, nchar(Dad) > 3)
-
-## Create the sequence of numbers starting from 118
-number_mom <- data.frame(Mom = unique(missing_moms$Mom), 
-                         ID = c((nrow(pedigree_df) + 1):(nrow(pedigree_df) + length(unique(missing_moms$Mom)))))
-## Fill in numbers
-for (i in 1:nrow(missing_moms)) {
-  missing_moms$Mom <- ifelse(missing_moms$Mom %in% number_mom$Mom[i], 
-                             number_mom$ID[i],
-                             missing_moms$Mom)
-}
-## Make ID numeric
-missing_moms$Mom <- as.numeric(missing_moms$Mom)
-
-## Do the same thing with dads
-number_dad <- data.frame(Dad = unique(missing_dads$Dad), 
-                         ID = c((max(missing_moms$Mom) + 1):(max(missing_moms$Mom) + length(unique(missing_dads$Dad)))))
-for (i in 1:nrow(missing_dads)) {
-  missing_dads$Dad <- ifelse(missing_dads$Dad %in% number_dad$Dad[i], 
-                             number_dad$ID[i],
-                             missing_dads$Dad)
-}
-## Make ID numeric
-missing_dads$Dad <- as.numeric(missing_dads$Dad)
-
-# Fill in the rest of the NAs with random numbers
-## Moms
-missing_moms_match <- subset(pedigree_df, nchar(Mom) > 3)
-matching_indices <- match(pedigree_df$Mom, missing_moms_match$Mom)
-pedigree_df$Mom <- ifelse(!is.na(matching_indices), missing_moms$Mom[matching_indices], pedigree_df$Mom)
-
-## Dads
-missing_dads_match<- subset(pedigree_df, nchar(Dad) > 3)
-matching_indices <- match(pedigree_df$Dad, missing_dads_match$Dad)
-pedigree_df$Dad <- ifelse(!is.na(matching_indices), missing_dads$Dad[matching_indices], pedigree_df$Dad)
-
-# Now create data for function
-pedigree_data <- data.frame(id = as.numeric(pedigree_df$ID),
-                          mom = as.numeric(pedigree_df$Mom),
-                          dad = as.numeric(pedigree_df$Dad),
-                          sex = pedigree_df$Sex)
-
-# Assuming your dataframe is named pedigree_data
-pedigree_data$dad[is.na(pedigree_data$dad)] <- 0  # Replace NA with 0 or another appropriate code
-pedigree_data$mom[is.na(pedigree_data$mom)] <- 0  # Replace NA with 0 or another appropriate code
-
-# Add Fake Fathers
-for (i in which(pedigree_data$mom > 0 & pedigree_data$dad == 0)) {
-  pedigree_data$dad[i] <- i + max(pedigree_data$dad)
-}
-
-# Create fake individuals
-fake_ids <- (nrow(pedigree_df) + 1):(max(pedigree_data$dad) + 1)
-fake <- data.frame(id = fake_ids,
-                   mom = rep(0, length(fake_ids)),
-                   dad = rep(0, length(fake_ids)),
-                   sex = rep(3, length(fake_ids)))
-pedigree_data <- rbind(pedigree_data, fake)
-
-# Change errors
-pedigree_data$sex[pedigree_data$id %in% c(139:270)] <- 1
-pedigree_data$sex[pedigree_data$id %in% c(118:138)] <- 2
-
-# For limited data
-pedigree_data$sex[pedigree_data$id %in% c(94:112, 117:nrow(pedigree_data))] <- 1
-pedigree_data$sex[pedigree_data$id %in% c(58:93)] <- 2
-
-# Create GR matrix
-ped <- pedigree(id = pedigree_data$id, 
-                dadid = pedigree_data$dad, 
-                momid = pedigree_data$mom,
-                sex = pedigree_data$sex)
-plot(ped)
-
-# Calculate kinship matrix
-kinship_matrix <- kinship(ped)
-kinship_matrix <- kinship_matrix[1:117, 1:117]
-saveRDS(kinship_matrix, "kinship_matrix.RData")
-
-# Limited population
-kinship_matrix <- kinship_matrix[1:57, 1:57]
-saveRDS(kinship_matrix, "kinship_matrix_limit.RData")
-
-# Test correlation to homerange
-kinship_matrix <- readRDS("kinship_matrix.RData")
-kov <- readRDS("kov.RDS")
-mantel(kov[[1]], kinship_matrix)
-mantel(kov[[2]], kinship_matrix)
-mantel(kov[[3]], kinship_matrix)
 
 # HI Matrices ------------------------------------------------------
 
@@ -784,17 +521,13 @@ saveRDS(sim_HI, "sim_HI.RData")
 
 
 ###########################################################################
-# PART 4: Run MCMC GLMM ---------------------------------------------
+# PART 3: Run MCMC GLMM ---------------------------------------------
 
 # Read in social association matrix and listed data
 sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
-gr <- readRDS("kinship_matrix.RData")
-
-# Check multicollinearity
-mantel(gr, kov[[1]]) # correlated, drop gr
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -918,7 +651,7 @@ mcmc_plot + scale_y_discrete(
 
 
 ###########################################################################
-# PART 5: Display Networks ---------------------------------------------
+# PART 4: Display Networks ---------------------------------------------
 
 ## Create social network
 net <- lapply(nxn, function (df) {
