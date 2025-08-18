@@ -48,132 +48,7 @@ if(!require(distributional)){install.packages('distributional'); library(distrib
 if(!require(doParallel)){install.packages('doParallel'); library(doParallel)} # Faster computing
 
 ###########################################################################
-# PART 1: CV and Modularity ---------------------------------------------
-
-## Coefficient of Variation ##
-# Read in null cv values for one year
-cv_null <- readRDS("cv_years.RData")
-## Remove NAs, if any
-# cv_null = cv_null[!is.na(cv_null)]
-
-# Calculate the CV of the observation association data
-# CV = (SD/mean)*100
-cv_obs <- lapply(nxn, function (df) {(sd(df) / mean(df)) * 100})  # Very high CV = unexpectedly 
-# high or low association indices in the empirical distribution
-
-# Calculate 95% confidence interval, in a two-tailed test
-cv_ci = lapply(cv_null, function (df) {quantile(df, probs=c(0.025, 0.975), type=2)})
-
-# Check whether pattern of connections is non-random
-par(mfrow=c(3, 1))
-
-# Create a list to store the histograms
-hist_cvs <- list()
-
-# Create histograms for each element in cv_null
-for (i in seq_along(cv_null)) {
-  hist_cvs[[i]] <- hist(cv_null[[i]], 
-                        breaks=50,
-                        col= "lightblue",
-                        main = NULL,
-                        xlab="Null CV SRI")
-  
-  # Add lines for empirical CV, 2.5% CI, and 97.5% CI
-  abline(v= cv_obs[[i]], col="red")
-  abline(v= cv_ci[[i]], col="blue")
-  abline(v= cv_ci[[i]], col="blue")
-}
-
-#' This shows whether there are more preferred/avoided 
-#' relationships than we would expect at random
-
-## Modularity ##
-# Read in data
-el <- readRDS("el_years.RData")
-
-## igraph format with weight
-n.cores <- detectCores()
-system.time({
-  registerDoParallel(n.cores)
-  dolphin_ig <- list()
-  for (j in seq_along(list_years)) {
-    dolphin_ig[[j]] <- graph_from_adjacency_matrix(as.matrix(nxn[[j]]),
-                                       mode="undirected",
-                                       weighted=TRUE, diag=TRUE)
-  }  
-  ### End parallel processing
-  stopImplicitCluster()
-})
-
-# Dolphin walk
-system.time({
-  registerDoParallel(n.cores)
-  dolphin_walk <- list()
-  for (k in seq_along(dolphin_ig)) {
-    dolphin_walk[[k]] <- cluster_walktrap(dolphin_ig[[k]], 
-                                          weights = edge_attr(dolphin_ig[[k]], "weight"), 
-                                          steps = 4, merges = TRUE, 
-                                          modularity = TRUE, 
-                                          membership = TRUE)
-  } # cluster_edge_betweenness
-  
-  ### End parallel processing
-  stopImplicitCluster()
-})
-
-# Run modularity permutations 1000 times for each matrix
-run_mod <- function(el, dolphin_walk_list) {
-  iter <- 1000
-  randmod <- numeric(iter)  # Initialize a numeric vector to store Q-values
-  result <- list()
-  
-  for (k in 1:3) {
-    
-    for (i in 1:iter) {
-    # Save the edgelist into a new object and permutate the link weights
-    auxrand <- el[[k]]
-    # transform it into igraph format
-    igrand <- graph_from_edgelist(auxrand[,1:2]) 
-    E(igrand)$weight <- auxrand[,3]
-    igrand <- as.undirected(igrand)
-    # Now we can permutate the link weights
-    E(igrand)$weight <- sample(E(igrand)$weight)
-    # calculate the modularity for the permutate copy
-    rand_walk <- cluster_walktrap(igrand)
-    # and finally save the modularity Q-value into the empty vector
-    randmod[i] <- modularity(rand_walk)
-  }
-  
-  # Calculate the 95% confidence interval (two-tailed test)
-  ci <- quantile(randmod, probs = c(0.025, 0.975), type = 2)
-  
-  # Visualization of the random Q distribution
-  hist(randmod, xlim = c(0.05, 0.35), main = NA,
-       xlab = "Q-value", ylab = "Frequency", col = "lightblue")
-  
-  # Empirical Q-value
-  abline(v = modularity(dolphin_walk_list[[k]]), col = "red")
-  
-  # 2.5% CI
-  abline(v = ci[1], col = "blue")
-  
-  # 97.5% CI
-  abline(v = ci[2], col = "blue")
-  
-  # Return a data frame with Q-value and confidence intervals
-  result[[k]] <- data.frame(Q = modularity(dolphin_walk_list[[k]]), LowCI = ci[1], HighCI = ci[2])
-  
-  }
-  return(result)
-}
-
-par(mfrow=c(3, 1))
-
-model <- run_mod(el = el, dolphin_walk_list = dolphin_walk)
-
-
-###########################################################################
-# PART 2: Create ILV and HI Predictors ---------------------------------------------
+# PART 1: Create ILV and HI Predictors ---------------------------------------------
 
 # SEX and AGE Matrices ------------------------------------------------------
 
@@ -521,7 +396,7 @@ saveRDS(sim_HI, "sim_HI.RData")
 
 
 ###########################################################################
-# PART 3: Run MCMC GLMM ---------------------------------------------
+# PART 2: Run MCMC GLMM ---------------------------------------------
 
 # Read in social association matrix and listed data
 sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
@@ -651,7 +526,10 @@ mcmc_plot + scale_y_discrete(
 
 
 ###########################################################################
-# PART 4: Display Networks ---------------------------------------------
+# PART 3: Display Networks ---------------------------------------------
+
+## Read in nxn
+nxn <- readRDS("nxn.RData")
 
 ## Create social network
 net <- lapply(nxn, function (df) {
@@ -695,10 +573,12 @@ dolp_ig <- lapply(el_years, function (el) {
   # Add the edge weights to this network
   E(ig)$weight <- as.numeric(el[,3])
   # Create undirected network
-  ig <- as.undirected(ig)
+  ig <- as_undirected(ig)
   return(ig)
   }
 )
+
+saveRDS(dolp_ig, "dolp_ig.RData") 
 
 # Newman's Q modularity
 newman <- lapply(dolp_ig, function (df) {
@@ -974,6 +854,16 @@ for (i in 1:3) {
   
 }
 
+# Save combined cluster list
+saveRDS(combined_cluster_data, "combined_cluster_data.RData")
+
+###########################################################################
+# PART 4: Modularity ---------------------------------------------
+
+# Read in cluster data
+combined_cluster_data <- readRDS("combined_cluster_data.RData")
+
+# Find the average cluster size for each HAB period
 mean(combined_cluster_data[[1]]$Total_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
 mean(na.omit(combined_cluster_data[[2]]$Total_Cluster_Count[combined_cluster_data[[2]]$HI_Cluster_Count != 0]))
 mean(combined_cluster_data[[3]]$Total_Cluster_Count[combined_cluster_data[[3]]$HI_Cluster_Count != 0])
@@ -985,3 +875,27 @@ mean(combined_cluster_data[[3]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_C
 mean(combined_cluster_data[[1]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
 mean(na.omit(combined_cluster_data[[2]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0]))
 mean(combined_cluster_data[[3]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
+
+# Make the list into a dataframe
+periods <- c("Before", "During", "After")
+combined_cluster_df <- do.call(rbind, Map(cbind, combined_cluster_data, Period = periods))
+combined_cluster_df <- na.omit(combined_cluster_df)
+
+# Make During the intercept
+combined_cluster_df$Period <- relevel(factor(combined_cluster_df$Period),
+                                      ref = "During")
+
+# Poisson test for cluster sizes
+model1 <- glm(Total_Cluster_Count ~ Period, family = poisson, data = combined_cluster_df)
+summary(model1)
+
+## Find avg
+mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "Before"])
+mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "During"])
+mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "After"])
+
+# Poisson test for proportion of HC
+model2 <- glm(cbind(HI_Cluster_Count, Total_Cluster_Count - HI_Cluster_Count) ~ Period,
+    family = binomial,
+    data = combined_cluster_df)
+summary(model2)
