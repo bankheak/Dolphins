@@ -19,7 +19,6 @@ if(!require(ggraph)){install.packages('ggraph'); library(ggraph)} # For network 
 if(!require(tnet)){install.packages('tnet'); library(tnet)} # For weights
 if(!require(asnipe)){install.packages('asnipe'); library(asnipe)} # get_group_by_individual
 if(!require(assortnet)){install.packages('assortnet'); library(assortnet)} # associative indices
-source("../code/functions.R") # nxn
 ## Mapping
 if(!require(statnet)){install.packages('statnet'); library(statnet)}
 if(!require(viridis)){install.packages('viridis'); library(viridis)}
@@ -403,6 +402,11 @@ sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
+gbi <- readRDS("gbi.RData")
+
+# Break apart nominator and denominator of nxn
+source("../code/functions.R")
+nxn_counts <- create_counts(gbi)
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -430,6 +434,8 @@ two <- lapply(seq_along(node_ids_j), function(i) factor(as.vector(node_names[[i]
 
 # Put data into a dataframe
 df_list = data.frame(edge_weight = HAB_data[, 1],
+                     assoc_count = unlist(lapply(nxn_counts, function(x) x$assoc[upper.tri(x$assoc, diag = TRUE)])),
+                     opportunity_count = unlist(lapply(nxn_counts, function(x) x$opps[upper.tri(x$opps, diag = TRUE)])),
                      HAB_During = HAB_data[, 3],
                      HAB_After = HAB_data[, 4],
                      Period = as.factor(HAB_data[, 2]),
@@ -446,37 +452,60 @@ df_list$edge_weight <- ifelse(df_list$edge_weight == 0, df_list$edge_weight + 0.
                               ifelse(df_list$edge_weight == 1, df_list$edge_weight - 0.00001,
                                      df_list$edge_weight))
 
+# Standardize variables
+numeric_vars <- c("HRO", "sex_similarity", "age_similarity", "HI_similarity")
+df_list[numeric_vars] <- lapply(df_list[numeric_vars], function(x) (x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE))
+
 # Help STAN run faster
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-# Multimembership models in brms
-fit_sri.0 <- brm(edge_weight ~ (1 | mm(node_id_1, node_id_2)), 
-                 family = Beta(), chains = 3, data = df_list)
-fit_sri.1 <- brm(edge_weight ~ HI_similarity + Period + 
-                   HRO + age_similarity + sex_similarity + 
-                   (1 | mm(node_id_1, node_id_2)), 
-                 family = Beta(), chains = 3, data = df_list)
-fit_sri.2 <- brm(edge_weight ~ HI_similarity * Period +
-                   HRO + age_similarity + sex_similarity + 
-                   (1 | mm(node_id_1, node_id_2)), 
-                 family = Beta(), chains = 3, data = df_list)
+# Decide on prior for SRI data
+p_hat <- with(df_list, sum(assoc_count, na.rm=TRUE) / sum(opportunity_count, na.rm=TRUE))
+int_mean <- qlogis(p_hat)            # prior mean on logit scale
+
+# Set priors
+full_priors <- c(
+  # Intercept centered at pooled baseline probability
+  set_prior(paste0("normal(", round(int_mean, 3), ", ", 1, ")"), class = "Intercept"),
+  
+  # Weakly-informative slopes for ALL fixed effects (main effects + interactions)
+  set_prior("normal(0, 0.5)", class = "b"),
+  
+  # Random-effect SDs (multiple-membership node effects)
+  set_prior("student_t(3, 0, 1)", class = "sd")
+  )
+
+# Multimembership model in brms
+df_list$obs <- seq_len(nrow(df_list))
+fit_sri <- brm(
+  assoc_count | trials(opportunity_count) ~
+    HI_similarity * Period + HRO + age_similarity + sex_similarity +
+    (1 | mm(node_id_1, node_id_2)) + (1 | obs),
+  family = binomial(),
+  prior  = full_priors,  
+  control = list(adapt_delta = 0.99, max_treedepth = 15),
+  data = df_list
+)
+
+# Generate prior predictive samples
+prior_pred_samples <- posterior_predict(fit_sri)
+
+# Plot the PPC (e.g., comparing minimum values)
+ppc_stat_2d(y = df_list$assoc_count, yrep = prior_pred_samples) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text = element_text(size = 14), axis.title = element_text(size = 16))
 
 # Save data
-looic.h1 <- loo(fit_sri.0, fit_sri.1, fit_sri.2, compare = T)
-saveRDS(looic.h1, "looic.h1.RData")
-looic.h1 <- readRDS("looic.h1.RData")
-
-saveRDS(fit_sri.0, "fit_sri.0.RData")
-saveRDS(fit_sri.1, "fit_sri.1.RData")
-saveRDS(fit_sri.2, "fit_sri.2.RData")
+saveRDS(fit_sri, "fit_sri.RData")
 
 # Summary Statistics
-fit_sri.2 <- readRDS("fit_sri.2.RData")
-summary(fit_sri.2)
+fit_sri <- readRDS("fit_sri.RData")
+summary(fit_sri)
+prior_summary(fit_sri)
 
 # Check for model convergence
-model <- fit_sri.2
+model <- fit_sri
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
@@ -579,6 +608,7 @@ dolp_ig <- lapply(el_years, function (el) {
 )
 
 saveRDS(dolp_ig, "dolp_ig.RData") 
+dolp_ig <- readRDS("dolp_ig.RData")
 
 # Newman's Q modularity
 newman <- lapply(dolp_ig, function (df) {
@@ -691,7 +721,7 @@ for (i in 1:length(ig)) {  # Loop through periods
     labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
 
     # Get map of Sarasota, Florida
-    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6))
+    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6), land.col = "lightgray")
     
     # add geographic coordinates
     net_i <- net[[i]]
@@ -863,19 +893,6 @@ saveRDS(combined_cluster_data, "combined_cluster_data.RData")
 # Read in cluster data
 combined_cluster_data <- readRDS("combined_cluster_data.RData")
 
-# Find the average cluster size for each HAB period
-mean(combined_cluster_data[[1]]$Total_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
-mean(na.omit(combined_cluster_data[[2]]$Total_Cluster_Count[combined_cluster_data[[2]]$HI_Cluster_Count != 0]))
-mean(combined_cluster_data[[3]]$Total_Cluster_Count[combined_cluster_data[[3]]$HI_Cluster_Count != 0])
-
-mean(combined_cluster_data[[1]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
-mean(na.omit(combined_cluster_data[[2]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0]))
-mean(combined_cluster_data[[3]]$HI_Cluster_Count[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
-
-mean(combined_cluster_data[[1]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
-mean(na.omit(combined_cluster_data[[2]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0]))
-mean(combined_cluster_data[[3]]$perc_HI[combined_cluster_data[[1]]$HI_Cluster_Count != 0])
-
 # Make the list into a dataframe
 periods <- c("Before", "During", "After")
 combined_cluster_df <- do.call(rbind, Map(cbind, combined_cluster_data, Period = periods))
@@ -894,8 +911,16 @@ mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "Befo
 mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "During"])
 mean(combined_cluster_df$Total_Cluster_Count[combined_cluster_df$Period == "After"])
 
+# Build new data frame without non-HC clusters
+combined_cluster_df_HC <- combined_cluster_df[combined_cluster_df$HI_Cluster_Count > 0,]
+
 # Poisson test for proportion of HC
 model2 <- glm(cbind(HI_Cluster_Count, Total_Cluster_Count - HI_Cluster_Count) ~ Period,
     family = binomial,
-    data = combined_cluster_df)
+    data = combined_cluster_df_HC)
 summary(model2)
+
+## Get averages
+mean(combined_cluster_df_HC$perc_HI[combined_cluster_df_HC$Period == "Before"])
+mean(combined_cluster_df_HC$perc_HI[combined_cluster_df_HC$Period == "During"])
+mean(combined_cluster_df_HC$perc_HI[combined_cluster_df_HC$Period == "After"])

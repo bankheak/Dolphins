@@ -45,6 +45,43 @@ SRI.func <-  function (matr) {
   Dice
 }
 
+# Break apart the numerator and demoninator of SRI
+SRI_counts <- function(matr) {
+  if (any(is.na(matr))) {
+    matr <- na.omit(matr)
+    cat("The data matrix contains NA, and have been removed.\n")
+  }
+  matr1 <- matr
+  N <- nrow(matr1)
+  matr1[matr1 > 1] <- 1
+  n <- apply(matr1, 2, sum)
+  tmatr <- t(matr1)
+  df <- as.matrix(t(matr))
+  
+  a <- df %*% t(df)            # both present
+  b <- df %*% (1 - t(df))      # A present, B absent
+  c <- (1 - df) %*% t(df)      # A absent, B present
+  d <- ncol(df) - a - b - c    # both absent (unused)
+  
+  denom <- a + b + c
+  
+  list(
+    assoc = a,         # numerator
+    opps  = denom,     # denominator
+    SRI   = a / denom  # same as before, for checking
+  )
+}
+
+create_counts <- function(gbi) {
+  n.cores <- detectCores()
+  registerDoParallel(n.cores)
+  nxn <- list()
+  for (i in seq_along(gbi)) {
+    nxn[[i]] <- SRI_counts(gbi[[i]])
+  }
+  stopImplicitCluster()
+  return(nxn)
+}
 
 # NULL PERMUTATIONS -------------------------------------------------------
 #' @description shuffles binary matrices under different restrictions. 
