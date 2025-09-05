@@ -397,16 +397,18 @@ saveRDS(sim_HI, "sim_HI.RData")
 ###########################################################################
 # PART 2: Run MCMC GLMM ---------------------------------------------
 
+# Break apart nominator and denominator of nxn
+gbi <- readRDS("gbi.RData")
+source("../code/functions.R")
+nxn_counts <- create_counts(gbi)
+saveRDS(nxn_counts, "nxn_counts.RData")
+
 # Read in social association matrix and listed data
 sim_HI <- readRDS("sim_HI.RData") # HI Sim Matrix
 ILV_mat <-readRDS("ILV_mat.RData") # Age and Sex Matrices
 kov <- readRDS("kov.RDS")  # Home range overlap
 nxn <- readRDS("nxn.RData") # Association Matrix
-gbi <- readRDS("gbi.RData")
-
-# Break apart nominator and denominator of nxn
-source("../code/functions.R")
-nxn_counts <- create_counts(gbi)
+nxn_counts <- readRDS("nxn_counts.RData")
 
 # Prepare random effect for MCMC
 num_nodes <- lapply(nxn, function(df) dim(df)[1])
@@ -453,59 +455,134 @@ df_list$edge_weight <- ifelse(df_list$edge_weight == 0, df_list$edge_weight + 0.
                                      df_list$edge_weight))
 
 # Standardize variables
-numeric_vars <- c("HRO", "sex_similarity", "age_similarity", "HI_similarity")
-df_list[numeric_vars] <- lapply(df_list[numeric_vars], function(x) (x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE))
+numeric_vars <- c("HRO", "age_similarity", "HI_similarity")
+df_list[numeric_vars] <- scale(df_list[numeric_vars])
+
+# Distribution of opportunities and successes
+summary(df_list$opportunity_count)
+summary(df_list$assoc_count)
+table(df_list$assoc_count == 0)  # many zeros?
+
+# Overall observed success rate
+overall_p  <- sum(df_list$assoc_count) / sum(df_list$opportunity_count)
+qlogis(overall_p)   # compare to your logit_hat
+
+# Decide on prior for SRI data
+total_successes <- sum(df_list$assoc_count, na.rm = TRUE)
+total_trials    <- sum(df_list$opportunity_count, na.rm = TRUE)
+
+p_hat <- (total_successes + 0.5) / (total_trials + 1)   # add 0.5 / 1 for stability
+logit_hat <- log(p_hat / (1 - p_hat))
+
+# Set priors
+null_priors <- c(
+  set_prior("normal(0, 1)", class = "Intercept"),
+  set_prior("exponential(1)", class = "phi")  # overdispersion parameter
+)
+
+full_priors <- c(
+  set_prior(sprintf("normal(%f, 1)", logit_hat), class = "Intercept"),
+  set_prior("normal(0, 0.5)", class = "b"),
+  set_prior("student_t(3, 0, 0.5)", class = "sd", lb = 0)  # shrink REs
+)
 
 # Help STAN run faster
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-# Decide on prior for SRI data
-p_hat <- with(df_list, sum(assoc_count, na.rm=TRUE) / sum(opportunity_count, na.rm=TRUE))
-int_mean <- qlogis(p_hat)            # prior mean on logit scale
-
-# Set priors
-full_priors <- c(
-  # Intercept centered at pooled baseline probability
-  set_prior(paste0("normal(", round(int_mean, 3), ", ", 1, ")"), class = "Intercept"),
-  
-  # Weakly-informative slopes for ALL fixed effects (main effects + interactions)
-  set_prior("normal(0, 0.5)", class = "b"),
-  
-  # Random-effect SDs (multiple-membership node effects)
-  set_prior("student_t(3, 0, 1)", class = "sd")
-  )
-
 # Multimembership model in brms
-df_list$obs <- seq_len(nrow(df_list))
-fit_sri <- brm(
-  assoc_count | trials(opportunity_count) ~
-    HI_similarity * Period + HRO + age_similarity + sex_similarity +
-    (1 | mm(node_id_1, node_id_2)) + (1 | obs),
-  family = binomial(),
-  prior  = full_priors,  
-  control = list(adapt_delta = 0.99, max_treedepth = 15),
+beta_binomial2 <- custom_family( "beta_binomial2", 
+                                 dpars = c("mu", "phi"), 
+                                 links = c("logit", "log"), 
+                                 lb = c(0, 0), ub = c(1, NA), 
+                                 type = "int", vars = "vint1[n]" )
+
+stan_funs <- "
+  real beta_binomial2_lpmf(int y, real mu, real phi, int T) {
+    return beta_binomial_lpmf(y | T, mu * phi, (1 - mu) * phi);
+  }
+  int beta_binomial2_rng(real mu, real phi, int T) {
+    return beta_binomial_rng(T, mu * phi, (1 - mu) * phi);
+  }
+"
+
+stanvars <- stanvar(scode = stan_funs, block = "functions")
+
+fit_sri.0 <- brm(
+  assoc_count | vint(opportunity_count) ~ 1 + (1 | mm(node_id_1, node_id_2)),
+  family = beta_binomial2,
+  prior = null_priors,
+  stanvars = stanvars,
+  cores = 4,
   data = df_list
 )
 
-# Generate prior predictive samples
-prior_pred_samples <- posterior_predict(fit_sri)
+fit_sri.1 <- brm(
+  assoc_count | vint(opportunity_count) ~ 
+    HI_similarity + Period + HRO + age_similarity + sex_similarity +
+    (1 | mm(node_id_1, node_id_2)),
+  family = beta_binomial2,
+  prior = full_priors,
+  stanvars = stanvars,
+  cores = 4,
+  data = df_list
+)
 
-# Plot the PPC (e.g., comparing minimum values)
-ppc_stat_2d(y = df_list$assoc_count, yrep = prior_pred_samples) +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme(axis.text = element_text(size = 14), axis.title = element_text(size = 16))
+fit_sri.2 <- brm(
+  assoc_count | vint(opportunity_count) ~ 
+    HI_similarity * Period + HRO + age_similarity + sex_similarity +
+    (1 | mm(node_id_1, node_id_2)),
+  family = beta_binomial2,
+  prior = full_priors,
+  stanvars = stanvars,
+  cores = 4,
+  data = df_list
+)
 
 # Save data
-saveRDS(fit_sri, "fit_sri.RData")
+looic.h1 <- loo(fit_sri.0, fit_sri.1, fit_sri.2, compare = T)
+saveRDS(looic.h1, "looic.h1.RData")
+looic.h1 <- readRDS("looic.h1.RData")
+
+# Posterior predictive function for custom beta-binomial2
+eta_draws <- posterior_linpred(fit_sri.bb, summary = FALSE)
+
+# transform to mu (on probability scale)
+mu_draws <- plogis(eta_draws)  # inv_logit
+dim(mu_draws)  # e.g., 4000 × 20709
+
+# extract phi (per-draw vector)
+phi_draws <- exp(as_draws_df(fit_sri.bb)$phi)
+
+# Now simulate from Beta-Binomial
+make_yrep <- function(mu_mat, phi_vec, T) {
+  sapply(seq_along(T), function(i) {
+    alpha <- pmax(mu_mat[, i] * phi_vec, 1e-8)
+    beta  <- pmax((1 - mu_mat[, i]) * phi_vec, 1e-8)
+    p <- rbeta(length(phi_vec), alpha, beta)
+    rbinom(length(p), size = T[i], prob = p)
+  })
+}
+
+yrep <- make_yrep(mu_draws, phi_draws, df_list$opportunity_count)
+
+# Use a subset of draws for clarity
+set.seed(123)
+yrep_sub <- yrep[sample(seq_len(nrow(yrep)), 200), ]
+
+# Density overlay
+ppc_dens_overlay(y = df_list$assoc_count, yrep = yrep_sub)
+
+# Save data
+saveRDS(fit_sri.bb, "fit_sri.bb.RData")
 
 # Summary Statistics
 fit_sri <- readRDS("fit_sri.RData")
-summary(fit_sri)
-prior_summary(fit_sri)
+summary(fit_sri.2)
+prior_summary(fit_sri.2)
 
 # Check for model convergence
-model <- fit_sri
+model <- fit_sri.bb
 plot(model)
 pp_check(model) # check to make sure they line up
 # Search how to fix this
@@ -698,9 +775,9 @@ centroid_list <- lapply(centroid_list, function(df) {
 # Set up the plotting area with 1 row and 2 columns for side-by-side plots
 labeled_nodes <- list()
 plot_list <- list()
-register_google(key = "AIzaSyAgFfxIJmkL8LAWE7kHCqSqKBQDvqa9umI")
+register_google(key = "AIzaSyCNUfReSv2TSoMrxLnDC0glT8kffvSpLGM")
 
-florida_map <- basemap(limits = c(-87.6349, -79.9743, 24.3963, 31.0006)) + 
+florida_map <- basemap(limits = c(-87.5349, -87.5349, 24.3963, 31.0006)) + 
   theme(axis.line = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
