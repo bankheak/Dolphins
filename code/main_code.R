@@ -463,17 +463,6 @@ summary(df_list$opportunity_count)
 summary(df_list$assoc_count)
 table(df_list$assoc_count == 0)  # many zeros?
 
-# Overall observed success rate
-overall_p  <- sum(df_list$assoc_count) / sum(df_list$opportunity_count)
-qlogis(overall_p)   # compare to your logit_hat
-
-# Decide on prior for SRI data
-total_successes <- sum(df_list$assoc_count, na.rm = TRUE)
-total_trials    <- sum(df_list$opportunity_count, na.rm = TRUE)
-
-p_hat <- (total_successes + 0.5) / (total_trials + 1)   # add 0.5 / 1 for stability
-logit_hat <- log(p_hat / (1 - p_hat))
-
 # Set priors
 null_priors <- c(
   set_prior("normal(0, 1)", class = "Intercept"),
@@ -481,9 +470,9 @@ null_priors <- c(
 )
 
 full_priors <- c(
-  set_prior(sprintf("normal(%f, 1)", logit_hat), class = "Intercept"),
+  set_prior("normal(0, 1)", class = "Intercept"),
   set_prior("normal(0, 0.5)", class = "b"),
-  set_prior("student_t(3, 0, 0.5)", class = "sd", lb = 0)  # shrink REs
+  set_prior("exponential(1)", class = "phi")  # overdispersion parameter
 )
 
 # Help STAN run faster
@@ -495,7 +484,8 @@ beta_binomial2 <- custom_family( "beta_binomial2",
                                  dpars = c("mu", "phi"), 
                                  links = c("logit", "log"), 
                                  lb = c(0, 0), ub = c(1, NA), 
-                                 type = "int", vars = "vint1[n]" )
+                                 type = "int", vars = "vint1[n]",
+                                 log_lik = "log_lik_beta_binomial2")
 
 stan_funs <- "
   real beta_binomial2_lpmf(int y, real mu, real phi, int T) {
@@ -508,12 +498,32 @@ stan_funs <- "
 
 stanvars <- stanvar(scode = stan_funs, block = "functions")
 
+log_lik_beta_binomial2 <- "
+  matrix log_lik_beta_binomial2(
+    array[] int y, 
+    array[] int vint1,   // trial counts
+    vector mu, 
+    vector phi
+  ) {
+    int N = size(y);
+    matrix[N, 1] log_lik;
+    for (n in 1:N) {
+      log_lik[n, 1] = beta_binomial_lpmf(y[n] | vint1[n], mu[n] * phi[n], (1 - mu[n]) * phi[n]);
+    }
+    return log_lik;
+  }
+"
+stanvars <- stanvar(scode = stan_funs, block = "functions") + 
+  stanvar(scode = log_lik_beta_binomial2, block = "functions")
+
+
 fit_sri.0 <- brm(
   assoc_count | vint(opportunity_count) ~ 1 + (1 | mm(node_id_1, node_id_2)),
   family = beta_binomial2,
   prior = null_priors,
   stanvars = stanvars,
-  cores = 4,
+  cores = 5,
+  save_pars = save_pars(all = TRUE),
   data = df_list
 )
 
@@ -521,10 +531,12 @@ fit_sri.1 <- brm(
   assoc_count | vint(opportunity_count) ~ 
     HI_similarity + Period + HRO + age_similarity + sex_similarity +
     (1 | mm(node_id_1, node_id_2)),
+  iter = 4000,
   family = beta_binomial2,
   prior = full_priors,
   stanvars = stanvars,
   cores = 4,
+  save_pars = save_pars(all = TRUE),
   data = df_list
 )
 
@@ -532,27 +544,61 @@ fit_sri.2 <- brm(
   assoc_count | vint(opportunity_count) ~ 
     HI_similarity * Period + HRO + age_similarity + sex_similarity +
     (1 | mm(node_id_1, node_id_2)),
+  iter = 5000,
   family = beta_binomial2,
   prior = full_priors,
   stanvars = stanvars,
   cores = 4,
+  save_pars = save_pars(all = TRUE),
   data = df_list
 )
 
 # Save data
-looic.h1 <- loo(fit_sri.0, fit_sri.1, fit_sri.2, compare = T)
-saveRDS(looic.h1, "looic.h1.RData")
-looic.h1 <- readRDS("looic.h1.RData")
+saveRDS(fit_sri.0, "fit_sri.0.RData")
+saveRDS(fit_sri.1, "fit_sri.1.RData")
+saveRDS(fit_sri.2, "fit_sri.2.RData")
+
+# Load data
+fit_sri.0 <- readRDS("fit_sri.bb.RData")
+fit_sri.1 <- readRDS("fit_sri.1.RData")
+fit_sri.2 <- readRDS("fit_sri.2.RData")
+
+# Log-likelihood function for custom beta-binomial2
+expose_functions(fit_sri.0, vectorize = TRUE)    # exports `beta_binomial2_lpmf` into R
+
+log_lik_beta_binomial2 <- function(i, prep) {
+  mu  <- brms::get_dpar(prep, "mu", i = i)
+  phi <- brms::get_dpar(prep, "phi", i = i)
+  trials <- prep$data$vint1[i]
+  y <- prep$data$Y[i]
+  
+  # call the exposed Stan function (vectorized) which returns S draws of log-lik
+  beta_binomial2_lpmf(y, mu, phi, trials)
+}
+
+looic.compare <- loo_compare(
+  loo(fit_sri.0),
+  loo(fit_sri.1),
+  loo(fit_sri.2)
+)
+print(looic.compare)
+
+saveRDS(looic.compare, "looic.compare.RData")
+looic.compare <- readRDS("looic.compare.RData")
+
+# Summary Statistics
+model <- fit_sri.2
+summary(fit_sri.2)
 
 # Posterior predictive function for custom beta-binomial2
-eta_draws <- posterior_linpred(fit_sri.bb, summary = FALSE)
+eta_draws <- posterior_linpred(model, summary = FALSE)
 
 # transform to mu (on probability scale)
 mu_draws <- plogis(eta_draws)  # inv_logit
 dim(mu_draws)  # e.g., 4000 × 20709
 
 # extract phi (per-draw vector)
-phi_draws <- exp(as_draws_df(fit_sri.bb)$phi)
+phi_draws <- exp(as_draws_df(model)$phi)
 
 # Now simulate from Beta-Binomial
 make_yrep <- function(mu_mat, phi_vec, T) {
@@ -573,19 +619,8 @@ yrep_sub <- yrep[sample(seq_len(nrow(yrep)), 200), ]
 # Density overlay
 ppc_dens_overlay(y = df_list$assoc_count, yrep = yrep_sub)
 
-# Save data
-saveRDS(fit_sri.bb, "fit_sri.bb.RData")
-
-# Summary Statistics
-fit_sri <- readRDS("fit_sri.RData")
-summary(fit_sri.2)
-prior_summary(fit_sri.2)
-
 # Check for model convergence
-model <- fit_sri.bb
 plot(model)
-pp_check(model) # check to make sure they line up
-# Search how to fix this
 
 # Find the significance
 posterior_samples <- as.data.frame(as.matrix( posterior_samples(model) ))
