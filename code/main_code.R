@@ -669,8 +669,23 @@ mcmc_plot + scale_y_discrete(
 ###########################################################################
 # PART 3: Display Networks ---------------------------------------------
 
-## Read in nxn
+## Read in nxn and list_years
+list_years <- readRDS("list_years.RData")
 nxn <- readRDS("nxn.RData")
+
+# Edgelist: Nodes (i & j) and edge (or link) weight
+n.cores <- detectCores()
+source("../code/functions.R")
+
+system.time({
+  registerDoParallel(n.cores)
+  el_years <- list()
+  for (i in seq_along(list_years)) {
+    el_years[[i]] <- matrix_to_edgelist(nxn[[i]], rawdata = FALSE, idnodes = FALSE)
+  }  
+  ### End parallel processing
+  stopImplicitCluster()
+})
 
 ## Create social network
 net <- lapply(nxn, function (df) {
@@ -689,7 +704,7 @@ ig <- readRDS("ig.RData")
 # Only show IDs of HI dolphins
 HI_list <- readRDS("HI_list.RData")
 HI_list <- HI_list[-4] # Get rid of natural foragers
-HI_IDs <- unique(as.vector(unlist(HI_list))) # Put them all together
+HI_IDs <- lapply(1:3, function(i) unname(unlist(lapply(HI_list[1:3], `[[`, i))))
 
 #----Modularity---
 # igraph format with weight
@@ -820,41 +835,35 @@ florida_map <- basemap(limits = c(-87.5349, -87.5349, 24.3963, 31.0006)) +
         axis.ticks = element_blank(),
         axis.title = element_blank())
 
-for (i in 1:length(ig)) {  # Loop through periods
+# Make map networks
+## Adjust the layout using home range coordinates
+i=1
+layout_coords <- as.matrix(centroid_list[[i]][, c("X", "Y")])
+adjusted_layout <- layout_coords[order(V(ig[[i]])$name), ]
     
-    # Load in igraph
-    require(igraph)
-    
-    # Adjust the layout using home range coordinates
-    layout_coords <- as.matrix(centroid_list[[i]][, c("X", "Y")])
-    adjusted_layout <- layout_coords[order(V(ig[[i]])$name), ]
-    
-    # Get nodes for each behavior
-    labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
+## Get nodes for each behavior
+labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs[[i]]  # Fixed index here
 
-    # Get map of Sarasota, Florida
-    sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6), land.col = "lightgray")
+## Get map of Sarasota, Florida
+sarasota_map <- basemap(limits = c(-82.8, -82.3, 27, 27.6), land.col = "lightgray")
     
-    # add geographic coordinates
-    net_i <- net[[i]]
-    net_i %v% "lat" <- layout_coords[,"Y"]
-    net_i %v% "lon" <- layout_coords[,"X"]
-    x <- net_i %v% "lon"
-    y <- net_i %v% "lat"
+## add geographic coordinates
+net_i <- net[[i]]
+net_i %v% "lat" <- layout_coords[,"Y"]
+net_i %v% "lon" <- layout_coords[,"X"]
+x <- net_i %v% "lon"
+y <- net_i %v% "lat"
+
+## Set network and attributes
+node_color <- V(dolp_ig[[i]])$color
     
-    # Set network and attributes
-    node_color <- V(dolp_ig[[i]])$color
+## Map the node colors to their corresponding numbers
+color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
+node_color_numbers <- color_mapping[node_color]
+grp <- as.vector(node_color_numbers) 
     
-    # Unrequire igraph
-    #detach("package:igraph", unload=TRUE)
-    
-    # Map the node colors to their corresponding numbers
-    color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
-    node_color_numbers <- color_mapping[node_color]
-    grp <- as.vector(node_color_numbers) 
-    
-    # Graph network
-    plot <- ggnetworkmap(
+## Graph network
+plot <- ggnetworkmap(
       sarasota_map, # Load in map
       net_i, # Load in network
       size = ifelse(labeled_nodes[[i]], 1.5, 0.5),
@@ -878,100 +887,50 @@ for (i in 1:length(ig)) {  # Loop through periods
         axis.title = element_blank()
       ) +
       guides(fill = "none")  # remove legend for fill
-    
-    plot_list[[i]] <- plot
-  
-  }
-
-# Plot one at a time
-plot_1 <- plot_list[[1]]
-pdf("plot_1.pdf", width = 8.5, height = 11)
-print(plot_1)
-dev.off()
-plot_2 <- plot_list[[2]]
-pdf("plot_2.pdf", width = 8.5, height = 11)
-print(plot_2)
-dev.off()
-plot_3 <- plot_list[[3]]
-pdf("plot_3.pdf", width = 8.5, height = 11)
-print(plot_3)
-dev.off()
 
 # Create non-mapped graph
-labeled_nodes <- list()
-plot_list <- list()
+## Get nodes for each behavior
+i=1
+labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs[[i]]  # Fixed index here
+  
+## Make net_i
+net_i <- ig[[i]]
+net_i <- simplify(net_i)
+  
+## Set network and attributes
+node_color <- V(dolp_ig[[i]])$color
+  
+## Map the node colors to their corresponding numbers
+color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
+node_color_numbers <- color_mapping[node_color]
+  
+## Update vertex attributes
+V(net_i)$grp <- as.character(node_color_numbers)
 
+## Create the plot
+plot <- ggraph(net_i, layout = "fr") +
+  geom_edge_link0(aes(color = "grey90", width = edge_attr(net_i, "weight")), alpha = 0.08) + 
+  geom_node_point(aes(fill = grp, size = ifelse(labeled_nodes[[i]], 1.5, 0.5)), shape = 21) +
+  geom_node_text(aes(label = ifelse(labeled_nodes[[i]], V(net_i)$name, "")), 
+                 color = "black", size = 2, vjust = 1.5) +
+  geom_mark_hull(aes(x = x, y = y, group = grp, fill = grp),   # <-- add x, y
+                 concavity = 4, 
+                 expand = unit(2, "mm"), 
+                 alpha = 0.25) +
+  scale_fill_brewer(palette = "Set1") +
+  scale_edge_color_manual(values = c(rgb(0, 0, 0, 0.1), rgb(0, 0, 0, 0.3))) +
+  theme_graph() +
+  theme(legend.position = "none")
+
+# What is the cluster size for each period?
+labeled_nodes <- list()
 for (i in 1:length(ig)) {  # Loop through periods
   
   # Get nodes for each behavior
-  labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs  # Fixed index here
-  
-  # Make net_i
-  net_i <- ig[[i]]
-  net_i <- simplify(net_i)
-  
-  # Set network and attributes
-  node_color <- V(dolp_ig[[i]])$color
-  
-  # Map the node colors to their corresponding numbers
-  color_mapping <- setNames(seq_along(unique(node_color)), unique(node_color))
-  node_color_numbers <- color_mapping[node_color]
-  
-  # Update vertex attributes
-  V(net_i)$grp <- as.character(node_color_numbers)
-  
-  create_group_layout <- function(graph, node_groups, layout_func = layout_with_fr, group_spacing = 5) {
-  # Get unique groups
-  unique_groups <- unique(node_groups)
-  
-  # Initialize an empty layout
-  layout <- matrix(0, nrow = vcount(graph), ncol = 2)
-  
-  # Apply the layout function to each group individually
-  for (i in seq_along(unique_groups)) {
-    group_idx <- which(node_groups == unique_groups[i])
-    subgraph <- induced_subgraph(graph, group_idx)
-    sub_layout <- layout_func(subgraph)
-    
-    # Normalize sub_layout to avoid large coordinate ranges
-    sub_layout <- sub_layout / max(abs(sub_layout))
-    
-    # Offset sub_layout
-    offset_x <- (i - 1) * group_spacing
-    offset_y <- (i - 1) * group_spacing
-    layout[group_idx, ] <- sub_layout + c(offset_x, offset_y)
-  }
-  
-  return(layout)
-}
-  
-  # Generate a layout based on the node groups
-  bb <- create_group_layout(net_i, V(net_i)$grp)
-  
-  # Create the plot
-  plot <- ggraph(net_i, layout = "manual", x = bb[, 1], y = bb[, 2]) +
-    geom_edge_link0(aes(color = "grey80", width = E(net_i)$weight), alpha = 0.08) + 
-    geom_node_point(aes(fill = grp, size = ifelse(labeled_nodes[[i]], 1.5, 0.5)), shape = 21) +
-    geom_text(aes(x = bb[, 1], y = bb[, 2], label = ifelse(labeled_nodes[[i]], V(net_i)$name, "")), color = "black", size = 2, vjust = 1.5) +
-    geom_mark_hull(aes(x = bb[, 1], y = bb[, 2], group = grp, fill = grp), 
-                   concavity = 4, 
-                   expand = unit(2, "mm"), 
-                   alpha = 0.25) +
-    scale_fill_brewer(palette = "Set1") +
-    scale_edge_color_manual(values = c(rgb(0, 0, 0, 0.1), rgb(0, 0, 0, 0.3))) +
-    theme_graph() +
-    theme(legend.position = "none")
-  
-  plot_list[[i]] <- plot
+  labeled_nodes[[i]] <- V(ig[[i]])$name %in% HI_IDs[[i]]  # Fixed index here
 }
 
-plot_list[[1]]
-plot_list[[2]]
-plot_list[[3]]
-
-# What is the cluster size for each period?
 combined_cluster_data <- list()
-
 for (i in 1:3) {
   
   ## Get the member data from newman and HI data from labeled_nodes
@@ -1009,6 +968,7 @@ combined_cluster_data <- readRDS("combined_cluster_data.RData")
 periods <- c("Before", "During", "After")
 combined_cluster_df <- do.call(rbind, Map(cbind, combined_cluster_data, Period = periods))
 combined_cluster_df <- na.omit(combined_cluster_df)
+combined_cluster_df <- combined_cluster_df[combined_cluster_df$Total_Cluster_Count >= 2, ]
 
 # Make During the intercept
 combined_cluster_df$Period <- relevel(factor(combined_cluster_df$Period),
